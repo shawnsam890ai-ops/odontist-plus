@@ -50,4 +50,9 @@ class PatientProvider extends ChangeNotifier {
     await _repo.updateTreatmentSession(patientId, session);
     notifyListeners();
   }
+
+  Future<void> removeSession(String patientId, String sessionId) async {
+    await _repo.removeTreatmentSession(patientId, sessionId);
+    notifyListeners();
+  }
 }

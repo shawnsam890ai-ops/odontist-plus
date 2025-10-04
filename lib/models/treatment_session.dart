@@ -151,6 +151,9 @@ class TreatmentSession {
   final List<InvestigationType> investigations;
   final List<InvestigationFinding> investigationFindings;
   final List<String> generalTreatmentPlan;
+  // New multi-select option lists (non tooth-specific)
+  final List<String> planOptions;
+  final List<String> treatmentDoneOptions;
   // New structured lists superseding generalTreatmentPlan (kept for backward compatibility)
   final List<ToothPlanEntry> toothPlans;
   final List<ToothTreatmentDoneEntry> treatmentsDone;
@@ -186,6 +189,8 @@ class TreatmentSession {
     List<InvestigationType>? investigations,
     List<InvestigationFinding>? investigationFindings,
     List<String>? generalTreatmentPlan,
+  List<String>? planOptions,
+  List<String>? treatmentDoneOptions,
   List<ToothPlanEntry>? toothPlans,
   List<ToothTreatmentDoneEntry>? treatmentsDone,
     this.notes = '',
@@ -208,6 +213,8 @@ class TreatmentSession {
         investigations = investigations ?? [],
         investigationFindings = investigationFindings ?? [],
         generalTreatmentPlan = generalTreatmentPlan ?? [],
+  planOptions = planOptions ?? [],
+  treatmentDoneOptions = treatmentDoneOptions ?? [],
   toothPlans = toothPlans ?? [],
   treatmentsDone = treatmentsDone ?? [],
         prescription = prescription ?? [],
@@ -229,6 +236,8 @@ class TreatmentSession {
     List<InvestigationType>? investigations,
     List<InvestigationFinding>? investigationFindings,
     List<String>? generalTreatmentPlan,
+  List<String>? planOptions,
+  List<String>? treatmentDoneOptions,
   List<ToothPlanEntry>? toothPlans,
   List<ToothTreatmentDoneEntry>? treatmentsDone,
     String? notes,
@@ -257,6 +266,8 @@ class TreatmentSession {
         investigations: investigations ?? List.from(this.investigations),
         investigationFindings: investigationFindings ?? List.from(this.investigationFindings),
         generalTreatmentPlan: generalTreatmentPlan ?? List.from(this.generalTreatmentPlan),
+  planOptions: planOptions ?? List.from(this.planOptions),
+  treatmentDoneOptions: treatmentDoneOptions ?? List.from(this.treatmentDoneOptions),
   toothPlans: toothPlans ?? List.from(this.toothPlans),
   treatmentsDone: treatmentsDone ?? List.from(this.treatmentsDone),
         notes: notes ?? this.notes,
@@ -287,6 +298,8 @@ class TreatmentSession {
         'investigations': investigations.map((e) => e.index).toList(),
         'investigationFindings': investigationFindings.map((e) => e.toJson()).toList(),
         'generalTreatmentPlan': generalTreatmentPlan,
+  'planOptions': planOptions,
+  'treatmentDoneOptions': treatmentDoneOptions,
   'toothPlans': toothPlans.map((e) => e.toJson()).toList(),
   'treatmentsDone': treatmentsDone.map((e) => e.toJson()).toList(),
         'notes': notes,
@@ -317,6 +330,8 @@ class TreatmentSession {
         investigations: (json['investigations'] as List<dynamic>).map((e) => InvestigationType.values[e as int]).toList(),
         investigationFindings: (json['investigationFindings'] as List<dynamic>).map((e) => InvestigationFinding.fromJson(e as Map<String, dynamic>)).toList(),
         generalTreatmentPlan: (json['generalTreatmentPlan'] as List<dynamic>).cast<String>(),
+  planOptions: (json['planOptions'] as List<dynamic>? ?? []).cast<String>(),
+  treatmentDoneOptions: (json['treatmentDoneOptions'] as List<dynamic>? ?? []).cast<String>(),
     toothPlans: (json['toothPlans'] as List<dynamic>? ?? [])
       .map((e) => ToothPlanEntry.fromJson(e as Map<String, dynamic>))
       .toList(),

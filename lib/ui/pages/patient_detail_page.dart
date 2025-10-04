@@ -20,6 +20,7 @@ class PatientDetailPage extends StatefulWidget {
 class _PatientDetailPageState extends State<PatientDetailPage> {
   TreatmentType _selectedType = TreatmentType.general;
   String? _followUpParentId; // follow up parent id
+  String? _editingSessionId; // when set, we update existing session instead of creating new
 
   // General form state
   List<String> _selectedComplaints = [];
@@ -87,14 +88,25 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
             const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: () async {
-                final session = _createSession();
-                await context.read<PatientProvider>().addSession(patient.id, session);
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session saved.')));
+                if (_editingSessionId == null) {
+                  final session = _createSession();
+                  await context.read<PatientProvider>().addSession(patient.id, session);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session saved.')));
+                } else {
+                  final updated = _createSession().copyWith(id: _editingSessionId);
+                  await context.read<PatientProvider>().updateSession(patient.id, updated);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session updated.')));
+                }
+                setState(() {
+                  _editingSessionId = null; // reset editing state
+                });
               },
               icon: const Icon(Icons.save),
-              label: const Text('Save Session'),
+              label: Text(_editingSessionId == null ? 'Save Session' : 'Update Session'),
             )
+            , const SizedBox(height: 24), _sessionHistory(patient)
           ],
         ),
       ),
@@ -662,6 +674,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
           generalTreatmentPlan: _treatmentPlan, // legacy
           toothPlans: _toothPlans,
           treatmentsDone: _treatmentsDone,
+          planOptions: _selectedPlanOptions,
+          treatmentDoneOptions: _selectedTreatmentDoneOptions,
           notes: _notes.text.trim(),
           prescription: _prescription,
           mediaPaths: _mediaPaths,
@@ -1012,5 +1026,189 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
   void _sortByTooth<T>(List<T> list, String Function(T) toothExtractor) {
     int parse(String s) => int.tryParse(s.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
     list.sort((a, b) => parse(toothExtractor(a)).compareTo(parse(toothExtractor(b))));
+  }
+
+  Widget _sessionHistory(patient) {
+    final sessions = patient.sessions;
+    if (sessions.isEmpty) return const SizedBox();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Text('Previous Sessions', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        ...sessions.reversed.map((s) {
+          // Defensive access: if older session objects (before hot restart) yield null for new fields, coalesce to []
+          List<String> planOpts;
+          List<String> doneOpts;
+          try {
+            final po = (s as dynamic).planOptions; // may be null if legacy instance
+            planOpts = (po is List) ? po.cast<String>() : <String>[];
+          } catch (_) {
+            planOpts = <String>[];
+          }
+          try {
+            final td = (s as dynamic).treatmentDoneOptions;
+            doneOpts = (td is List) ? td.cast<String>() : <String>[];
+          } catch (_) {
+            doneOpts = <String>[];
+          }
+          final orderedDetails = _buildSessionDetailLines(s, planOpts, doneOpts);
+          return ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            title: Text('${s.type.label} • ${s.date.toLocal().toString().split(' ').first}'),
+            subtitle: Text(orderedDetails.take(2).join('  '), maxLines: 2, overflow: TextOverflow.ellipsis),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                  tooltip: 'View',
+                  icon: const Icon(Icons.visibility, size: 20),
+                  onPressed: () => _viewSessionDialog(s, planOpts, doneOpts)),
+              IconButton(
+                  tooltip: 'Edit',
+                  icon: const Icon(Icons.edit, size: 20),
+                  onPressed: () => _editExistingSession(s)),
+              IconButton(
+                  tooltip: 'Delete',
+                  icon: const Icon(Icons.delete, size: 20),
+                  onPressed: () => _deleteSessionConfirm(patient, s.id)),
+            ]),
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: orderedDetails.map((l) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(l),
+                      )).toList(),
+                ),
+              )
+            ],
+          );
+        })
+      ],
+    );
+  }
+
+  List<String> _buildSessionDetailLines(TreatmentSession s, List<String> planOpts, List<String> doneOpts) {
+    final lines = <String>[];
+    if (s.chiefComplaint != null && (s.chiefComplaint!.complaints.isNotEmpty || s.chiefComplaint!.quadrants.isNotEmpty)) {
+      lines.add('Chief Complaint: ${s.chiefComplaint!.complaints.join(', ')}');
+      if (s.chiefComplaint!.quadrants.isNotEmpty) {
+        lines.add('Quadrants: ${s.chiefComplaint!.quadrants.join(', ')}');
+      }
+    }
+    if (s.oralExamFindings.isNotEmpty) {
+      lines.add('Oral Findings: ${s.oralExamFindings.map((e) => '${e.toothNumber}-${e.finding}').join('; ')}');
+    }
+    if (s.investigations.isNotEmpty) {
+      lines.add('Investigations: ${s.investigations.map((e) => e.label).join(', ')}');
+    }
+    if (s.investigationFindings.isNotEmpty) {
+      lines.add('Investigation Findings: ${s.investigationFindings.map((e) => '${e.toothNumber}-${e.finding}').join('; ')}');
+    }
+    if (planOpts.isNotEmpty) {
+      lines.add('Plan Options: ${planOpts.join(', ')}');
+    }
+    if (doneOpts.isNotEmpty) {
+      lines.add('Treatment Done: ${doneOpts.join(', ')}');
+    }
+    if (s.toothPlans.isNotEmpty) {
+      lines.add('Tooth Plans: ${s.toothPlans.map((e) => '${e.toothNumber}-${e.plan}').join('; ')}');
+    }
+    if (s.treatmentsDone.isNotEmpty) {
+      lines.add('Tooth Treatments: ${s.treatmentsDone.map((e) => '${e.toothNumber}-${e.treatment}').join('; ')}');
+    }
+    if (s.prescription.isNotEmpty) {
+      lines.add('Prescription: ${s.prescription.map((e) => '#${e.serial} ${e.medicine} ${e.timing}').join('; ')}');
+    }
+    if (s.nextAppointment != null) {
+      lines.add('Next Appt: ${s.nextAppointment!.toLocal().toString().split(' ').first}');
+    }
+    if (s.notes.isNotEmpty) {
+      lines.add('Notes: ${s.notes}');
+    }
+    return lines;
+  }
+
+  void _viewSessionDialog(TreatmentSession s, List<String> planOpts, List<String> doneOpts) {
+    final lines = _buildSessionDetailLines(s, planOpts, doneOpts);
+    showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+              title: Text('${s.type.label} Session Details'),
+              content: SizedBox(
+                width: 400,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: lines.map((l) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(l),
+                        )).toList(),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+              ],
+            ));
+  }
+
+  void _editExistingSession(TreatmentSession s) {
+    // For now: load into current form for editing only if same type (general). More types can be added later.
+    if (s.type != TreatmentType.general) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Edit only supported for General sessions currently.')));
+      return;
+    }
+    setState(() {
+      _editingSessionId = s.id;
+      _selectedType = s.type;
+      _selectedComplaints = List.from(s.chiefComplaint?.complaints ?? []);
+      _selectedQuadrants = List.from(s.chiefComplaint?.quadrants ?? []);
+      _oralFindings
+        ..clear()
+        ..addAll(s.oralExamFindings);
+      _investigations
+        ..clear()
+        ..addAll(s.investigations);
+      _investigationFindings
+        ..clear()
+        ..addAll(s.investigationFindings);
+      _selectedPlanOptions = List.from(s.planOptions);
+      _selectedTreatmentDoneOptions = List.from(s.treatmentDoneOptions);
+      _toothPlans
+        ..clear()
+        ..addAll(s.toothPlans);
+      _treatmentsDone
+        ..clear()
+        ..addAll(s.treatmentsDone);
+      _prescription
+        ..clear()
+        ..addAll(s.prescription);
+      _notes.text = s.notes;
+      _nextAppointment = s.nextAppointment;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session data loaded. Make changes and Save Session.')));
+  }
+
+  Future<void> _deleteSessionConfirm(patient, String sessionId) async {
+    final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+              title: const Text('Delete Session'),
+              content: const Text('Are you sure you want to delete this session permanently?'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+              ],
+            ));
+    if (ok == true) {
+      await context.read<PatientProvider>().removeSession(patient.id, sessionId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session deleted')));
+      setState(() {});
+    }
   }
 }

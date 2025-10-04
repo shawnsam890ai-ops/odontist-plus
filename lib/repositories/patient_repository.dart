@@ -64,7 +64,13 @@ class PatientRepository {
     await _persist();
   }
 
-  Patient? getById(String id) => _patients.firstWhere((p) => p.id == id, orElse: () => null as Patient);
+  Patient? getById(String id) {
+    try {
+      return _patients.firstWhere((p) => p.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<void> addTreatmentSession(String patientId, TreatmentSession session) async {
     final idx = _patients.indexWhere((p) => p.id == patientId);
@@ -83,6 +89,15 @@ class PatientRepository {
     final sIdx = sessions.indexWhere((s) => s.id == session.id);
     if (sIdx == -1) return;
     sessions[sIdx] = session;
+    _patients[idx] = patient.copyWith(sessions: sessions);
+    await _persist();
+  }
+
+  Future<void> removeTreatmentSession(String patientId, String sessionId) async {
+    final idx = _patients.indexWhere((p) => p.id == patientId);
+    if (idx == -1) return;
+    final patient = _patients[idx];
+    final sessions = List<TreatmentSession>.from(patient.sessions)..removeWhere((s) => s.id == sessionId);
     _patients[idx] = patient.copyWith(sessions: sessions);
     await _persist();
   }
