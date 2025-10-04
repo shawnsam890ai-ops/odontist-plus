@@ -1178,6 +1178,125 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   }
 
   void _viewSessionDialog(TreatmentSession s, List<String> planOpts, List<String> doneOpts) {
+    if (s.type == TreatmentType.general) {
+      final complaintText = () {
+        if (s.chiefComplaint == null) return null;
+        final cc = s.chiefComplaint!;
+        if (cc.complaints.isEmpty && cc.quadrants.isEmpty) return null;
+        final complaint = cc.complaints.join(', ');
+        final quadrant = cc.quadrants.isNotEmpty ? ' w.r.t ${cc.quadrants.join(', ')}' : '';
+        return 'Pt c/o of $complaint$quadrant.';
+      }();
+      final oralList = s.oralExamFindings.isEmpty
+          ? null
+          : List.generate(s.oralExamFindings.length, (i) {
+              final f = s.oralExamFindings[i];
+              return '${String.fromCharCode(97 + i)}) ${f.toothNumber}, ${f.finding}';
+            });
+      final invDone = s.investigations.isEmpty ? null : s.investigations.map((e) => e.label).join(', ');
+      final invFindings = s.investigationFindings.isEmpty
+          ? null
+          : s.investigationFindings.asMap().entries.map((e) => '${String.fromCharCode(97 + e.key)}) ${e.value.toothNumber}, ${e.value.finding}').toList();
+      final planTooth = s.toothPlans.isEmpty
+          ? null
+          : s.toothPlans.asMap().entries.map((e) => '${String.fromCharCode(97 + e.key)}) ${e.value.toothNumber}, ${e.value.plan}').toList();
+      final doneTooth = s.treatmentsDone.isEmpty
+          ? null
+          : s.treatmentsDone.asMap().entries.map((e) => '${String.fromCharCode(97 + e.key)}) ${e.value.toothNumber}, ${e.value.treatment}').toList();
+
+      showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+                title: const Text('General Session Details'),
+                content: SizedBox(
+                  width: 480,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (complaintText != null) ...[
+                          _boldLine('1. Chief Complaint:'),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, bottom: 8),
+                            child: Text(complaintText),
+                          ),
+                        ],
+                        if (oralList != null) ...[
+                          _boldLine('2. Oral Findings:'),
+                          ...oralList.map((l) => Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: Text(l),
+                              )),
+                          const SizedBox(height: 8),
+                        ],
+                        if (invDone != null) ...[
+                          _boldLine('3. Investigation Done:'),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, bottom: 8),
+                            child: Text(invDone),
+                          ),
+                        ],
+                        if (invFindings != null) ...[
+                          _boldLine('4. Investigational Findings:'),
+                          ...invFindings.map((l) => Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: Text(l),
+                              )),
+                          const SizedBox(height: 8),
+                        ],
+                        if (planTooth != null || planOpts.isNotEmpty) ...[
+                          _boldLine('5. Treatment Plan:'),
+                          if (planOpts.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8, bottom: 4),
+                              child: Text(planOpts.join(', ')),
+                            ),
+                          if (planTooth != null)
+                            ...planTooth.map((l) => Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: Text(l),
+                                )),
+                          const SizedBox(height: 8),
+                        ],
+                        if (doneTooth != null || doneOpts.isNotEmpty) ...[
+                          _boldLine('6. Treatment Done:'),
+                          if (doneOpts.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8, bottom: 4),
+                              child: Text(doneOpts.join(', ')),
+                            ),
+                          if (doneTooth != null)
+                            ...doneTooth.map((l) => Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: Text(l),
+                                )),
+                          const SizedBox(height: 8),
+                        ],
+                        if (s.nextAppointment != null) ...[
+                          _boldLine('Next Appointment:'),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, bottom: 8),
+                            child: Text(s.nextAppointment!.toLocal().toString().split(' ').first),
+                          ),
+                        ],
+                        if (s.notes.isNotEmpty) ...[
+                          _boldLine('Notes:'),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: Text(s.notes),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+                ],
+              ));
+      return;
+    }
+    // Fallback for other session types
     final lines = _buildSessionDetailLines(s, planOpts, doneOpts);
     showDialog(
         context: context,
@@ -1200,6 +1319,11 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               ],
             ));
   }
+
+  Widget _boldLine(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Text(text, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+      );
 
   void _editExistingSession(TreatmentSession s) {
     // For now: load into current form for editing only if same type (general). More types can be added later.
