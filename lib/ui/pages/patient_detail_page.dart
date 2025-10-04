@@ -21,6 +21,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
   TreatmentType _selectedType = TreatmentType.general;
   String? _followUpParentId; // follow up parent id
   String? _editingSessionId; // when set, we update existing session instead of creating new
+  bool _showRxForm = false; // hides main session entry form until Add Rx pressed
 
   // General form state
   List<String> _selectedComplaints = [];
@@ -81,32 +82,47 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _basicInfoCard(patient),
+            const SizedBox(height: 12),
+            // Previous sessions container moved near top
+            _sessionHistoryContainer(patient),
             const SizedBox(height: 16),
-            _typeSelector(),
-            const SizedBox(height: 16),
-            _buildTypeForm(),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () async {
-                if (_editingSessionId == null) {
-                  final session = _createSession();
-                  await context.read<PatientProvider>().addSession(patient.id, session);
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session saved.')));
-                } else {
-                  final updated = _createSession().copyWith(id: _editingSessionId);
-                  await context.read<PatientProvider>().updateSession(patient.id, updated);
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session updated.')));
-                }
-                setState(() {
-                  _editingSessionId = null; // reset editing state
-                });
-              },
-              icon: const Icon(Icons.save),
-              label: Text(_editingSessionId == null ? 'Save Session' : 'Update Session'),
-            )
-            , const SizedBox(height: 24), _sessionHistory(patient)
+            Row(
+              children: [
+                Expanded(child: _typeSelector()),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: () => setState(() => _showRxForm = true),
+                  icon: const Icon(Icons.add_circle_outline),
+                  label: const Text('Add Rx'),
+                )
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_showRxForm) ...[
+              _buildTypeForm(),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  if (_editingSessionId == null) {
+                    final session = _createSession();
+                    await context.read<PatientProvider>().addSession(patient.id, session);
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session saved.')));
+                  } else {
+                    final updated = _createSession().copyWith(id: _editingSessionId);
+                    await context.read<PatientProvider>().updateSession(patient.id, updated);
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session updated.')));
+                  }
+                  setState(() {
+                    _editingSessionId = null; // reset editing state
+                    _showRxForm = false; // collapse form after save
+                  });
+                },
+                icon: const Icon(Icons.save),
+                label: Text(_editingSessionId == null ? 'Save Session' : 'Update Session'),
+              ),
+            ],
           ],
         ),
       ),
@@ -1189,8 +1205,41 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
         ..addAll(s.prescription);
       _notes.text = s.notes;
       _nextAppointment = s.nextAppointment;
+      _showRxForm = true; // ensure form is visible when editing
     });
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session data loaded. Make changes and Save Session.')));
+  }
+
+  // New containerized session history with rounded edges
+  Widget _sessionHistoryContainer(patient) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.4)),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('Previous Sessions', style: Theme.of(context).textTheme.titleMedium),
+              const Spacer(),
+              if (!_showRxForm)
+                TextButton.icon(
+                  onPressed: () => setState(() => _showRxForm = true),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Rx'),
+                )
+            ],
+          ),
+          const SizedBox(height: 8),
+          _sessionHistory(patient),
+        ],
+      ),
+    );
   }
 
   Future<void> _deleteSessionConfirm(patient, String sessionId) async {
