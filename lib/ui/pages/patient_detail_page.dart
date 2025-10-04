@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:provider/provider.dart';
 import '../../providers/patient_provider.dart';
 import '../../core/enums.dart';
-import 'package:provider/provider.dart';
 import '../../core/constants.dart';
 import '../../models/treatment_session.dart';
 import '../widgets/multi_select_dropdown.dart';
@@ -19,31 +19,42 @@ class PatientDetailPage extends StatefulWidget {
 
 class _PatientDetailPageState extends State<PatientDetailPage> {
   TreatmentType _selectedType = TreatmentType.general;
-  String? _followUpParentId; // if creating follow-up session
+  String? _followUpParentId; // follow up parent id
 
-  // General form controllers (simplified initial prototype)
+  // General form state
   List<String> _selectedComplaints = [];
   List<String> _selectedQuadrants = [];
   final List<OralExamFinding> _oralFindings = [];
   final List<InvestigationType> _investigations = [];
   final List<InvestigationFinding> _investigationFindings = [];
-  // Legacy multi-select treatment plan kept but not shown now
-  final List<String> _treatmentPlan = [];
-  // New structured per-tooth plan & treatments done
+  final List<String> _treatmentPlan = []; // legacy
   final List<ToothPlanEntry> _toothPlans = [];
   final List<ToothTreatmentDoneEntry> _treatmentsDone = [];
+  // New multi-select buffers for plan and treatment done (legacy structured lists retained)
+  List<String> _selectedPlanOptions = [];
+  List<String> _selectedTreatmentDoneOptions = [];
   final List<String> _mediaPaths = [];
+  final List<String> _rvgImages = []; // RVG images uploaded at investigation section level
   DateTime? _nextAppointment;
   final TextEditingController _notes = TextEditingController();
-  // Prescription builder state
+
+  // Prescription
   final List<PrescriptionItem> _prescription = [];
   String? _rxSelectedMedicine;
   final TextEditingController _rxTiming = TextEditingController();
   final TextEditingController _rxTablets = TextEditingController();
   final TextEditingController _rxDays = TextEditingController();
-  // Inline oral exam entry controllers
+
+  // Inline oral
   final TextEditingController _inlineToothController = TextEditingController();
   final TextEditingController _inlineFindingController = TextEditingController();
+
+  // Inline investigation add
+  final TextEditingController _invToothController = TextEditingController();
+  final TextEditingController _invFindingController = TextEditingController();
+  String? _invPickedPath;
+
+  // (Inline edit dialog uses local controllers)
 
   // Ortho
   final TextEditingController _orthoFindings = TextEditingController();
@@ -52,21 +63,16 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
   final TextEditingController _orthoDoctor = TextEditingController();
   final List<ProcedureStep> _orthoSteps = [];
 
-  // Root Canal
+  // Root canal
   final List<OralExamFinding> _rcFindings = [];
   final TextEditingController _rcTotal = TextEditingController();
   final List<ProcedureStep> _rcSteps = [];
 
   @override
   Widget build(BuildContext context) {
-    final patientProvider = context.watch<PatientProvider>();
-    final patient = widget.patientId == null ? null : patientProvider.byId(widget.patientId!);
-
-    if (patient == null) {
-      return const Scaffold(body: Center(child: Text('Patient not found')));
-    }
-
-    return Scaffold(
+    final patient = widget.patientId == null ? null : context.watch<PatientProvider>().byId(widget.patientId!);
+    if (patient == null) return const Scaffold(body: Center(child: Text('Patient not found')));
+  return Scaffold(
       appBar: AppBar(title: Text(patient.name)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -250,9 +256,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
                       decoration: const InputDecoration(labelText: 'Finding'),
                     )),
                     const SizedBox(width: 8),
-                    ElevatedButton(
-                        onPressed: _addInlineOralFinding,
-                        child: const Text('Add'))
+          ElevatedButton(
+            onPressed: _addInlineOralFinding,
+            child: const Text('Add'))
                   ],
                 )
               ],
@@ -266,71 +272,159 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
             padding: const EdgeInsets.all(12),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               _sectionTitle('3. Investigations'),
-        MultiSelectDropdown(
-          options: InvestigationType.values.map((e) => e.label).toList(),
-          initialSelected: _investigations.map((e) => e.label).toList(),
-          label: 'Select Investigations',
-          onChanged: (vals) => setState(() {
-            _investigations
-              ..clear()
-              ..addAll(vals.map((l) => InvestigationType.values.firstWhere((it) => it.label == l)));
-          }),
-        ),
-        if (_investigations.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              columns: const [
-                DataColumn(label: Text('Tooth')),
-                DataColumn(label: Text('Finding')),
-                DataColumn(label: Text('Media')),
-                DataColumn(label: Text('')),
-              ],
-              rows: [
-                for (var i = 0; i < _investigationFindings.length; i++)
-                  DataRow(cells: [
-                    DataCell(Text(_investigationFindings[i].toothNumber)),
-                    DataCell(Text(_investigationFindings[i].finding)),
-                    DataCell(IconButton(
-                      icon: Icon(
-                        _investigationFindings[i].imagePath == null ? Icons.attach_file : Icons.visibility,
-                        color: _investigationFindings[i].imagePath == null ? null : Colors.teal,
+              MultiSelectDropdown(
+                options: InvestigationType.values.map((e) => e.label).toList(),
+                initialSelected: _investigations.map((e) => e.label).toList(),
+                label: 'Select Investigations',
+                onChanged: (vals) => setState(() {
+                  _investigations
+                    ..clear()
+                    ..addAll(vals.map((l) => InvestigationType.values.firstWhere((it) => it.label == l)));
+                  // If investigations changed and no longer relevant, keep existing findings (could filter if needed later)
+                }),
+              ),
+              if (_investigations.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                if (_investigationFindings.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text('No investigation findings yet. Add below:', style: Theme.of(context).textTheme.bodyMedium),
+                  ),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    headingRowHeight: 38,
+                    dataRowMinHeight: 40,
+                    columns: const [
+                      DataColumn(label: Text('Tooth', style: TextStyle(fontWeight: FontWeight.w600))),
+                      DataColumn(label: Text('Finding', style: TextStyle(fontWeight: FontWeight.w600))),
+                      DataColumn(label: Text('Media', style: TextStyle(fontWeight: FontWeight.w600))),
+                      DataColumn(label: Text('', style: TextStyle(fontWeight: FontWeight.w600))),
+                    ],
+                    rows: [
+                      for (var i = 0; i < _investigationFindings.length; i++)
+                        DataRow(cells: [
+                          DataCell(Text(_investigationFindings[i].toothNumber)),
+                          DataCell(Text(_investigationFindings[i].finding)),
+                          DataCell(Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: Icon(
+                                  _investigationFindings[i].imagePath == null ? Icons.attach_file : Icons.visibility,
+                                  color: _investigationFindings[i].imagePath == null ? null : Colors.teal,
+                                ),
+                                tooltip: _investigationFindings[i].imagePath == null ? 'Attach Media' : 'View Attachment',
+                                onPressed: () async {
+                                  if (_investigationFindings[i].imagePath == null) {
+                                    await _attachMediaToInvestigation(i);
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('File: ${_investigationFindings[i].imagePath}')));
+                                  }
+                                },
+                              ),
+                            ],
+                          )),
+                          DataCell(Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit, size: 18),
+                                tooltip: 'Edit',
+                                onPressed: () => _editInvestigationFinding(i),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, size: 18),
+                                onPressed: () => setState(() => _investigationFindings.removeAt(i)),
+                              ),
+                            ],
+                          )),
+                        ]),
+                      // Inline add row
+                      DataRow(cells: [
+                        DataCell(SizedBox(
+                          width: 70,
+                          child: TextField(
+                            controller: _invToothController,
+                            decoration: const InputDecoration(isDense: true, hintText: 'Tooth'),
+                          ),
+                        )),
+                        DataCell(SizedBox(
+                          width: 160,
+                          child: TextField(
+                            controller: _invFindingController,
+                            decoration: const InputDecoration(isDense: true, hintText: 'Finding'),
+                          ),
+                        )),
+                        DataCell(Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: _invPickedPath == null ? 'Attach Media' : 'Change Media',
+                              icon: Icon(_invPickedPath == null ? Icons.attach_file : Icons.image, color: _invPickedPath == null ? null : Colors.teal),
+                              onPressed: _pickInvestigationMedia,
+                            ),
+                            if (_invPickedPath != null)
+                              IconButton(
+                                tooltip: 'Clear',
+                                icon: const Icon(Icons.close, size: 18),
+                                onPressed: () => setState(() => _invPickedPath = null),
+                              )
+                          ],
+                        )),
+                        DataCell(Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.add_circle, color: Colors.green),
+                              tooltip: 'Add',
+                              onPressed: _addInvestigationFindingInline,
+                            ),
+                          ],
+                        )),
+                      ])
+                    ],
+                  ),
+                ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add Finding'),
+                        onPressed: _addInvestigationFindingInline,
                       ),
-                      tooltip: _investigationFindings[i].imagePath == null ? 'No media' : 'View Attachment',
-                      onPressed: _investigationFindings[i].imagePath == null
-                          ? null
-                          : () {
-                              // Placeholder: could implement opening the file with an external viewer
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('File: ${_investigationFindings[i].imagePath}')));
-                            },
-                    )),
-                    DataCell(Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                            icon: const Icon(Icons.delete, size: 18),
-                            onPressed: () => setState(() => _investigationFindings.removeAt(i))),
-                      ],
-                    )),
-                  ])
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.upload_file),
+                        label: const Text('Upload RVG Image'),
+                        onPressed: () async {
+                          final res = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: true);
+                          if (res != null) {
+                            setState(() {
+                              for (final f in res.files) {
+                                if (f.path != null) _rvgImages.add(f.path!);
+                              }
+                            });
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  if (_rvgImages.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      children: _rvgImages
+                          .map((p) => Chip(
+                                label: Text(p.split('/').last),
+                                onDeleted: () => setState(() => _rvgImages.remove(p)),
+                              ))
+                          .toList(),
+                    ),
+                  ],
               ],
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Wrap(
-              spacing: 8,
-              children: [
-                TextButton.icon(
-                    onPressed: () => _addInvestigationFinding(),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add Finding')),
-              ],
-            ),
-          ),
-        ],
             ]),
           ),
         ),
@@ -553,7 +647,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
   }
 
   TreatmentSession _createSession() {
-    final uuid = const Uuid();
+    const uuid = Uuid();
     switch (_selectedType) {
       case TreatmentType.general:
         return TreatmentSession(
@@ -683,27 +777,22 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
   }
 
   Widget _multiSelectToothPlan() {
-    // Represent existing plans as display, add/edit via dialog using multi-entry one at a time
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_toothPlans.isEmpty) const Text('No plans added'),
-        ..._toothPlans.asMap().entries.map((e) => ListTile(
-              dense: true,
-              title: Text('Tooth ${e.value.toothNumber}'),
-              subtitle: Text(e.value.plan),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(icon: const Icon(Icons.edit, size: 18), onPressed: () => _editPlan(e.key)),
-                  IconButton(icon: const Icon(Icons.delete, size: 18), onPressed: () => setState(() => _toothPlans.removeAt(e.key))),
-                ],
-              ),
-            )),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(onPressed: _addToothPlan, icon: const Icon(Icons.add), label: const Text('Add Plan')),
-        )
+        MultiSelectDropdown(
+          options: AppConstants.generalTreatmentPlanOptions,
+          initialSelected: _selectedPlanOptions,
+          label: 'Select Plan Options',
+          onChanged: (vals) => setState(() => _selectedPlanOptions = vals),
+        ),
+        const SizedBox(height: 8),
+        if (_selectedPlanOptions.isEmpty) const Text('No plan options selected'),
+        if (_selectedPlanOptions.isNotEmpty)
+          Wrap(
+            spacing: 6,
+            children: _selectedPlanOptions.map((p) => Chip(label: Text(p))).toList(),
+          )
       ],
     );
   }
@@ -712,23 +801,19 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_treatmentsDone.isEmpty) const Text('No treatment done entries'),
-        ..._treatmentsDone.asMap().entries.map((e) => ListTile(
-              dense: true,
-              title: Text('Tooth ${e.value.toothNumber}'),
-              subtitle: Text(e.value.treatment),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(icon: const Icon(Icons.edit, size: 18), onPressed: () => _editTreatmentDone(e.key)),
-                  IconButton(icon: const Icon(Icons.delete, size: 18), onPressed: () => setState(() => _treatmentsDone.removeAt(e.key))),
-                ],
-              ),
-            )),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(onPressed: _addTreatmentDone, icon: const Icon(Icons.add), label: const Text('Add Treatment Done')),
-        )
+        MultiSelectDropdown(
+          options: AppConstants.generalTreatmentPlanOptions, // using same list for demo; can create separate constants
+          initialSelected: _selectedTreatmentDoneOptions,
+          label: 'Select Treatments Done',
+          onChanged: (vals) => setState(() => _selectedTreatmentDoneOptions = vals),
+        ),
+        const SizedBox(height: 8),
+        if (_selectedTreatmentDoneOptions.isEmpty) const Text('No treatments selected'),
+        if (_selectedTreatmentDoneOptions.isNotEmpty)
+          Wrap(
+            spacing: 6,
+            children: _selectedTreatmentDoneOptions.map((p) => Chip(label: Text(p))).toList(),
+          )
       ],
     );
   }
@@ -739,149 +824,99 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
     if (tooth.isEmpty || finding.isEmpty) return;
     setState(() {
       _oralFindings.add(OralExamFinding(toothNumber: tooth, finding: finding));
+      _sortByTooth(_oralFindings, (f) => f.toothNumber);
       _inlineToothController.clear();
       _inlineFindingController.clear();
     });
   }
 
-  Future<void> _addInvestigationFinding() async {
-    final tooth = TextEditingController();
-    final finding = TextEditingController();
-    String? pickedPath;
-    final ok = await showDialog<bool>(
+  Future<void> _attachMediaToInvestigation(int index) async {
+    final res = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false);
+    if (res != null && res.files.isNotEmpty) {
+      setState(() {
+        final existing = _investigationFindings[index];
+        _investigationFindings[index] = InvestigationFinding(
+          toothNumber: existing.toothNumber,
+          finding: existing.finding,
+          imagePath: res.files.single.path,
+        );
+      });
+    }
+  }
+
+  Future<void> _pickInvestigationMedia() async {
+    final res = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false);
+    if (res != null && res.files.isNotEmpty) {
+      setState(() => _invPickedPath = res.files.single.path);
+    }
+  }
+
+  void _addInvestigationFindingInline() {
+    final tooth = _invToothController.text.trim();
+    final finding = _invFindingController.text.trim();
+    if (tooth.isEmpty || finding.isEmpty) return;
+    setState(() {
+      _investigationFindings.add(InvestigationFinding(toothNumber: tooth, finding: finding, imagePath: _invPickedPath));
+      _sortByTooth(_investigationFindings, (f) => f.toothNumber);
+      _invToothController.clear();
+      _invFindingController.clear();
+      _invPickedPath = null;
+    });
+  }
+
+  Future<void> _editInvestigationFinding(int index) async {
+    final tooth = TextEditingController(text: _investigationFindings[index].toothNumber);
+    final finding = TextEditingController(text: _investigationFindings[index].finding);
+    String? mediaPath = _investigationFindings[index].imagePath;
+    final result = await showDialog<bool>(
         context: context,
         builder: (_) => StatefulBuilder(builder: (ctx, setSt) {
               return AlertDialog(
-                title: const Text('Add Investigation Finding'),
+                title: const Text('Edit Investigation Finding'),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(controller: tooth, decoration: const InputDecoration(labelText: 'Tooth (FDI)')),
                     TextField(controller: finding, decoration: const InputDecoration(labelText: 'Finding')),
-                    const SizedBox(height: 8),
                     Row(
                       children: [
-                        Expanded(child: Text(pickedPath == null ? 'No media selected' : pickedPath!.split('/').last)),
                         IconButton(
+                            tooltip: mediaPath == null ? 'Attach Media' : 'Change Media',
+                            icon: Icon(mediaPath == null ? Icons.attach_file : Icons.image, color: mediaPath == null ? null : Colors.teal),
                             onPressed: () async {
                               final res = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false);
                               if (res != null && res.files.isNotEmpty) {
-                                setSt(() => pickedPath = res.files.single.path);
+                                setSt(() => mediaPath = res.files.single.path);
                               }
-                            },
-                            icon: const Icon(Icons.attach_file))
+                            }),
+                        if (mediaPath != null)
+                          IconButton(
+                              tooltip: 'Remove Media',
+                              icon: const Icon(Icons.delete_outline, size: 20),
+                              onPressed: () => setSt(() => mediaPath = null)),
                       ],
                     )
                   ],
                 ),
                 actions: [
                   TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                  ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add')),
+                  ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
                 ],
               );
             }));
-    if (ok == true && tooth.text.trim().isNotEmpty && finding.text.trim().isNotEmpty) {
-      setState(() => _investigationFindings.add(InvestigationFinding(toothNumber: tooth.text.trim(), finding: finding.text.trim(), imagePath: pickedPath)));
+    if (result == true && tooth.text.trim().isNotEmpty && finding.text.trim().isNotEmpty) {
+      setState(() {
+        _investigationFindings[index] = InvestigationFinding(
+          toothNumber: tooth.text.trim(),
+          finding: finding.text.trim(),
+          imagePath: mediaPath,
+        );
+        _sortByTooth(_investigationFindings, (f) => f.toothNumber);
+      });
     }
   }
 
-  Future<void> _addToothPlan() async {
-    final tooth = TextEditingController();
-    final plan = TextEditingController();
-    final ok = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-              title: const Text('Add Treatment Plan'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(controller: tooth, decoration: const InputDecoration(labelText: 'Tooth (FDI)')),
-                  TextField(controller: plan, decoration: const InputDecoration(labelText: 'Plan')),
-                ],
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add')),
-              ],
-            ));
-    if (ok == true && tooth.text.isNotEmpty && plan.text.isNotEmpty) {
-      setState(() => _toothPlans.add(ToothPlanEntry(toothNumber: tooth.text.trim(), plan: plan.text.trim())));
-    }
-  }
-
-  Future<void> _editPlan(int index) async {
-    final existing = _toothPlans[index];
-    final tooth = TextEditingController(text: existing.toothNumber);
-    final plan = TextEditingController(text: existing.plan);
-    final ok = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-              title: const Text('Edit Treatment Plan'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(controller: tooth, decoration: const InputDecoration(labelText: 'Tooth (FDI)')),
-                  TextField(controller: plan, decoration: const InputDecoration(labelText: 'Plan')),
-                ],
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
-              ],
-            ));
-    if (ok == true && tooth.text.isNotEmpty && plan.text.isNotEmpty) {
-      setState(() => _toothPlans[index] = ToothPlanEntry(toothNumber: tooth.text.trim(), plan: plan.text.trim()));
-    }
-  }
-
-  Future<void> _addTreatmentDone() async {
-    final tooth = TextEditingController();
-    final treat = TextEditingController();
-    final ok = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-              title: const Text('Add Treatment Done'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(controller: tooth, decoration: const InputDecoration(labelText: 'Tooth (FDI)')),
-                  TextField(controller: treat, decoration: const InputDecoration(labelText: 'Treatment')),
-                ],
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add')),
-              ],
-            ));
-    if (ok == true && tooth.text.isNotEmpty && treat.text.isNotEmpty) {
-      setState(() => _treatmentsDone.add(ToothTreatmentDoneEntry(toothNumber: tooth.text.trim(), treatment: treat.text.trim())));
-    }
-  }
-
-  Future<void> _editTreatmentDone(int index) async {
-    final existing = _treatmentsDone[index];
-    final tooth = TextEditingController(text: existing.toothNumber);
-    final treat = TextEditingController(text: existing.treatment);
-    final ok = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-              title: const Text('Edit Treatment Done'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(controller: tooth, decoration: const InputDecoration(labelText: 'Tooth (FDI)')),
-                  TextField(controller: treat, decoration: const InputDecoration(labelText: 'Treatment')),
-                ],
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
-              ],
-            ));
-    if (ok == true && tooth.text.isNotEmpty && treat.text.isNotEmpty) {
-      setState(() => _treatmentsDone[index] = ToothTreatmentDoneEntry(toothNumber: tooth.text.trim(), treatment: treat.text.trim()));
-    }
-  }
+  // Removed dialog helpers for plan & treatment done (replaced by multi-select)
 
   Future<void> _pickAttachment() async {
     final res = await FilePicker.platform.pickFiles(allowMultiple: true);
@@ -914,7 +949,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
     final desc = TextEditingController();
     final pay = TextEditingController();
     final note = TextEditingController();
-    final uuid = const Uuid();
+    const uuid = Uuid();
     final result = await showDialog<ProcedureStep>(
         context: context,
         builder: (_) => AlertDialog(
@@ -971,5 +1006,11 @@ class _PatientDetailPageState extends State<PatientDetailPage> {
 
   void _openLabWork(String patientId) {
     Navigator.of(context).pushNamed('/patient-lab-work', arguments: {'patientId': patientId});
+  }
+
+  // Generic sorter converting tooth numbers (possibly strings like 11, 12) to int where possible.
+  void _sortByTooth<T>(List<T> list, String Function(T) toothExtractor) {
+    int parse(String s) => int.tryParse(s.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    list.sort((a, b) => parse(toothExtractor(a)).compareTo(parse(toothExtractor(b))));
   }
 }
