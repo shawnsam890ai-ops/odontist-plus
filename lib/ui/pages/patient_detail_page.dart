@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart'; // keep Flutter material
+import 'dart:ui';
 import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
@@ -100,41 +101,29 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             // Previous sessions container moved near top
             _sessionHistoryContainer(patient),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                  Expanded(child: _typeSelector()),
-                const SizedBox(width: 12),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.add_circle_outline),
-                      label: const Text('Add Rx'),
-                      onPressed: () => setState(() => _showRxForm = true),
-                    )
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Follow-up button row
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Builder(builder: (ctx){
-                final patientProv = ctx.watch<PatientProvider>();
-                final patientSessions = patientProv.byId(patient.id)?.sessions ?? [];
-                final generalSessions = patientSessions.where((s)=> s.type == TreatmentType.general).toList();
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: ElevatedButton.icon(
-                    onPressed: generalSessions.isEmpty ? null : () => _openFollowUpPicker(generalSessions),
-                    icon: const Icon(Icons.reply_all),
-                    label: const Text('Follow Up'),
-                  ),
-                );
-              }),
-            ),
+            // Removed duplicate Add Rx + outer type row (type now moved inside form header)
+            // Global follow-up button removed (now per-session inside history list)
             AnimatedSize(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
               child: _showRxForm
                   ? Column(
                       children: [
+                        // Inline header showing Type selector at top of form
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('Type:', style: TextStyle(fontWeight: FontWeight.w600)),
+                                const SizedBox(width: 12),
+                                _typeSelector(),
+                              ],
+                            ),
+                          ),
+                        ),
                         _buildTypeForm(),
                         const SizedBox(height: 24),
                         Row(
@@ -1338,6 +1327,43 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     list.sort((a, b) => parse(toothExtractor(a)).compareTo(parse(toothExtractor(b))));
   }
 
+  // =============== Modern Styling Helpers ===============
+  Color _typeColor(TreatmentSession s) {
+    switch (s.type) {
+      case TreatmentType.general:
+        return Theme.of(context).colorScheme.primary;
+      case TreatmentType.orthodontic:
+        return Colors.purpleAccent.shade400;
+      case TreatmentType.rootCanal:
+        return Colors.teal.shade600;
+      case TreatmentType.labWork:
+        return Colors.orange.shade700;
+    }
+  }
+
+  List<Color> _typeGradientColors(TreatmentSession s, {bool followUp = false}) {
+    final base = _typeColor(s);
+    final lighter = Color.alphaBlend(base.withOpacity(0.25), Colors.white);
+    if (followUp) {
+      return [lighter, base.withOpacity(0.12)];
+    }
+    return [base.withOpacity(0.22), base.withOpacity(0.05)];
+  }
+
+  IconData _typeIcon(TreatmentSession s, {bool isFollowUp = false}) {
+    if (isFollowUp) return Icons.subdirectory_arrow_right_rounded;
+    switch (s.type) {
+      case TreatmentType.general:
+        return Icons.medical_services_outlined;
+      case TreatmentType.orthodontic:
+        return Icons.settings_input_component;
+      case TreatmentType.rootCanal:
+        return Icons.healing_outlined;
+      case TreatmentType.labWork:
+        return Icons.science_outlined;
+    }
+  }
+
   Widget _sessionHistory(patient) {
     final sessions = patient.sessions;
     if (sessions.isEmpty) return const SizedBox();
@@ -1366,15 +1392,43 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       } catch (_) { doneOpts = <String>[]; }
       final orderedDetails = _buildSessionDetailLines(s, planOpts, doneOpts);
       final titlePrefix = isFollowUp ? 'Follow-Up' : s.type.label;
+      // Determine if we should elevate chief complaint(s) into the title for general parent sessions
+      bool movedComplaintToTitle = false;
+      String datePart = s.date.toLocal().toString().split(' ').first;
+      String displayTitle; // used when not moving complaint or for follow-ups
+      String complaintsFullForTitle = '';
+      if (!isFollowUp && s.type == TreatmentType.general && s.chiefComplaint != null) {
+        final complaintsFull = s.chiefComplaint!.complaints.join(', ');
+        if (complaintsFull.trim().isNotEmpty) {
+          complaintsFullForTitle = complaintsFull;
+          displayTitle = '$complaintsFull • $datePart'; // fallback usage not in container row mode
+          movedComplaintToTitle = true;
+        } else {
+          displayTitle = '$titlePrefix • $datePart';
+        }
+      } else {
+        displayTitle = '$titlePrefix • $datePart';
+      }
       final badge = !isFollowUp && parentCount != null && parentCount > 0
-          ? Container(
+          ? AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
               margin: const EdgeInsets.only(left:8),
-              padding: const EdgeInsets.symmetric(horizontal:6, vertical:2),
+              padding: const EdgeInsets.symmetric(horizontal:8, vertical:4),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
+                gradient: LinearGradient(colors: [
+                  _typeColor(s).withOpacity(.85),
+                  _typeColor(s).withOpacity(.55),
+                ]),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: _typeColor(s).withOpacity(.35),
+                    blurRadius: 6,
+                    offset: const Offset(0,2),
+                  )
+                ],
               ),
-              child: Text(parentCount.toString(), style: Theme.of(context).textTheme.labelSmall),
+              child: Text(parentCount.toString(), style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
             )
           : const SizedBox.shrink();
       // Timeline visuals for follow-ups
@@ -1403,56 +1457,200 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           ),
         );
       }
-      return ExpansionTile(
-        initiallyExpanded: false,
-        tilePadding: EdgeInsets.only(left: isFollowUp ? 12 : 12, right: 12, top: 4, bottom: 4),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        title: Row(
-          children: [
-            if (isFollowUp) leadingBullet(false) else const SizedBox(width: 0),
-            Flexible(child: Text('$titlePrefix • ${s.date.toLocal().toString().split(' ').first}')),
-            if (!isFollowUp) badge,
+      final gradient = _typeGradientColors(s, followUp: isFollowUp);
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: gradient,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _typeColor(s).withOpacity(.25), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: _typeColor(s).withOpacity(.20),
+              blurRadius: 14,
+              offset: const Offset(0,6),
+              spreadRadius: -2,
+            )
           ],
         ),
-        subtitle: Text(orderedDetails.take(2).join('  '), maxLines: 2, overflow: TextOverflow.ellipsis),
-        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          IconButton(
-              tooltip: 'View',
-              icon: const Icon(Icons.visibility, size: 20),
-              onPressed: () => _viewSessionDialog(s, planOpts, doneOpts)),
-          IconButton(
-              tooltip: 'Edit',
-              icon: const Icon(Icons.edit, size: 20),
-              onPressed: () => _editExistingSession(s)),
-          IconButton(
-              tooltip: 'Delete',
-              icon: const Icon(Icons.delete, size: 20),
-              onPressed: () => _deleteSessionConfirm(patient, s.id)),
-        ]),
-        children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: orderedDetails.map((l) => Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(l),
-                  )).toList(),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              initiallyExpanded: false,
+              iconColor: _typeColor(s).withOpacity(.9),
+              collapsedIconColor: _typeColor(s).withOpacity(.8),
+              tilePadding: EdgeInsets.only(left: isFollowUp ? 8 : 12, right: 8, top: 4, bottom: 4),
+              childrenPadding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      if (isFollowUp)
+                        leadingBullet(false)
+                      else
+                        Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            color: _typeColor(s).withOpacity(.18),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.all(6),
+                          child: Icon(_typeIcon(s), size: 18, color: _typeColor(s).withOpacity(.9)),
+                        ),
+                      Expanded(
+                        child: isFollowUp
+                            ? Text(
+                                displayTitle,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(.85),
+                                  fontSize: 13.5,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                      if (!isFollowUp) badge,
+                      if (!isFollowUp && s.type == TreatmentType.general)
+                        Tooltip(
+                          message: 'Add Follow-Up',
+                          child: IconButton(
+                            icon: const Icon(Icons.reply_all, size: 20),
+                            onPressed: () {
+                              _startFollowUpFrom(s);
+                              setState(() => _showRxForm = true);
+                            },
+                          ),
+                        ),
+                      Tooltip(
+                        message: 'View',
+                        child: IconButton(
+                            icon: const Icon(Icons.visibility_rounded, size: 20),
+                            onPressed: () => _viewSessionDialog(s, planOpts, doneOpts)),
+                      ),
+                      Tooltip(
+                        message: 'Edit',
+                        child: IconButton(
+                            icon: const Icon(Icons.edit_rounded, size: 20),
+                            onPressed: () => _editExistingSession(s)),
+                      ),
+                      Tooltip(
+                        message: 'Delete',
+                        child: IconButton(
+                            icon: const Icon(Icons.delete_forever_rounded, size: 20),
+                            onPressed: () => _deleteSessionConfirm(patient, s.id)),
+                      ),
+                    ],
+                  ),
+                  if (movedComplaintToTitle) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _typeColor(s).withOpacity(.13),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: _typeColor(s).withOpacity(.30), width: .8),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              complaintsFullForTitle,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(.92),
+                                height: 1.15,
+                              ),
+                              softWrap: true,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            datePart,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(.70),
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (doneOpts.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Treatment Done: ' + doneOpts.join(', '),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(.75),
+                            ),
+                      ),
+                    ],
+                  ] else ...[
+                    if (!isFollowUp) const SizedBox(height: 4),
+                    if (!isFollowUp && orderedDetails.isNotEmpty)
+                      Text(
+                        orderedDetails.first,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w500,
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(.75),
+                            ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ]
+                ],
+              ),
+              // Removed separate subtitle & trailing; integrated into custom title Column (Option B)
+              children: [
+                // Removed expanded Add Follow-Up button (only trailing icon now)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: orderedDetails.map((l) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(l),
+                        )).toList(),
+                  ),
+                ),
+                if (!isFollowUp && (childFollowUpsFiltered?.isNotEmpty ?? false)) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: _typeColor(s).withOpacity(.85),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('Follow-Ups', style: Theme.of(context).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  for (var i=0;i<childFollowUpsFiltered!.length;i++)
+                    Padding(
+                      padding: const EdgeInsets.only(left:4),
+                      child: buildTile(childFollowUpsFiltered[i], isFollowUp: true),
+                    ),
+                ]
+              ],
             ),
           ),
-          if (!isFollowUp && (childFollowUpsFiltered?.isNotEmpty ?? false)) ...[
-            const Divider(height: 20),
-            Padding(
-              padding: const EdgeInsets.only(bottom:8),
-              child: Text('Follow-Ups', style: Theme.of(context).textTheme.labelSmall),
-            ),
-            for (var i=0;i<childFollowUpsFiltered!.length;i++)
-              Padding(
-                padding: const EdgeInsets.only(left:4),
-                child: buildTile(childFollowUpsFiltered[i], isFollowUp: true),
-              ),
-          ]
-        ],
+        ),
       );
     }
     bool matches(TreatmentSession s) {
@@ -2000,17 +2198,20 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
 
   // New containerized session history with rounded edges
   Widget _sessionHistoryContainer(patient) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.4)),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          // Outline only look
+          color: Theme.of(context).colorScheme.surface.withOpacity(.0),
+          border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(.35), width: 1.4),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           LayoutBuilder(
             builder: (ctx, constraints) {
               final isNarrow = constraints.maxWidth < 480;
@@ -2041,13 +2242,15 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                       onPressed: () => setState(() => _sessionFilterDateStr = null),
                     )
                   : const SizedBox.shrink();
-              final addRxBtn = (!_showRxForm)
-                  ? TextButton.icon(
-                      onPressed: () => setState(() => _showRxForm = true),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add Rx'),
-                    )
-                  : const SizedBox.shrink();
+              final addRxBtn = TextButton.icon(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  foregroundColor: Theme.of(context).colorScheme.primary,
+                ),
+                onPressed: () => setState(() => _showRxForm = !_showRxForm),
+                icon: Icon(_showRxForm ? Icons.close : Icons.add_circle_outline),
+                label: Text(_showRxForm ? 'Close' : 'Add Rx'),
+              );
 
               if (isNarrow) {
                 return Column(
@@ -2092,8 +2295,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           const SizedBox(height: 6),
           _sessionHistory(patient),
         ],
-      ),
-    );
+      ), // Column
+    ), // inner Container
+  );
   }
 
   Future<void> _deleteSessionConfirm(patient, String sessionId) async {
@@ -2105,24 +2309,26 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       builder: (_) => StatefulBuilder(builder: (c, setSt) {
         return AlertDialog(
           title: const Text('Delete Session'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (!hasChildren) const Text('Are you sure you want to delete this session permanently?') else ...[
-                  const Text('This session has follow-up sessions.'),
-                  const SizedBox(height: 8),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: cascade,
-                    onChanged: (v)=> setSt(()=> cascade = v ?? false),
-                    title: const Text('Also delete all its follow-ups (cascade).'),
-                  ),
-                  const SizedBox(height:4),
-                  if(!cascade) const Text('Deletion blocked unless you choose cascade.', style: TextStyle(fontSize:12, color: Colors.redAccent)),
-                ],
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!hasChildren)
+                const Text('Are you sure you want to delete this session permanently?')
+              else ...[
+                const Text('This session has follow-up sessions.'),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: cascade,
+                  onChanged: (v)=> setSt(()=> cascade = v ?? false),
+                  title: const Text('Also delete all its follow-ups (cascade).'),
+                ),
+                const SizedBox(height:4),
+                if(!cascade) const Text('Deletion blocked unless you choose cascade.', style: TextStyle(fontSize:12, color: Colors.redAccent)),
               ],
-            ),
+            ],
+          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
             ElevatedButton(
