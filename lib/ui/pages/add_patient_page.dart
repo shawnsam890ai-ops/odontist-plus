@@ -3,7 +3,9 @@ import '../../providers/patient_provider.dart';
 import 'package:provider/provider.dart';
 import '../../core/enums.dart';
 import '../../core/constants.dart';
-import '../widgets/search_multi_select.dart';
+// Removed legacy simple SearchMultiSelect (using editable variant)
+import '../widgets/search_editable_multi_select.dart';
+import '../../providers/options_provider.dart';
 
 class AddPatientPage extends StatefulWidget {
   static const routeName = '/add-patient';
@@ -27,6 +29,20 @@ class _AddPatientPageState extends State<AddPatientPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Load dynamic options for history
+    final opt = context.read<OptionsProvider>();
+    if (!opt.isLoaded) {
+      opt.ensureLoaded(
+        defaultComplaints: const [], // not needed here
+        defaultPlan: const [],
+        defaultTreatmentDone: const [],
+        defaultMedicines: const [],
+        defaultPastDental: AppConstants.pastDentalHistoryOptions,
+        defaultPastMedical: AppConstants.pastMedicalHistoryOptions,
+        defaultMedicationOptions: AppConstants.medicationOptions,
+        defaultDrugAllergies: AppConstants.drugAllergyOptions,
+      );
+    }
     return Scaffold(
       appBar: AppBar(title: const Text('Add Patient')),
       body: SingleChildScrollView(
@@ -72,35 +88,55 @@ class _AddPatientPageState extends State<AddPatientPage> {
               const SizedBox(height: 24),
               Text('Medical / Dental History', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
-              SearchMultiSelect(
-                options: AppConstants.pastDentalHistoryOptions,
-                initial: _pastDental,
-                label: 'Past Dental History',
-                onChanged: (v) => setState(() => _pastDental = v),
-              ),
+              Builder(builder: (ctx){
+                final watch = ctx.watch<OptionsProvider>();
+                return SearchEditableMultiSelect(
+                  label: 'Past Dental History',
+                  options: watch.pastDentalHistory,
+                  initial: _pastDental,
+                  onChanged: (v)=> setState(()=> _pastDental = v),
+                  onAdd: (val)=> watch.addValue('pastDental', val),
+                  onDelete: (val)=> watch.removeValue('pastDental', val),
+                );
+              }),
               const SizedBox(height: 12),
-              SearchMultiSelect(
-                options: AppConstants.pastMedicalHistoryOptions,
-                initial: _pastMedical,
-                label: 'Past Medical History',
-                onChanged: (v) => setState(() => _pastMedical = v),
-              ),
+              Builder(builder: (ctx){
+                final watch = ctx.watch<OptionsProvider>();
+                return SearchEditableMultiSelect(
+                  label: 'Past Medical History',
+                  options: watch.pastMedicalHistory,
+                  initial: _pastMedical,
+                  onChanged: (v)=> setState(()=> _pastMedical = v),
+                  onAdd: (val)=> watch.addValue('pastMedical', val),
+                  onDelete: (val)=> watch.removeValue('pastMedical', val),
+                );
+              }),
               if (_pastMedical.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                SearchMultiSelect(
-                  options: AppConstants.medicationOptions,
-                  initial: _currentMeds,
-                  label: 'Current Medications',
-                  onChanged: (v) => setState(() => _currentMeds = v),
-                ),
+                Builder(builder: (ctx){
+                  final watch = ctx.watch<OptionsProvider>();
+                  return SearchEditableMultiSelect(
+                    label: 'Current Medications',
+                    options: watch.medicationOptions,
+                    initial: _currentMeds,
+                    onChanged: (v)=> setState(()=> _currentMeds = v),
+                    onAdd: (val)=> watch.addValue('dynamicMedications', val),
+                    onDelete: (val)=> watch.removeValue('dynamicMedications', val),
+                  );
+                }),
               ],
               const SizedBox(height: 12),
-              SearchMultiSelect(
-                options: AppConstants.drugAllergyOptions,
-                initial: _drugAllergies,
-                label: 'Drug Allergies',
-                onChanged: (v) => setState(() => _drugAllergies = v),
-              ),
+              Builder(builder: (ctx){
+                final watch = ctx.watch<OptionsProvider>();
+                return SearchEditableMultiSelect(
+                  label: 'Drug Allergies',
+                  options: watch.drugAllergyOptions,
+                  initial: _drugAllergies,
+                  onChanged: (v)=> setState(()=> _drugAllergies = v),
+                  onAdd: (val)=> watch.addValue('drugAllergies', val),
+                  onDelete: (val)=> watch.removeValue('drugAllergies', val),
+                );
+              }),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,

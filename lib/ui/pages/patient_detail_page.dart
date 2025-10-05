@@ -176,6 +176,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         defaultPlan: AppConstants.generalTreatmentPlanOptions,
         defaultTreatmentDone: AppConstants.generalTreatmentDoneOptions,
         defaultMedicines: AppConstants.prescriptionMedicines,
+        defaultPastDental: AppConstants.pastDentalHistoryOptions,
+        defaultPastMedical: AppConstants.pastMedicalHistoryOptions,
+        defaultMedicationOptions: AppConstants.medicationOptions,
+        defaultDrugAllergies: AppConstants.drugAllergyOptions,
       );
     }
   }
