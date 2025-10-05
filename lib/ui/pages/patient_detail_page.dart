@@ -174,7 +174,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       options.ensureLoaded(
         defaultComplaints: AppConstants.chiefComplaints,
         defaultPlan: AppConstants.generalTreatmentPlanOptions,
-        defaultTreatmentDone: AppConstants.generalTreatmentPlanOptions,
+        defaultTreatmentDone: AppConstants.generalTreatmentDoneOptions,
         defaultMedicines: AppConstants.prescriptionMedicines,
       );
     }

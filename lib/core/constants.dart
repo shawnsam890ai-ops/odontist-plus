@@ -21,6 +21,11 @@ class AppConstants {
     'Advice Rootcanal', 'Oral Prophylaxis', 'Extraction', 'Filling'
   ];
 
+  // Separate list for treatments actually done (can diverge from plan)
+  static const generalTreatmentDoneOptions = [
+    'RCT Completed', 'Filling Completed', 'Extraction Completed', 'Scaling Done', 'Crown Cemented'
+  ];
+
   static const prescriptionMedicines = [
     'Paracetamol 500mg', 'Ibuprofen 400mg', 'Amoxicillin 500mg', 'Vitamin C'
   ];
