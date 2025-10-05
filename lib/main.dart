@@ -23,7 +23,15 @@ class DentalClinicApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LabProvider()),
         ChangeNotifierProvider(create: (_) => OptionsProvider()),
       ],
-      child: MaterialApp(
+      child: Builder(
+        builder: (ctx) {
+          // Register cross-provider reference once tree is built
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final opt = ctx.read<OptionsProvider>();
+            final pats = ctx.read<PatientProvider>();
+            opt.registerPatientProvider(pats);
+          });
+          return MaterialApp(
         title: 'Dental Clinic',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
@@ -32,6 +40,8 @@ class DentalClinicApp extends StatelessWidget {
         ),
         onGenerateRoute: AppRouter.generate,
         initialRoute: SplashPage.routeName,
+          );
+        }
       ),
     );
   }

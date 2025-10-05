@@ -121,7 +121,12 @@ class _EditPatientPageState extends State<EditPatientPage> {
                   initial: _pastDental,
                   onChanged: (v)=> setState(()=> _pastDental = v),
                   onAdd: (val)=> watch.addValue('pastDental', val),
-                  onDelete: (val)=> watch.removeValue('pastDental', val),
+                  onDelete: (val) async {
+                    final ok = await watch.removeValue('pastDental', val);
+                    if (!ok && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: option in use.')));
+                    }
+                  },
                 );
               }),
               const SizedBox(height: 12),
@@ -133,7 +138,12 @@ class _EditPatientPageState extends State<EditPatientPage> {
                   initial: _pastMedical,
                   onChanged: (v)=> setState(()=> _pastMedical = v),
                   onAdd: (val)=> watch.addValue('pastMedical', val),
-                  onDelete: (val)=> watch.removeValue('pastMedical', val),
+                  onDelete: (val) async {
+                    final ok = await watch.removeValue('pastMedical', val);
+                    if (!ok && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: option in use.')));
+                    }
+                  },
                 );
               }),
               if (_pastMedical.isNotEmpty) ...[
@@ -146,7 +156,12 @@ class _EditPatientPageState extends State<EditPatientPage> {
                     initial: _currentMeds,
                     onChanged: (v)=> setState(()=> _currentMeds = v),
                     onAdd: (val)=> watch.addValue('dynamicMedications', val),
-                    onDelete: (val)=> watch.removeValue('dynamicMedications', val),
+                    onDelete: (val) async {
+                      final ok = await watch.removeValue('dynamicMedications', val);
+                      if (!ok && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: option in use.')));
+                      }
+                    },
                   );
                 }),
               ],
@@ -159,7 +174,12 @@ class _EditPatientPageState extends State<EditPatientPage> {
                   initial: _drugAllergies,
                   onChanged: (v)=> setState(()=> _drugAllergies = v),
                   onAdd: (val)=> watch.addValue('drugAllergies', val),
-                  onDelete: (val)=> watch.removeValue('drugAllergies', val),
+                  onDelete: (val) async {
+                    final ok = await watch.removeValue('drugAllergies', val);
+                    if (!ok && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: option in use.')));
+                    }
+                  },
                 );
               }),
               const SizedBox(height: 24),

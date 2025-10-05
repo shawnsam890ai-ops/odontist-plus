@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'patient_provider.dart';
+import '../models/patient.dart';
 
 // Manages dynamic option lists (complaints, plan, treatment done, medicines)
 class OptionsProvider extends ChangeNotifier {
@@ -17,6 +19,12 @@ class OptionsProvider extends ChangeNotifier {
 
   bool _loaded = false;
   bool get isLoaded => _loaded;
+
+  // Reference to patient provider (registered from UI) so we can check usage before deletion
+  PatientProvider? _patientProvider;
+  void registerPatientProvider(PatientProvider provider) {
+    _patientProvider = provider;
+  }
 
   Future<void> ensureLoaded({
     required List<String> defaultComplaints,
@@ -49,11 +57,21 @@ class OptionsProvider extends ChangeNotifier {
     if (complaints.isEmpty) complaints = List.from(defaultComplaints);
     if (planOptions.isEmpty) planOptions = List.from(defaultPlan);
     if (treatmentDoneOptions.isEmpty) treatmentDoneOptions = List.from(defaultTreatmentDone);
-  if (medicineOptions.isEmpty) medicineOptions = List.from(defaultMedicines);
-  if (pastDentalHistory.isEmpty) pastDentalHistory = List.from(defaultPastDental);
-  if (pastMedicalHistory.isEmpty) pastMedicalHistory = List.from(defaultPastMedical);
-  if (medicationOptions.isEmpty) medicationOptions = List.from(defaultMedicationOptions);
-  if (drugAllergyOptions.isEmpty) drugAllergyOptions = List.from(defaultDrugAllergies);
+    if (medicineOptions.isEmpty) medicineOptions = List.from(defaultMedicines);
+    if (pastDentalHistory.isEmpty) pastDentalHistory = List.from(defaultPastDental);
+    if (pastMedicalHistory.isEmpty) pastMedicalHistory = List.from(defaultPastMedical);
+    if (medicationOptions.isEmpty) medicationOptions = List.from(defaultMedicationOptions);
+    if (drugAllergyOptions.isEmpty) drugAllergyOptions = List.from(defaultDrugAllergies);
+
+    // Ensure all lists are sorted alphabetically (case-insensitive) once loaded
+    _sortList(complaints);
+    _sortList(planOptions);
+    _sortList(treatmentDoneOptions);
+    _sortList(medicineOptions);
+    _sortList(pastDentalHistory);
+    _sortList(pastMedicalHistory);
+    _sortList(medicationOptions);
+    _sortList(drugAllergyOptions);
     _loaded = true;
     notifyListeners();
   }
@@ -76,18 +94,34 @@ class OptionsProvider extends ChangeNotifier {
     value = value.trim();
     if (value.isEmpty) return;
     List<String> target = _target(listKey);
-    if (!target.contains(value)) {
+    // Prevent case-insensitive duplicates
+    final exists = target.any((e) => e.toLowerCase() == value.toLowerCase());
+    if (!exists) {
       target.add(value);
+      _sortList(target);
       await _persist();
       notifyListeners();
     }
   }
 
-  Future<void> removeValue(String listKey, String value) async {
+  // Returns true if deletion succeeded, false if blocked due to usage
+  Future<bool> removeValue(String listKey, String value) async {
+    // Load patients if available but not yet loaded
+    if (_patientProvider != null && !_patientProvider!.isLoaded) {
+      await _patientProvider!.ensureLoaded();
+    }
+    final patients = _patientProvider?.patients ?? <Patient>[];
+    if (_isInUse(listKey, value, patients)) {
+      return false; // block deletion
+    }
     List<String> target = _target(listKey);
-    target.remove(value);
-    await _persist();
-    notifyListeners();
+    final removed = target.remove(value);
+    if (removed) {
+      _sortList(target); // keep sorted after removal
+      await _persist();
+      notifyListeners();
+    }
+    return removed;
   }
 
   List<String> _target(String key) {
@@ -110,6 +144,61 @@ class OptionsProvider extends ChangeNotifier {
         return drugAllergyOptions;
       default:
         return complaints;
+    }
+  }
+
+  void _sortList(List<String> list) {
+    list.sort((a,b){
+      final al = a.toLowerCase();
+      final bl = b.toLowerCase();
+      final cmp = al.compareTo(bl);
+      if (cmp != 0) return cmp;
+      return a.compareTo(b); // tie-breaker to keep stable deterministic ordering
+    });
+  }
+
+  bool _isInUse(String listKey, String value, List<Patient> patients) {
+    if (patients.isEmpty) return false;
+    switch (listKey) {
+      case 'complaints':
+        for (final p in patients) {
+          for (final s in p.sessions) {
+            final cc = s.chiefComplaint?.complaints ?? const [];
+            if (cc.any((c) => c.toLowerCase() == value.toLowerCase())) return true;
+          }
+        }
+        return false;
+      case 'plan':
+        for (final p in patients) {
+          for (final s in p.sessions) {
+            if (s.planOptions.any((c) => c.toLowerCase() == value.toLowerCase())) return true;
+          }
+        }
+        return false;
+      case 'done':
+        for (final p in patients) {
+          for (final s in p.sessions) {
+            if (s.treatmentDoneOptions.any((c) => c.toLowerCase() == value.toLowerCase())) return true;
+          }
+        }
+        return false;
+      case 'medicines':
+        for (final p in patients) {
+          for (final s in p.sessions) {
+            if (s.prescription.any((rx) => rx.medicine.toLowerCase() == value.toLowerCase())) return true;
+          }
+        }
+        return false;
+      case 'pastDental':
+        return patients.any((p) => p.pastDentalHistory.any((e) => e.toLowerCase() == value.toLowerCase()));
+      case 'pastMedical':
+        return patients.any((p) => p.pastMedicalHistory.any((e) => e.toLowerCase() == value.toLowerCase()));
+      case 'dynamicMedications':
+        return patients.any((p) => p.currentMedications.any((e) => e.toLowerCase() == value.toLowerCase()));
+      case 'drugAllergies':
+        return patients.any((p) => p.drugAllergies.any((e) => e.toLowerCase() == value.toLowerCase()));
+      default:
+        return false;
     }
   }
 }

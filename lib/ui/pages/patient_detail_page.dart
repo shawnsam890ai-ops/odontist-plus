@@ -108,6 +108,23 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               ],
             ),
             const SizedBox(height: 12),
+            // Follow-up button row
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Builder(builder: (ctx){
+                final patientProv = ctx.watch<PatientProvider>();
+                final patientSessions = patientProv.byId(patient.id)?.sessions ?? [];
+                final generalSessions = patientSessions.where((s)=> s.type == TreatmentType.general).toList();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ElevatedButton.icon(
+                    onPressed: generalSessions.isEmpty ? null : () => _openFollowUpPicker(generalSessions),
+                    icon: const Icon(Icons.reply_all),
+                    label: const Text('Follow Up'),
+                  ),
+                );
+              }),
+            ),
             AnimatedSize(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
@@ -125,7 +142,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                     final session = _createSession();
                                     await context.read<PatientProvider>().addSession(patient.id, session);
                                     if (!mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session saved.')));
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_followUpParentId==null ? 'Session saved.' : 'Follow-up session saved.')));
                                   } else {
                                     final updated = _createSession().copyWith(id: _editingSessionId);
                                     await context.read<PatientProvider>().updateSession(patient.id, updated);
@@ -328,7 +345,12 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         initial: _selectedComplaints,
                         onChanged: (vals) => setState(() => _selectedComplaints = vals),
                         onAdd: (v) => opt.addValue('complaints', v),
-                        onDelete: (v) => opt.removeValue('complaints', v),
+                        onDelete: (v) async {
+                          final ok = await opt.removeValue('complaints', v);
+                          if (!ok && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: option in use.')));
+                          }
+                        },
                       );
                     },
                   ),
@@ -950,9 +972,15 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         trailing: IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
                           onPressed: () async {
-                            await opt.removeValue('medicines', med);
-                            if (localSelected == med) localSelected = null;
-                            setSB(() {});
+                            final ok = await opt.removeValue('medicines', med);
+                            if (!ok) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: medicine in use.')));
+                              }
+                            } else {
+                              if (localSelected == med) localSelected = null;
+                              setSB(() {});
+                            }
                           },
                         ),
                         onTap: () => setSB(()=> localSelected = med),
@@ -1008,7 +1036,12 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             initial: _selectedPlanOptions,
             onChanged: (vals)=> setState(()=> _selectedPlanOptions = vals),
             onAdd: (v)=> opt.addValue('plan', v),
-            onDelete: (v)=> opt.removeValue('plan', v),
+            onDelete: (v) async {
+              final ok = await opt.removeValue('plan', v);
+              if (!ok && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: option in use.')));
+              }
+            },
           );
         }),
         const SizedBox(height: 8),
@@ -1034,7 +1067,12 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             initial: _selectedTreatmentDoneOptions,
             onChanged: (vals)=> setState(()=> _selectedTreatmentDoneOptions = vals),
             onAdd: (v)=> opt.addValue('done', v),
-            onDelete: (v)=> opt.removeValue('done', v),
+            onDelete: (v) async {
+              final ok = await opt.removeValue('done', v);
+              if (!ok && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: option in use.')));
+              }
+            },
           );
         }),
         const SizedBox(height: 8),
@@ -1247,62 +1285,79 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   Widget _sessionHistory(patient) {
     final sessions = patient.sessions;
     if (sessions.isEmpty) return const SizedBox();
+    // Build parent -> children map for follow-ups
+    final Map<String, List<TreatmentSession>> followUps = {};
+    final parents = <TreatmentSession>[];
+    for (final s in sessions) {
+      if (s.parentSessionId == null) {
+        parents.add(s);
+      } else {
+        followUps.putIfAbsent(s.parentSessionId!, () => []).add(s);
+      }
+    }
+    // Sort parents by date descending
+    parents.sort((a,b)=> b.date.compareTo(a.date));
+    Widget buildTile(TreatmentSession s, {bool isFollowUp=false}) {
+      List<String> planOpts;
+      List<String> doneOpts;
+      try {
+        final po = (s as dynamic).planOptions;
+        planOpts = (po is List) ? po.cast<String>() : <String>[];
+      } catch (_) { planOpts = <String>[]; }
+      try {
+        final td = (s as dynamic).treatmentDoneOptions;
+        doneOpts = (td is List) ? td.cast<String>() : <String>[];
+      } catch (_) { doneOpts = <String>[]; }
+      final orderedDetails = _buildSessionDetailLines(s, planOpts, doneOpts);
+      final titlePrefix = isFollowUp ? 'Follow-Up' : s.type.label;
+      return ExpansionTile(
+        initiallyExpanded: false,
+        tilePadding: EdgeInsets.only(left: isFollowUp ? 32 : 12, right: 12, top: 4, bottom: 4),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        title: Text('$titlePrefix • ${s.date.toLocal().toString().split(' ').first}'),
+        subtitle: Text(orderedDetails.take(2).join('  '), maxLines: 2, overflow: TextOverflow.ellipsis),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          IconButton(
+              tooltip: 'View',
+              icon: const Icon(Icons.visibility, size: 20),
+              onPressed: () => _viewSessionDialog(s, planOpts, doneOpts)),
+          IconButton(
+              tooltip: 'Edit',
+              icon: const Icon(Icons.edit, size: 20),
+              onPressed: () => _editExistingSession(s)),
+          IconButton(
+              tooltip: 'Delete',
+              icon: const Icon(Icons.delete, size: 20),
+              onPressed: () => _deleteSessionConfirm(patient, s.id)),
+        ]),
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: orderedDetails.map((l) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(l),
+                  )).toList(),
+            ),
+          )
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
         Text('Previous Sessions', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
-        ...sessions.reversed.map((s) {
-          // Defensive access: if older session objects (before hot restart) yield null for new fields, coalesce to []
-          List<String> planOpts;
-          List<String> doneOpts;
-          try {
-            final po = (s as dynamic).planOptions; // may be null if legacy instance
-            planOpts = (po is List) ? po.cast<String>() : <String>[];
-          } catch (_) {
-            planOpts = <String>[];
-          }
-          try {
-            final td = (s as dynamic).treatmentDoneOptions;
-            doneOpts = (td is List) ? td.cast<String>() : <String>[];
-          } catch (_) {
-            doneOpts = <String>[];
-          }
-          final orderedDetails = _buildSessionDetailLines(s, planOpts, doneOpts);
-          return ExpansionTile(
-            tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            title: Text('${s.type.label} • ${s.date.toLocal().toString().split(' ').first}'),
-            subtitle: Text(orderedDetails.take(2).join('  '), maxLines: 2, overflow: TextOverflow.ellipsis),
-            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-              IconButton(
-                  tooltip: 'View',
-                  icon: const Icon(Icons.visibility, size: 20),
-                  onPressed: () => _viewSessionDialog(s, planOpts, doneOpts)),
-              IconButton(
-                  tooltip: 'Edit',
-                  icon: const Icon(Icons.edit, size: 20),
-                  onPressed: () => _editExistingSession(s)),
-              IconButton(
-                  tooltip: 'Delete',
-                  icon: const Icon(Icons.delete, size: 20),
-                  onPressed: () => _deleteSessionConfirm(patient, s.id)),
-            ]),
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: orderedDetails.map((l) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text(l),
-                      )).toList(),
-                ),
-              )
-            ],
-          );
-        })
+        for (final p in parents) ...[
+          buildTile(p, isFollowUp: false),
+          if (followUps[p.id] != null) ...[
+            // Sort follow-ups chronological ascending under parent
+            for (final f in (followUps[p.id]!..sort((a,b)=> a.date.compareTo(b.date))))
+              buildTile(f, isFollowUp: true)
+          ]
+        ]
       ],
     );
   }
@@ -1603,6 +1658,70 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     _rcFindings.clear();
     _rcTotal.clear();
     _rcSteps.clear();
+  }
+
+  Future<void> _openFollowUpPicker(List<TreatmentSession> generalSessions) async {
+    if (generalSessions.isEmpty) return;
+    // Sort sessions by date desc to show latest first
+    final sorted = List<TreatmentSession>.from(generalSessions)..sort((a,b)=> b.date.compareTo(a.date));
+    final selectedId = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Select Session for Follow-Up'),
+        content: SizedBox(
+          width: 420,
+          height: 400,
+          child: ListView.builder(
+            itemCount: sorted.length,
+            itemBuilder: (c,i){
+              final s = sorted[i];
+              return ListTile(
+                leading: const Icon(Icons.history),
+                title: Text('Session ${s.date.toLocal().toString().split(' ').first}'),
+                subtitle: Text('Complaints: ${(s.chiefComplaint?.complaints.join(', ') ?? '')}'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.pop(ctx, s.id),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        ],
+      ),
+    );
+    if (selectedId != null) {
+      final session = generalSessions.firstWhere((s) => s.id == selectedId, orElse: () => generalSessions.first);
+      _startFollowUpFrom(session);
+    }
+  }
+
+  void _startFollowUpFrom(TreatmentSession base) {
+    // Only meaningful for general sessions; ignore others
+    if (base.type != TreatmentType.general) return;
+    setState(() {
+      _resetFormState();
+      _showRxForm = true;
+      _followUpParentId = base.id; // link parent
+      // Carry forward selected context but clear findings that should be new observations
+      _selectedType = TreatmentType.general;
+      _selectedComplaints = List.from(base.chiefComplaint?.complaints ?? []);
+      _selectedQuadrants = List.from(base.chiefComplaint?.quadrants ?? []);
+      // Do NOT copy oral exam findings or investigation findings (new exam expected)
+      // Copy plan options (treatment plan often continues) but not treatments done (fresh for this visit)
+      _selectedPlanOptions = List.from(base.planOptions);
+      _selectedTreatmentDoneOptions.clear();
+      // Structured tooth plans carried forward; treatments done not carried
+      _toothPlans
+        ..clear()
+        ..addAll(base.toothPlans);
+      _treatmentsDone.clear();
+      // Prescription not copied (usually new)
+      _prescription.clear();
+      _notes.clear();
+      _nextAppointment = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Follow-up started. Adjust details and save.')));
   }
 
   Future<void> _printGeneralSession({required Patient patient, required TreatmentSession s, required List<String> planOpts, required List<String> doneOpts}) async {
