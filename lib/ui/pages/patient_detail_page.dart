@@ -5,12 +5,14 @@ import 'package:provider/provider.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../../providers/patient_provider.dart';
+import '../../providers/options_provider.dart';
 import '../../core/enums.dart';
 import '../../core/constants.dart';
 import '../../models/treatment_session.dart';
 import '../../models/patient.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../widgets/multi_select_dropdown.dart';
+import '../widgets/search_editable_multi_select.dart';
 // import '../widgets/search_multi_select.dart'; // no longer needed here after moving to full-screen edit page
 import 'edit_patient_page.dart';
 
@@ -78,6 +80,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
 
   @override
   Widget build(BuildContext context) {
+    // Ensure dynamic options are loaded
+    _ensureOptionsLoaded(context);
     final patient = widget.patientId == null ? null : context.watch<PatientProvider>().byId(widget.patientId!);
     if (patient == null) return const Scaffold(body: Center(child: Text('Patient not found')));
   return Scaffold(
@@ -162,6 +166,18 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         ),
       ),
     );
+  }
+
+  void _ensureOptionsLoaded(BuildContext context) {
+    final options = context.read<OptionsProvider>();
+    if (!options.isLoaded) {
+      options.ensureLoaded(
+        defaultComplaints: AppConstants.chiefComplaints,
+        defaultPlan: AppConstants.generalTreatmentPlanOptions,
+        defaultTreatmentDone: AppConstants.generalTreatmentPlanOptions,
+        defaultMedicines: AppConstants.prescriptionMedicines,
+      );
+    }
   }
 
   Widget _basicInfoCard(patient) {
@@ -299,11 +315,18 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _sectionTitle('1. Chief Complaint'),
-                  MultiSelectDropdown(
-                    options: AppConstants.chiefComplaints,
-                    initialSelected: _selectedComplaints,
-                    label: 'Complaint Type',
-                    onChanged: (vals) => setState(() => _selectedComplaints = vals),
+                  Builder(
+                    builder: (ctx) {
+                      final opt = ctx.watch<OptionsProvider>();
+                      return SearchEditableMultiSelect(
+                        label: 'Complaint Type',
+                        options: opt.complaints,
+                        initial: _selectedComplaints,
+                        onChanged: (vals) => setState(() => _selectedComplaints = vals),
+                        onAdd: (v) => opt.addValue('complaints', v),
+                        onDelete: (v) => opt.removeValue('complaints', v),
+                      );
+                    },
                   ),
                   const SizedBox(height: 12),
                   MultiSelectDropdown(
@@ -805,12 +828,19 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           children: [
             Expanded(
               flex: 3,
-              child: DropdownButtonFormField<String>(
-                value: _rxSelectedMedicine,
-                items: AppConstants.prescriptionMedicines.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
-                onChanged: (v) => setState(() => _rxSelectedMedicine = v),
-                decoration: const InputDecoration(labelText: 'Medicine'),
-              ),
+              child: Builder(builder: (ctx){
+                final opt = ctx.watch<OptionsProvider>();
+                return InkWell(
+                  onTap: () async {
+                    final selected = await _openMedicinePicker(opt);
+                    if (selected != null) setState(()=> _rxSelectedMedicine = selected);
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(labelText: 'Medicine'),
+                    child: Text(_rxSelectedMedicine ?? 'Select', style: TextStyle(color: _rxSelectedMedicine==null? Colors.grey : null)),
+                  ),
+                );
+              }),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -850,6 +880,94 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     );
   }
 
+  Future<String?> _openMedicinePicker(OptionsProvider opt) async {
+    final controller = TextEditingController();
+    String query = '';
+    String? localSelected = _rxSelectedMedicine;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSB) {
+        final filtered = opt.medicineOptions.where((m) => m.toLowerCase().contains(query.toLowerCase())).toList();
+        return AlertDialog(
+          title: const Text('Select Medicine'),
+          content: SizedBox(
+            width: 400,
+            height: 480,
+            child: Column(
+              children: [
+                TextField(
+                  decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search'),
+                  onChanged: (v) => setSB(() => query = v),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: controller,
+                        decoration: const InputDecoration(hintText: 'Add new medicine'),
+                        onSubmitted: (_) async {
+                          final val = controller.text.trim();
+                          if (val.isNotEmpty) {
+                            await opt.addValue('medicines', val);
+                            controller.clear();
+                            setSB(() {});
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final val = controller.text.trim();
+                        if (val.isNotEmpty) {
+                          await opt.addValue('medicines', val);
+                          controller.clear();
+                          setSB(() {});
+                        }
+                      },
+                      child: const Text('Add'),
+                    )
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: filtered.length,
+                    itemBuilder: (c, i) {
+                      final med = filtered[i];
+                      return ListTile(
+                        leading: Radio<String>(
+                          value: med,
+                          groupValue: localSelected,
+                          onChanged: (v)=> setSB(()=> localSelected = v),
+                        ),
+                        title: Text(med),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () async {
+                            await opt.removeValue('medicines', med);
+                            if (localSelected == med) localSelected = null;
+                            setSB(() {});
+                          },
+                        ),
+                        onTap: () => setSB(()=> localSelected = med),
+                      );
+                    },
+                  ),
+                )
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, localSelected), child: const Text('Select')),
+          ],
+        );
+      }),
+    );
+  }
+
   // Helpers & dialogs
   Widget _sectionTitle(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
@@ -878,12 +996,17 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        MultiSelectDropdown(
-          options: AppConstants.generalTreatmentPlanOptions,
-          initialSelected: _selectedPlanOptions,
-          label: 'Select Plan Options',
-          onChanged: (vals) => setState(() => _selectedPlanOptions = vals),
-        ),
+        Builder(builder: (ctx){
+          final opt = ctx.watch<OptionsProvider>();
+          return SearchEditableMultiSelect(
+            label: 'Select Plan Options',
+            options: opt.planOptions,
+            initial: _selectedPlanOptions,
+            onChanged: (vals)=> setState(()=> _selectedPlanOptions = vals),
+            onAdd: (v)=> opt.addValue('plan', v),
+            onDelete: (v)=> opt.removeValue('plan', v),
+          );
+        }),
         const SizedBox(height: 8),
         if (_selectedPlanOptions.isEmpty) const Text('No plan options selected'),
         if (_selectedPlanOptions.isNotEmpty)
@@ -899,12 +1022,17 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        MultiSelectDropdown(
-          options: AppConstants.generalTreatmentPlanOptions, // using same list for demo; can create separate constants
-          initialSelected: _selectedTreatmentDoneOptions,
-          label: 'Select Treatments Done',
-          onChanged: (vals) => setState(() => _selectedTreatmentDoneOptions = vals),
-        ),
+        Builder(builder: (ctx){
+          final opt = ctx.watch<OptionsProvider>();
+          return SearchEditableMultiSelect(
+            label: 'Select Treatments Done',
+            options: opt.treatmentDoneOptions,
+            initial: _selectedTreatmentDoneOptions,
+            onChanged: (vals)=> setState(()=> _selectedTreatmentDoneOptions = vals),
+            onAdd: (v)=> opt.addValue('done', v),
+            onDelete: (v)=> opt.removeValue('done', v),
+          );
+        }),
         const SizedBox(height: 8),
         if (_selectedTreatmentDoneOptions.isEmpty) const Text('No treatments selected'),
         if (_selectedTreatmentDoneOptions.isNotEmpty)

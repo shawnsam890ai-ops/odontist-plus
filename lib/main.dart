@@ -4,6 +4,7 @@ import 'core/app_router.dart';
 import 'providers/patient_provider.dart';
 import 'providers/revenue_provider.dart';
 import 'providers/lab_provider.dart';
+import 'providers/options_provider.dart';
 import 'ui/pages/splash_page.dart';
 
 void main() {
@@ -20,6 +21,7 @@ class DentalClinicApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PatientProvider()),
         ChangeNotifierProvider(create: (_) => RevenueProvider()),
         ChangeNotifierProvider(create: (_) => LabProvider()),
+        ChangeNotifierProvider(create: (_) => OptionsProvider()),
       ],
       child: MaterialApp(
         title: 'Dental Clinic',
