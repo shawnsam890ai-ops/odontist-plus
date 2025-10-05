@@ -36,4 +36,18 @@ class AppConstants {
   static const labWorkTypes = [
     'Crown', 'Bridge', 'Denture', 'Aligner', 'Retainer'
   ];
+
+  // New history option lists
+  static const pastDentalHistoryOptions = [
+    'Previous RCT', 'Extraction', 'Orthodontic treatment', 'Trauma', 'Bleeding gums', 'Bad breath'
+  ];
+  static const pastMedicalHistoryOptions = [
+    'Diabetes', 'Hypertension', 'Cardiac disease', 'Asthma', 'Thyroid disorder', 'Epilepsy'
+  ];
+  static const medicationOptions = [
+    'Metformin', 'Insulin', 'Aspirin', 'Antihypertensives', 'Inhaled bronchodilators'
+  ];
+  static const drugAllergyOptions = [
+    'Penicillin', 'Sulfa drugs', 'NSAIDs', 'Local anesthetic', 'Latex'
+  ];
 }

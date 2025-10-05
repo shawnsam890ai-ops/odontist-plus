@@ -14,6 +14,11 @@ class Patient {
   DateTime createdAt;
   final List<TreatmentSession> sessions;
   final List<LabWork> labWorks;
+  // New medical/dental history fields
+  final List<String> pastDentalHistory;
+  final List<String> pastMedicalHistory;
+  final List<String> currentMedications;
+  final List<String> drugAllergies;
 
   Patient({
     required this.id,
@@ -26,9 +31,17 @@ class Patient {
     required this.createdAt,
     this.customNumber = '',
     List<TreatmentSession>? sessions,
-    List<LabWork>? labWorks,
+  List<LabWork>? labWorks,
+  List<String>? pastDentalHistory,
+  List<String>? pastMedicalHistory,
+  List<String>? currentMedications,
+  List<String>? drugAllergies,
   })  : sessions = sessions ?? [],
-        labWorks = labWorks ?? [];
+    labWorks = labWorks ?? [],
+    pastDentalHistory = pastDentalHistory ?? [],
+    pastMedicalHistory = pastMedicalHistory ?? [],
+    currentMedications = currentMedications ?? [],
+    drugAllergies = drugAllergies ?? [];
 
   Patient copyWith({
     String? id,
@@ -42,6 +55,10 @@ class Patient {
     DateTime? createdAt,
     List<TreatmentSession>? sessions,
     List<LabWork>? labWorks,
+    List<String>? pastDentalHistory,
+    List<String>? pastMedicalHistory,
+    List<String>? currentMedications,
+    List<String>? drugAllergies,
   }) => Patient(
         id: id ?? this.id,
         displayNumber: displayNumber ?? this.displayNumber,
@@ -54,6 +71,10 @@ class Patient {
         createdAt: createdAt ?? this.createdAt,
         sessions: sessions ?? List.from(this.sessions),
         labWorks: labWorks ?? List.from(this.labWorks),
+        pastDentalHistory: pastDentalHistory ?? List.from(this.pastDentalHistory),
+        pastMedicalHistory: pastMedicalHistory ?? List.from(this.pastMedicalHistory),
+        currentMedications: currentMedications ?? List.from(this.currentMedications),
+        drugAllergies: drugAllergies ?? List.from(this.drugAllergies),
       );
 
   Map<String, dynamic> toJson() => {
@@ -68,6 +89,10 @@ class Patient {
         'createdAt': createdAt.toIso8601String(),
         'sessions': sessions.map((e) => e.toJson()).toList(),
         'labWorks': labWorks.map((e) => e.toJson()).toList(),
+        'pastDentalHistory': pastDentalHistory,
+        'pastMedicalHistory': pastMedicalHistory,
+        'currentMedications': currentMedications,
+        'drugAllergies': drugAllergies,
       };
 
   factory Patient.fromJson(Map<String, dynamic> json) => Patient(
@@ -82,5 +107,9 @@ class Patient {
         createdAt: DateTime.parse(json['createdAt'] as String),
         sessions: (json['sessions'] as List<dynamic>).map((e) => TreatmentSession.fromJson(e as Map<String, dynamic>)).toList(),
         labWorks: (json['labWorks'] as List<dynamic>).map((e) => LabWork.fromJson(e as Map<String, dynamic>)).toList(),
+        pastDentalHistory: (json['pastDentalHistory'] as List<dynamic>? ?? []).cast<String>(),
+        pastMedicalHistory: (json['pastMedicalHistory'] as List<dynamic>? ?? []).cast<String>(),
+        currentMedications: (json['currentMedications'] as List<dynamic>? ?? []).cast<String>(),
+        drugAllergies: (json['drugAllergies'] as List<dynamic>? ?? []).cast<String>(),
       );
 }

@@ -30,10 +30,18 @@ class _MultiSelectDropdownState extends State<MultiSelectDropdown> {
   @override
   void didUpdateWidget(covariant MultiSelectDropdown oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // sync if external list length changed
-    if (oldWidget.initialSelected.length != widget.initialSelected.length) {
+    // Sync when external list content changes (even if same length)
+    if (!_listsEqual(oldWidget.initialSelected, widget.initialSelected)) {
       _selected = List.from(widget.initialSelected);
     }
+  }
+
+  bool _listsEqual(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false; // order-sensitive; adjust if order not important
+    }
+    return true;
   }
 
   @override

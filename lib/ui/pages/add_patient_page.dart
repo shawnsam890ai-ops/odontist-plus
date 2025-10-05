@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../providers/patient_provider.dart';
 import 'package:provider/provider.dart';
 import '../../core/enums.dart';
+import '../../core/constants.dart';
+import '../widgets/search_multi_select.dart';
 
 class AddPatientPage extends StatefulWidget {
   static const routeName = '/add-patient';
@@ -17,6 +19,11 @@ class _AddPatientPageState extends State<AddPatientPage> {
   final _address = TextEditingController();
   final _phone = TextEditingController();
   Sex _sex = Sex.male;
+  // History selections
+  List<String> _pastDental = [];
+  List<String> _pastMedical = [];
+  List<String> _currentMeds = [];
+  List<String> _drugAllergies = [];
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +70,38 @@ class _AddPatientPageState extends State<AddPatientPage> {
                 keyboardType: TextInputType.phone,
               ),
               const SizedBox(height: 24),
+              Text('Medical / Dental History', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              SearchMultiSelect(
+                options: AppConstants.pastDentalHistoryOptions,
+                initial: _pastDental,
+                label: 'Past Dental History',
+                onChanged: (v) => setState(() => _pastDental = v),
+              ),
+              const SizedBox(height: 12),
+              SearchMultiSelect(
+                options: AppConstants.pastMedicalHistoryOptions,
+                initial: _pastMedical,
+                label: 'Past Medical History',
+                onChanged: (v) => setState(() => _pastMedical = v),
+              ),
+              if (_pastMedical.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                SearchMultiSelect(
+                  options: AppConstants.medicationOptions,
+                  initial: _currentMeds,
+                  label: 'Current Medications',
+                  onChanged: (v) => setState(() => _currentMeds = v),
+                ),
+              ],
+              const SizedBox(height: 12),
+              SearchMultiSelect(
+                options: AppConstants.drugAllergyOptions,
+                initial: _drugAllergies,
+                label: 'Drug Allergies',
+                onChanged: (v) => setState(() => _drugAllergies = v),
+              ),
+              const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -74,6 +113,10 @@ class _AddPatientPageState extends State<AddPatientPage> {
                           sex: _sex,
                           address: _address.text.trim(),
                           phone: _phone.text.trim(),
+                          pastDentalHistory: _pastDental,
+                          pastMedicalHistory: _pastMedical,
+                          currentMedications: _currentMeds,
+                          drugAllergies: _drugAllergies,
                         );
                     if (!mounted) return;
                     Navigator.of(context).pop();

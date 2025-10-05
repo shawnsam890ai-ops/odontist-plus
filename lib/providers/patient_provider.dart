@@ -24,8 +24,22 @@ class PatientProvider extends ChangeNotifier {
     required Sex sex,
     required String address,
     required String phone,
+    List<String>? pastDentalHistory,
+    List<String>? pastMedicalHistory,
+    List<String>? currentMedications,
+    List<String>? drugAllergies,
   }) async {
-    await _repo.addPatient(name: name, age: age, sex: sex, address: address, phone: phone);
+    await _repo.addPatient(
+      name: name,
+      age: age,
+      sex: sex,
+      address: address,
+      phone: phone,
+      pastDentalHistory: pastDentalHistory,
+      pastMedicalHistory: pastMedicalHistory,
+      currentMedications: currentMedications,
+      drugAllergies: drugAllergies,
+    );
     notifyListeners();
   }
 

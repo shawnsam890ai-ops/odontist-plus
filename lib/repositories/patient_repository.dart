@@ -32,6 +32,10 @@ class PatientRepository {
     required Sex sex,
     required String address,
     required String phone,
+    List<String>? pastDentalHistory,
+    List<String>? pastMedicalHistory,
+    List<String>? currentMedications,
+    List<String>? drugAllergies,
   }) async {
     final patient = Patient(
       id: _uuid.v4(),
@@ -42,6 +46,10 @@ class PatientRepository {
       address: address,
       phone: phone,
       createdAt: DateTime.now(),
+      pastDentalHistory: pastDentalHistory,
+      pastMedicalHistory: pastMedicalHistory,
+      currentMedications: currentMedications,
+      drugAllergies: drugAllergies,
     );
     _patients.add(patient);
     await _persist();

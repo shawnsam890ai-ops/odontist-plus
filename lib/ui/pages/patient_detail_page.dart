@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../../providers/patient_provider.dart';
 import '../../core/enums.dart';
 import '../../core/constants.dart';
 import '../../models/treatment_session.dart';
+import '../../models/patient.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import '../widgets/multi_select_dropdown.dart';
 
 class PatientDetailPage extends StatefulWidget {
@@ -198,6 +202,28 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             Text('Phone: ${patient.phone}'),
             Text('Address: ${patient.address}'),
             const SizedBox(height: 8),
+            if (patient.pastDentalHistory.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('Past Dental: ${patient.pastDentalHistory.join(', ')}'),
+              ),
+            if (patient.pastMedicalHistory.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('Past Medical: ${patient.pastMedicalHistory.join(', ')}'),
+              ),
+            if (patient.currentMedications.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('Medications: ${patient.currentMedications.join(', ')}'),
+              ),
+            if (patient.drugAllergies.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('Allergies: ${patient.drugAllergies.join(', ')}', style: const TextStyle(color: Colors.redAccent)),
+              ),
+            if (patient.pastDentalHistory.isNotEmpty || patient.pastMedicalHistory.isNotEmpty || patient.currentMedications.isNotEmpty || patient.drugAllergies.isNotEmpty)
+              const SizedBox(height: 8),
             Wrap(spacing: 8, children: [
               ElevatedButton.icon(
                 onPressed: () => _openLabWork(patient.id),
@@ -712,18 +738,22 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           type: TreatmentType.general,
           date: DateTime.now(),
           parentSessionId: _followUpParentId,
-          chiefComplaint: ChiefComplaintEntry(complaints: _selectedComplaints, quadrants: _selectedQuadrants),
-          oralExamFindings: _oralFindings,
-          investigations: _investigations,
-          investigationFindings: _investigationFindings,
-          generalTreatmentPlan: _treatmentPlan, // legacy
-          toothPlans: _toothPlans,
-          treatmentsDone: _treatmentsDone,
-          planOptions: _selectedPlanOptions,
-          treatmentDoneOptions: _selectedTreatmentDoneOptions,
+          // Deep copies to preserve snapshot (avoid later clears mutating saved session)
+          chiefComplaint: ChiefComplaintEntry(
+            complaints: List.from(_selectedComplaints),
+            quadrants: List.from(_selectedQuadrants),
+          ),
+          oralExamFindings: List.from(_oralFindings),
+          investigations: List.from(_investigations),
+          investigationFindings: List.from(_investigationFindings),
+          generalTreatmentPlan: List.from(_treatmentPlan), // legacy
+          toothPlans: List.from(_toothPlans),
+          treatmentsDone: List.from(_treatmentsDone),
+          planOptions: List.from(_selectedPlanOptions),
+          treatmentDoneOptions: List.from(_selectedTreatmentDoneOptions),
           notes: _notes.text.trim(),
-          prescription: _prescription,
-          mediaPaths: _mediaPaths,
+          prescription: List.from(_prescription),
+          mediaPaths: List.from(_mediaPaths),
           nextAppointment: _nextAppointment,
         );
       case TreatmentType.orthodontic:
@@ -736,7 +766,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           bracketType: _bracketType,
           orthoTotalAmount: double.tryParse(_orthoTotal.text.trim()),
           orthoDoctorInCharge: _orthoDoctor.text.trim(),
-          orthoSteps: _orthoSteps,
+          orthoSteps: List.from(_orthoSteps),
         );
       case TreatmentType.rootCanal:
         return TreatmentSession(
@@ -744,9 +774,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           type: TreatmentType.rootCanal,
           date: DateTime.now(),
           parentSessionId: _followUpParentId,
-          rootCanalFindings: _rcFindings,
+          rootCanalFindings: List.from(_rcFindings),
           rootCanalTotalAmount: double.tryParse(_rcTotal.text.trim()),
-          rootCanalSteps: _rcSteps,
+          rootCanalSteps: List.from(_rcSteps),
         );
       case TreatmentType.labWork:
         return TreatmentSession(
@@ -1178,125 +1208,171 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   }
 
   void _viewSessionDialog(TreatmentSession s, List<String> planOpts, List<String> doneOpts) {
+    // Custom rich formatting only for general sessions as requested
     if (s.type == TreatmentType.general) {
-      final complaintText = () {
-        if (s.chiefComplaint == null) return null;
-        final cc = s.chiefComplaint!;
-        if (cc.complaints.isEmpty && cc.quadrants.isEmpty) return null;
-        final complaint = cc.complaints.join(', ');
-        final quadrant = cc.quadrants.isNotEmpty ? ' w.r.t ${cc.quadrants.join(', ')}' : '';
-        return 'Pt c/o of $complaint$quadrant.';
-      }();
-      final oralList = s.oralExamFindings.isEmpty
-          ? null
-          : List.generate(s.oralExamFindings.length, (i) {
-              final f = s.oralExamFindings[i];
-              return '${String.fromCharCode(97 + i)}) ${f.toothNumber}, ${f.finding}';
-            });
-      final invDone = s.investigations.isEmpty ? null : s.investigations.map((e) => e.label).join(', ');
-      final invFindings = s.investigationFindings.isEmpty
-          ? null
-          : s.investigationFindings.asMap().entries.map((e) => '${String.fromCharCode(97 + e.key)}) ${e.value.toothNumber}, ${e.value.finding}').toList();
-      final planTooth = s.toothPlans.isEmpty
-          ? null
-          : s.toothPlans.asMap().entries.map((e) => '${String.fromCharCode(97 + e.key)}) ${e.value.toothNumber}, ${e.value.plan}').toList();
-      final doneTooth = s.treatmentsDone.isEmpty
-          ? null
-          : s.treatmentsDone.asMap().entries.map((e) => '${String.fromCharCode(97 + e.key)}) ${e.value.toothNumber}, ${e.value.treatment}').toList();
+      final bold = Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold);
+      String _alphaIndex(int i) => String.fromCharCode(97 + i); // a, b, c
+
+      final ccComplaints = s.chiefComplaint?.complaints ?? [];
+      final ccQuadrants = s.chiefComplaint?.quadrants ?? [];
+      final oral = s.oralExamFindings;
+      final invDone = s.investigations;
+      final invFindings = s.investigationFindings;
+      final toothPlans = s.toothPlans; // structured per-tooth plan
+      final toothTreatments = s.treatmentsDone; // structured per-tooth treatments
+
+      // Fallback to option lists if structured lists empty
+      final planDisplayStructured = toothPlans.isNotEmpty;
+      final treatmentDisplayStructured = toothTreatments.isNotEmpty;
+
+      final children = <Widget>[];
+      int section = 1;
+
+      // 1. Chief complaint (always show in general for clarity)
+      final complaintText = ccComplaints.isNotEmpty ? ccComplaints.join(', ') : 'No complaint recorded';
+      final quadrantsText = ccQuadrants.isNotEmpty ? ccQuadrants.join(', ') : 'N/A';
+      children.add(RichText(
+        text: TextSpan(style: Theme.of(context).textTheme.bodyMedium, children: [
+          TextSpan(text: '${section++}. '),
+          TextSpan(text: 'Chief complaint', style: bold),
+          const TextSpan(text: ' : '),
+          TextSpan(text: 'Pt c/o of $complaintText wrt $quadrantsText.'),
+        ]),
+      ));
+      children.add(const SizedBox(height: 6));
+
+      // 2. Oral findings enumerated a) tooth, finding
+      final oralLine = oral.isNotEmpty
+          ? oral.asMap().entries.map((e) {
+              final idx = e.key; final f = e.value; return '${_alphaIndex(idx)}) ${f.toothNumber}, ${f.finding}';
+            }).join('  ')
+          : 'None';
+      children.add(RichText(
+        text: TextSpan(style: Theme.of(context).textTheme.bodyMedium, children: [
+          TextSpan(text: '${section++}. '),
+          TextSpan(text: 'Oral findings', style: bold),
+          const TextSpan(text: ' : '),
+          TextSpan(text: oralLine),
+        ]),
+      ));
+      children.add(const SizedBox(height: 6));
+
+      // 3. Investigation done
+      children.add(RichText(
+        text: TextSpan(style: Theme.of(context).textTheme.bodyMedium, children: [
+          TextSpan(text: '${section++}. '),
+          TextSpan(text: 'Investigation done', style: bold),
+          const TextSpan(text: ' : '),
+          TextSpan(text: invDone.isEmpty ? 'None' : invDone.map((e) => e.label).join(', ')),
+        ]),
+      ));
+      children.add(const SizedBox(height: 6));
+
+      // 4. Investigational findings
+      final findingsText = invFindings.isNotEmpty
+          ? invFindings.map((f) => '${f.toothNumber}, ${f.finding}').join('  ')
+          : 'None';
+      children.add(RichText(
+        text: TextSpan(style: Theme.of(context).textTheme.bodyMedium, children: [
+          TextSpan(text: '${section++}. '),
+          TextSpan(text: 'Investigational findings', style: bold),
+          const TextSpan(text: ' : '),
+          TextSpan(text: findingsText),
+        ]),
+      ));
+      children.add(const SizedBox(height: 6));
+
+      // 5. Treatment Plan
+      String planLine;
+      if (planDisplayStructured && toothPlans.isNotEmpty) {
+        planLine = toothPlans.asMap().entries.map((e) {
+          final idx = e.key; final p = e.value; return '${_alphaIndex(idx)}. ${p.toothNumber}, ${p.plan}';
+        }).join('  ');
+      } else if (planOpts.isNotEmpty) {
+        planLine = planOpts.join(', ');
+      } else {
+        planLine = 'None';
+      }
+      children.add(RichText(
+        text: TextSpan(style: Theme.of(context).textTheme.bodyMedium, children: [
+          TextSpan(text: '${section++}. '),
+          TextSpan(text: 'Treatment Plan', style: bold),
+          const TextSpan(text: ' : '),
+          TextSpan(text: planLine),
+        ]),
+      ));
+      children.add(const SizedBox(height: 6));
+
+      // 6. Treatment done
+      String doneLine;
+      if (treatmentDisplayStructured && toothTreatments.isNotEmpty) {
+        doneLine = toothTreatments.asMap().entries.map((e) {
+          final idx = e.key; final t = e.value; return '${_alphaIndex(idx)}. ${t.toothNumber}, ${t.treatment}';
+        }).join('  ');
+      } else if (doneOpts.isNotEmpty) {
+        doneLine = doneOpts.join(', ');
+      } else {
+        doneLine = 'None';
+      }
+      children.add(RichText(
+        text: TextSpan(style: Theme.of(context).textTheme.bodyMedium, children: [
+          TextSpan(text: '${section++}. '),
+          TextSpan(text: 'Treatment done', style: bold),
+          const TextSpan(text: ' : '),
+          TextSpan(text: doneLine),
+        ]),
+      ));
+      children.add(const SizedBox(height: 6));
+
+      // Next appointment
+      if (s.nextAppointment != null) {
+        children.add(RichText(
+          text: TextSpan(style: Theme.of(context).textTheme.bodyMedium, children: [
+            TextSpan(text: 'Next appointment: ', style: bold),
+            TextSpan(text: s.nextAppointment!.toLocal().toString().split(' ').first),
+          ]),
+        ));
+        children.add(const SizedBox(height: 6));
+      }
+
+      // Notes
+      if (s.notes.isNotEmpty) {
+        children.add(RichText(
+          text: TextSpan(style: Theme.of(context).textTheme.bodyMedium, children: [
+            TextSpan(text: 'Notes: ', style: bold),
+            TextSpan(text: s.notes),
+          ]),
+        ));
+      }
 
       showDialog(
           context: context,
           builder: (_) => AlertDialog(
                 title: const Text('General Session Details'),
                 content: SizedBox(
-                  width: 480,
+                  width: 500,
                   child: SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (complaintText != null) ...[
-                          _boldLine('1. Chief Complaint:'),
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8, bottom: 8),
-                            child: Text(complaintText),
-                          ),
-                        ],
-                        if (oralList != null) ...[
-                          _boldLine('2. Oral Findings:'),
-                          ...oralList.map((l) => Padding(
-                                padding: const EdgeInsets.only(left: 8),
-                                child: Text(l),
-                              )),
-                          const SizedBox(height: 8),
-                        ],
-                        if (invDone != null) ...[
-                          _boldLine('3. Investigation Done:'),
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8, bottom: 8),
-                            child: Text(invDone),
-                          ),
-                        ],
-                        if (invFindings != null) ...[
-                          _boldLine('4. Investigational Findings:'),
-                          ...invFindings.map((l) => Padding(
-                                padding: const EdgeInsets.only(left: 8),
-                                child: Text(l),
-                              )),
-                          const SizedBox(height: 8),
-                        ],
-                        if (planTooth != null || planOpts.isNotEmpty) ...[
-                          _boldLine('5. Treatment Plan:'),
-                          if (planOpts.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 8, bottom: 4),
-                              child: Text(planOpts.join(', ')),
-                            ),
-                          if (planTooth != null)
-                            ...planTooth.map((l) => Padding(
-                                  padding: const EdgeInsets.only(left: 8),
-                                  child: Text(l),
-                                )),
-                          const SizedBox(height: 8),
-                        ],
-                        if (doneTooth != null || doneOpts.isNotEmpty) ...[
-                          _boldLine('6. Treatment Done:'),
-                          if (doneOpts.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 8, bottom: 4),
-                              child: Text(doneOpts.join(', ')),
-                            ),
-                          if (doneTooth != null)
-                            ...doneTooth.map((l) => Padding(
-                                  padding: const EdgeInsets.only(left: 8),
-                                  child: Text(l),
-                                )),
-                          const SizedBox(height: 8),
-                        ],
-                        if (s.nextAppointment != null) ...[
-                          _boldLine('Next Appointment:'),
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8, bottom: 8),
-                            child: Text(s.nextAppointment!.toLocal().toString().split(' ').first),
-                          ),
-                        ],
-                        if (s.notes.isNotEmpty) ...[
-                          _boldLine('Notes:'),
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: Text(s.notes),
-                          ),
-                        ],
-                      ],
+                      children: children,
                     ),
                   ),
                 ),
                 actions: [
+          TextButton(
+            onPressed: () => _printGeneralSession(
+              patient: context.read<PatientProvider>().byId(widget.patientId!)!,
+              s: s,
+              planOpts: planOpts,
+              doneOpts: doneOpts,
+              ),
+            child: const Text('Print')),
                   TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
                 ],
               ));
       return;
     }
-    // Fallback for other session types
+    // Non-general fallback to previous simple list formatting
     final lines = _buildSessionDetailLines(s, planOpts, doneOpts);
     showDialog(
         context: context,
@@ -1319,11 +1395,6 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               ],
             ));
   }
-
-  Widget _boldLine(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Text(text, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-      );
 
   void _editExistingSession(TreatmentSession s) {
     // For now: load into current form for editing only if same type (general). More types can be added later.
@@ -1391,6 +1462,134 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     _rcFindings.clear();
     _rcTotal.clear();
     _rcSteps.clear();
+  }
+
+  Future<void> _printGeneralSession({required Patient patient, required TreatmentSession s, required List<String> planOpts, required List<String> doneOpts}) async {
+    // Build the exact same textual representation used in dialog
+    if (s.type != TreatmentType.general) return;
+    final doc = pw.Document();
+    String alpha(int i) => String.fromCharCode(97 + i);
+
+    final ccComplaints = s.chiefComplaint?.complaints ?? [];
+    final ccQuadrants = s.chiefComplaint?.quadrants ?? [];
+    final oral = s.oralExamFindings;
+    final invDone = s.investigations;
+    final invFindings = s.investigationFindings;
+    final toothPlans = s.toothPlans;
+    final toothTreatments = s.treatmentsDone;
+    final planDisplayStructured = toothPlans.isNotEmpty;
+    final treatmentDisplayStructured = toothTreatments.isNotEmpty;
+
+    String complaintText = ccComplaints.isNotEmpty ? ccComplaints.join(', ') : 'No complaint recorded';
+    String quadrantsText = ccQuadrants.isNotEmpty ? ccQuadrants.join(', ') : 'N/A';
+    String oralLine = oral.isNotEmpty
+        ? oral.asMap().entries.map((e) => '${alpha(e.key)}) ${e.value.toothNumber}, ${e.value.finding}').join('  ')
+        : 'None';
+    String invDoneLine = invDone.isEmpty ? 'None' : invDone.map((e) => e.label).join(', ');
+    String invFindingsLine = invFindings.isNotEmpty
+        ? invFindings.map((f) => '${f.toothNumber}, ${f.finding}').join('  ')
+        : 'None';
+    String planLine;
+    if (planDisplayStructured && toothPlans.isNotEmpty) {
+      planLine = toothPlans.asMap().entries.map((e) => '${alpha(e.key)}. ${e.value.toothNumber}, ${e.value.plan}').join('  ');
+    } else if (planOpts.isNotEmpty) {
+      planLine = planOpts.join(', ');
+    } else {
+      planLine = 'None';
+    }
+    String doneLine;
+    if (treatmentDisplayStructured && toothTreatments.isNotEmpty) {
+      doneLine = toothTreatments.asMap().entries.map((e) => '${alpha(e.key)}. ${e.value.toothNumber}, ${e.value.treatment}').join('  ');
+    } else if (doneOpts.isNotEmpty) {
+      doneLine = doneOpts.join(', ');
+    } else {
+      doneLine = 'None';
+    }
+    final nextAppt = s.nextAppointment == null ? null : s.nextAppointment!.toLocal().toString().split(' ').first;
+
+    // Load optional header/footer images (ignore if missing)
+    Future<pw.Widget?> loadImage(String assetPath) async {
+      try {
+        final data = await rootBundle.load(assetPath);
+        final bytes = data.buffer.asUint8List();
+        final image = pw.MemoryImage(bytes);
+        return pw.Image(image, fit: pw.BoxFit.contain, height: 80);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    Future<pw.Widget?> resolveImage(String base) async {
+      // If caller passes a name with extension already, try directly first
+      final hasExt = base.contains('.') && !base.endsWith('.');
+      final candidates = <String>[];
+      if (hasExt) {
+        candidates.add('assets/images/' + base);
+      } else {
+        candidates.addAll([
+          'assets/images/' + base + '.png',
+          'assets/images/' + base + '.jpg',
+          'assets/images/' + base + '.jpeg',
+        ]);
+      }
+      for (final c in candidates) {
+        final w = await loadImage(c);
+        if (w != null) return w;
+      }
+      // Debug print (will show in console, harmless in release)
+      // ignore: avoid_print
+      print('Print header/footer: none of these paths found: ' + candidates.join(', '));
+      return null;
+    }
+
+    final headerImage = await resolveImage('clinic_header');
+    final footerImage = await resolveImage('clinic_footer');
+
+    final demographics = 'Patient: ${patient.name}  ID: ${patient.displayNumber}${patient.customNumber.isNotEmpty ? ' (${patient.customNumber})' : ''}\nAge/Sex: ${patient.age}/${patient.sex.label}   Date: ${DateTime.now().toLocal().toString().split(' ').first}';
+
+    doc.addPage(
+      pw.MultiPage(
+        margin: const pw.EdgeInsets.all(24),
+        header: (ctx) => headerImage == null
+            ? pw.SizedBox()
+            : pw.Column(children: [headerImage, pw.Divider(thickness: 1)]),
+        footer: (ctx) => footerImage == null
+            ? pw.SizedBox()
+            : pw.Column(children: [pw.Divider(thickness: 1), footerImage]),
+        build: (ctx) => [
+          pw.Text('GENERAL SESSION REPORT', style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 8),
+            pw.Text(demographics, style: const pw.TextStyle(fontSize: 10)),
+            pw.SizedBox(height: 12),
+            pw.Text('1. Chief complaint : Pt c/o of $complaintText wrt $quadrantsText.'),
+            pw.SizedBox(height: 4),
+            pw.Text('2. Oral findings : $oralLine'),
+            pw.SizedBox(height: 4),
+            pw.Text('3. Investigation done : $invDoneLine'),
+            pw.SizedBox(height: 4),
+            pw.Text('4. Investigational findings : $invFindingsLine'),
+            pw.SizedBox(height: 4),
+            pw.Text('5. Treatment Plan : $planLine'),
+            pw.SizedBox(height: 4),
+            pw.Text('6. Treatment done : $doneLine'),
+            if (nextAppt != null) ...[
+              pw.SizedBox(height: 8),
+              pw.Text('Next appointment: $nextAppt'),
+            ],
+            if (s.notes.isNotEmpty) ...[
+              pw.SizedBox(height: 4),
+              pw.Text('Notes: ${s.notes}'),
+            ],
+        ],
+      ),
+    );
+
+  await Printing.layoutPdf(onLayout: (format) async => doc.save());
+    if (headerImage == null || footerImage == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Header/Footer image missing (expected clinic_header / clinic_footer in assets/images).')));
+      }
+    }
   }
 
   // New containerized session history with rounded edges
