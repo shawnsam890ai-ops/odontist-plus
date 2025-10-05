@@ -77,6 +77,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   final List<OralExamFinding> _rcFindings = [];
   final TextEditingController _rcTotal = TextEditingController();
   final List<ProcedureStep> _rcSteps = [];
+  // Session history filtering by registered date (unique existing session dates)
+  String? _sessionFilterDateStr; // YYYY-MM-DD string currently selected
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +86,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     _ensureOptionsLoaded(context);
     final patient = widget.patientId == null ? null : context.watch<PatientProvider>().byId(widget.patientId!);
     if (patient == null) return const Scaffold(body: Center(child: Text('Patient not found')));
-  return Scaffold(
+    return Scaffold(
       appBar: AppBar(title: Text(patient.name)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -98,13 +100,13 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: _typeSelector()),
+                  Expanded(child: _typeSelector()),
                 const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: () => setState(() => _showRxForm = true),
-                  icon: const Icon(Icons.add_circle_outline),
-                  label: const Text('Add Rx'),
-                )
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.add_circle_outline),
+                      label: const Text('Add Rx'),
+                      onPressed: () => setState(() => _showRxForm = true),
+                    )
               ],
             ),
             const SizedBox(height: 12),
@@ -1297,7 +1299,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     }
     // Sort parents by date descending
     parents.sort((a,b)=> b.date.compareTo(a.date));
-    Widget buildTile(TreatmentSession s, {bool isFollowUp=false}) {
+  Widget buildTile(TreatmentSession s, {bool isFollowUp=false, int? parentCount}) {
       List<String> planOpts;
       List<String> doneOpts;
       try {
@@ -1310,11 +1312,54 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       } catch (_) { doneOpts = <String>[]; }
       final orderedDetails = _buildSessionDetailLines(s, planOpts, doneOpts);
       final titlePrefix = isFollowUp ? 'Follow-Up' : s.type.label;
+      final badge = !isFollowUp && parentCount != null && parentCount > 0
+          ? Container(
+              margin: const EdgeInsets.only(left:8),
+              padding: const EdgeInsets.symmetric(horizontal:6, vertical:2),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(parentCount.toString(), style: Theme.of(context).textTheme.labelSmall),
+            )
+          : const SizedBox.shrink();
+      // Timeline visuals for follow-ups
+      Widget leadingBullet(bool isLast) {
+        return SizedBox(
+          width: 20,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.secondary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              if (!isLast)
+                Container(
+                  margin: const EdgeInsets.only(top: 2),
+                  width: 2,
+                  height: 18,
+                  color: Theme.of(context).dividerColor.withOpacity(0.5),
+                ),
+            ],
+          ),
+        );
+      }
       return ExpansionTile(
         initiallyExpanded: false,
-        tilePadding: EdgeInsets.only(left: isFollowUp ? 32 : 12, right: 12, top: 4, bottom: 4),
+        tilePadding: EdgeInsets.only(left: isFollowUp ? 12 : 12, right: 12, top: 4, bottom: 4),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        title: Text('$titlePrefix • ${s.date.toLocal().toString().split(' ').first}'),
+        title: Row(
+          children: [
+            if (isFollowUp) leadingBullet(false) else const SizedBox(width: 0),
+            Flexible(child: Text('$titlePrefix • ${s.date.toLocal().toString().split(' ').first}')),
+            if (!isFollowUp) badge,
+          ],
+        ),
         subtitle: Text(orderedDetails.take(2).join('  '), maxLines: 2, overflow: TextOverflow.ellipsis),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
           IconButton(
@@ -1344,19 +1389,55 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         ],
       );
     }
+    // Filtering logic: all tokens must match somewhere (type, date, details). Supports partial date search.
+    bool matches(TreatmentSession s, List<String> planOpts, List<String> doneOpts) {
+      if (_sessionFilterDateStr == null) return true;
+      final dateStr = s.date.toLocal().toString().split(' ').first; // yyyy-mm-dd
+      return dateStr == _sessionFilterDateStr;
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 8),
-        Text('Previous Sessions', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         for (final p in parents) ...[
-          buildTile(p, isFollowUp: false),
-          if (followUps[p.id] != null) ...[
-            // Sort follow-ups chronological ascending under parent
-            for (final f in (followUps[p.id]!..sort((a,b)=> a.date.compareTo(b.date))))
-              buildTile(f, isFollowUp: true)
-          ]
+          () {
+            // Evaluate parent & children for filter
+            final children = (followUps[p.id] ?? [])..sort((a,b)=> a.date.compareTo(b.date));
+            // Precompute plan/done for parent to test filter
+            List<String> parentPlan = [];
+            List<String> parentDone = [];
+            try { parentPlan = (p as dynamic).planOptions?.cast<String>() ?? []; } catch(_){ parentPlan = []; }
+            try { parentDone = (p as dynamic).treatmentDoneOptions?.cast<String>() ?? []; } catch(_){ parentDone = []; }
+            final childMatch = <TreatmentSession>[];
+            for (final c in children) {
+              List<String> cp = [];
+              List<String> cd = [];
+              try { cp = (c as dynamic).planOptions?.cast<String>() ?? []; } catch(_){ cp = []; }
+              try { cd = (c as dynamic).treatmentDoneOptions?.cast<String>() ?? []; } catch(_){ cd = []; }
+              if (matches(c, cp, cd)) childMatch.add(c);
+            }
+            final parentMatches = matches(p, parentPlan, parentDone);
+            if (!parentMatches && childMatch.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                buildTile(p, isFollowUp: false, parentCount: (followUps[p.id] ?? []).length),
+                if (childMatch.isNotEmpty) ...[
+                  // Render follow-ups with timeline connector; mark last
+                  for (var i=0;i<childMatch.length;i++)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(width: 8),
+                        Expanded(child: buildTile(childMatch[i], isFollowUp: true)),
+                      ],
+                    )
+                ]
+              ],
+            );
+          }(),
         ]
       ],
     );
@@ -1888,19 +1969,85 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text('Previous Sessions', style: Theme.of(context).textTheme.titleMedium),
-              const Spacer(),
-              if (!_showRxForm)
-                TextButton.icon(
-                  onPressed: () => setState(() => _showRxForm = true),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Rx'),
-                )
-            ],
+          LayoutBuilder(
+            builder: (ctx, constraints) {
+              final isNarrow = constraints.maxWidth < 480;
+              // Build unique session date list (yyyy-mm-dd) from patient's sessions
+              final sessions = patient.sessions as List<TreatmentSession>;
+              final dateSet = <String>{};
+              for (final s in sessions) {
+                dateSet.add(s.date.toLocal().toString().split(' ').first);
+              }
+              final dates = dateSet.toList()..sort((a,b)=> b.compareTo(a));
+              final dateDropdown = ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 220),
+                child: DropdownButtonFormField<String>(
+                  isDense: true,
+                  decoration: const InputDecoration(labelText: 'Registered Date'),
+                  value: _sessionFilterDateStr ?? '',
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('All Dates')),
+                    ...dates.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                  ],
+                  onChanged: (val) => setState(() => _sessionFilterDateStr = (val == '' ? null : val)),
+                ),
+              );
+              final clearBtn = (_sessionFilterDateStr != null)
+                  ? IconButton(
+                      tooltip: 'Clear date filter',
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => setState(() => _sessionFilterDateStr = null),
+                    )
+                  : const SizedBox.shrink();
+              final addRxBtn = (!_showRxForm)
+                  ? TextButton.icon(
+                      onPressed: () => setState(() => _showRxForm = true),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Rx'),
+                    )
+                  : const SizedBox.shrink();
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Previous Sessions',
+                            style: Theme.of(context).textTheme.titleMedium,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        addRxBtn,
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(child: dateDropdown),
+                        clearBtn,
+                      ],
+                    ),
+                  ],
+                );
+              }
+              // Wide layout: keep in one row
+              return Row(
+                children: [
+                  Text('Previous Sessions', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(width: 16),
+                  dateDropdown,
+                  const SizedBox(width: 8),
+                  clearBtn,
+                  const Spacer(),
+                  addRxBtn,
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           _sessionHistory(patient),
         ],
       ),
@@ -1908,20 +2055,60 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   }
 
   Future<void> _deleteSessionConfirm(patient, String sessionId) async {
+    final sessions = patient.sessions as List<TreatmentSession>;
+    final hasChildren = sessions.any((s) => s.parentSessionId == sessionId);
+    bool cascade = false;
     final ok = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-              title: const Text('Delete Session'),
-              content: const Text('Are you sure you want to delete this session permanently?'),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+      context: context,
+      builder: (_) => StatefulBuilder(builder: (c, setSt) {
+        return AlertDialog(
+          title: const Text('Delete Session'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!hasChildren) const Text('Are you sure you want to delete this session permanently?') else ...[
+                  const Text('This session has follow-up sessions.'),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: cascade,
+                    onChanged: (v)=> setSt(()=> cascade = v ?? false),
+                    title: const Text('Also delete all its follow-ups (cascade).'),
+                  ),
+                  const SizedBox(height:4),
+                  if(!cascade) const Text('Deletion blocked unless you choose cascade.', style: TextStyle(fontSize:12, color: Colors.redAccent)),
+                ],
               ],
-            ));
+            ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                if (hasChildren && !cascade) {
+                  Navigator.pop(context, false);
+                } else {
+                  Navigator.pop(context, true);
+                }
+              },
+              child: Text(hasChildren ? (cascade ? 'Delete All' : 'Delete') : 'Delete'),
+            ),
+          ],
+        );
+      })
+    );
     if (ok == true) {
-      await context.read<PatientProvider>().removeSession(patient.id, sessionId);
+      final provider = context.read<PatientProvider>();
+      // If cascade, delete children first
+      if (cascade) {
+        final children = sessions.where((s) => s.parentSessionId == sessionId).toList();
+        for (final ch in children) {
+          await provider.removeSession(patient.id, ch.id);
+        }
+      }
+      await provider.removeSession(patient.id, sessionId);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session deleted')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Session${cascade ? ' and follow-ups' : ''} deleted')));
       setState(() {});
     }
   }
