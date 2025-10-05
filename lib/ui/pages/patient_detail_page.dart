@@ -11,6 +11,8 @@ import '../../models/treatment_session.dart';
 import '../../models/patient.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../widgets/multi_select_dropdown.dart';
+// import '../widgets/search_multi_select.dart'; // no longer needed here after moving to full-screen edit page
+import 'edit_patient_page.dart';
 
 class PatientDetailPage extends StatefulWidget {
   static const routeName = '/patient-detail';
@@ -230,6 +232,11 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 icon: const Icon(Icons.biotech, size: 18),
                 label: const Text('Lab Work'),
               ),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).pushNamed(EditPatientPage.routeName, arguments: {'patientId': patient.id}),
+                icon: const Icon(Icons.manage_accounts, size: 18),
+                label: const Text('Edit Patient'),
+              ),
               if (_followUpParentId != null)
                 OutlinedButton(
                     onPressed: () {
@@ -244,6 +251,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       ),
     );
   }
+
+  // (Edit patient dialog removed in favor of full-screen page)
 
   Widget _typeSelector() {
     return Row(
@@ -1545,7 +1554,21 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     final headerImage = await resolveImage('clinic_header');
     final footerImage = await resolveImage('clinic_footer');
 
-    final demographics = 'Patient: ${patient.name}  ID: ${patient.displayNumber}${patient.customNumber.isNotEmpty ? ' (${patient.customNumber})' : ''}\nAge/Sex: ${patient.age}/${patient.sex.label}   Date: ${DateTime.now().toLocal().toString().split(' ').first}';
+  final demographicsLeft = 'Patient: ${patient.name}\nID: ${patient.displayNumber}${patient.customNumber.isNotEmpty ? ' (${patient.customNumber})' : ''}\nAge/Sex: ${patient.age}/${patient.sex.label}\nDate: ${DateTime.now().toLocal().toString().split(' ').first}';
+    // Build concise history summary (only show non-empty)
+    List<pw.Widget> historyLines = [];
+    if (patient.pastDentalHistory.isNotEmpty) {
+      historyLines.add(pw.Text('Dental: ' + patient.pastDentalHistory.join(', '), style: const pw.TextStyle(fontSize: 9)));
+    }
+    if (patient.pastMedicalHistory.isNotEmpty) {
+      historyLines.add(pw.Text('Medical: ' + patient.pastMedicalHistory.join(', '), style: const pw.TextStyle(fontSize: 9)));
+    }
+    if (patient.currentMedications.isNotEmpty) {
+      historyLines.add(pw.Text('Meds: ' + patient.currentMedications.join(', '), style: const pw.TextStyle(fontSize: 9)));
+    }
+    if (patient.drugAllergies.isNotEmpty) {
+  historyLines.add(pw.Text('Allergies: ' + patient.drugAllergies.join(', '), style: const pw.TextStyle(fontSize: 9)));
+    }
 
     doc.addPage(
       pw.MultiPage(
@@ -1559,7 +1582,16 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         build: (ctx) => [
           pw.Text('GENERAL SESSION REPORT', style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 8),
-            pw.Text(demographics, style: const pw.TextStyle(fontSize: 10)),
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(child: pw.Text(demographicsLeft, style: const pw.TextStyle(fontSize: 10))),
+                if (historyLines.isNotEmpty) ...[
+                  pw.SizedBox(width: 16),
+                  pw.Expanded(child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [pw.Text('History:', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)), ...historyLines]))
+                ]
+              ],
+            ),
             pw.SizedBox(height: 12),
             pw.Text('1. Chief complaint : Pt c/o of $complaintText wrt $quadrantsText.'),
             pw.SizedBox(height: 4),

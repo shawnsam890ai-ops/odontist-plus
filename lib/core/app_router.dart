@@ -6,6 +6,7 @@ import '../ui/pages/patient_list_page.dart';
 import '../ui/pages/add_patient_page.dart';
 import '../ui/pages/patient_detail_page.dart';
 import '../ui/pages/patient_lab_work_page.dart';
+import '../ui/pages/edit_patient_page.dart';
 
 class AppRouter {
   static Route<dynamic> generate(RouteSettings settings) {
@@ -28,6 +29,13 @@ class AppRouter {
         final args = settings.arguments as Map<String, dynamic>?;
         final patientId = args?['patientId'] as String?;
         return MaterialPageRoute(builder: (_) => PatientLabWorkPage(patientId: patientId));
+      case EditPatientPage.routeName:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final patientId = args?['patientId'] as String?;
+        if (patientId == null) {
+          return MaterialPageRoute(builder: (_) => const Scaffold(body: Center(child: Text('Missing patient id'))));
+        }
+        return MaterialPageRoute(builder: (_) => EditPatientPage(patientId: patientId));
       default:
         return MaterialPageRoute(
             builder: (_) => Scaffold(

@@ -63,6 +63,35 @@ class PatientRepository {
     await _persist();
   }
 
+  Future<void> updatePatient({
+    required String patientId,
+    String? name,
+    int? age,
+    Sex? sex,
+    String? address,
+    String? phone,
+    List<String>? pastDentalHistory,
+    List<String>? pastMedicalHistory,
+    List<String>? currentMedications,
+    List<String>? drugAllergies,
+  }) async {
+    final index = _patients.indexWhere((p) => p.id == patientId);
+    if (index == -1) return;
+    final current = _patients[index];
+    _patients[index] = current.copyWith(
+      name: name,
+      age: age,
+      sex: sex,
+      address: address,
+      phone: phone,
+      pastDentalHistory: pastDentalHistory,
+      pastMedicalHistory: pastMedicalHistory,
+      currentMedications: currentMedications,
+      drugAllergies: drugAllergies,
+    );
+    await _persist();
+  }
+
   Future<void> deletePatient(String patientId) async {
     _patients.removeWhere((p) => p.id == patientId);
     // Reindex displayNumber sequentially

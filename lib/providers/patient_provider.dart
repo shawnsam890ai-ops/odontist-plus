@@ -50,6 +50,33 @@ class PatientProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updatePatient({
+    required String patientId,
+    String? name,
+    int? age,
+    Sex? sex,
+    String? address,
+    String? phone,
+    List<String>? pastDentalHistory,
+    List<String>? pastMedicalHistory,
+    List<String>? currentMedications,
+    List<String>? drugAllergies,
+  }) async {
+    await _repo.updatePatient(
+      patientId: patientId,
+      name: name,
+      age: age,
+      sex: sex,
+      address: address,
+      phone: phone,
+      pastDentalHistory: pastDentalHistory,
+      pastMedicalHistory: pastMedicalHistory,
+      currentMedications: currentMedications,
+      drugAllergies: drugAllergies,
+    );
+    notifyListeners();
+  }
+
   Future<void> deletePatient(String patientId) async {
     await _repo.deletePatient(patientId);
     notifyListeners();
