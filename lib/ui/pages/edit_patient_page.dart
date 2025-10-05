@@ -61,6 +61,7 @@ class _EditPatientPageState extends State<EditPatientPage> {
     if (!opt.isLoaded) {
       opt.ensureLoaded(
         defaultComplaints: const [],
+        defaultOralFindings: const [],
         defaultPlan: const [],
         defaultTreatmentDone: const [],
         defaultMedicines: const [],

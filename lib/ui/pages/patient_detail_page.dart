@@ -35,6 +35,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   List<String> _selectedComplaints = [];
   List<String> _selectedQuadrants = [];
   final List<OralExamFinding> _oralFindings = [];
+  // Temp selections for new oral findings (multi-select style like complaints)
+  List<String> _selectedOralFindingOptions = [];
   final List<InvestigationType> _investigations = [];
   final List<InvestigationFinding> _investigationFindings = [];
   final List<String> _treatmentPlan = []; // legacy
@@ -44,7 +46,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   List<String> _selectedPlanOptions = [];
   List<String> _selectedTreatmentDoneOptions = [];
   final List<String> _mediaPaths = [];
-  final List<String> _rvgImages = []; // RVG images uploaded at investigation section level
+  final List<String> _rvgImages = [];
   DateTime? _nextAppointment;
   final TextEditingController _notes = TextEditingController();
 
@@ -83,7 +85,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   @override
   Widget build(BuildContext context) {
     // Ensure dynamic options are loaded
-    _ensureOptionsLoaded(context);
+  _ensureOptionsLoaded(context);
     final patient = widget.patientId == null ? null : context.watch<PatientProvider>().byId(widget.patientId!);
     if (patient == null) return const Scaffold(body: Center(child: Text('Patient not found')));
     return Scaffold(
@@ -157,13 +159,15 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                     _resetFormState();
                                   });
                                 },
-                                icon: const Icon(Icons.save),
+                                icon: Icon(_editingSessionId == null ? Icons.save : Icons.save_as),
                                 label: Text(_editingSessionId == null ? 'Save Session' : 'Update Session'),
                               ),
                             ),
                             const SizedBox(width: 12),
-                            Expanded(
-                              child: OutlinedButton.icon(
+                            if (_editingSessionId != null)
+                              OutlinedButton.icon(
+                                icon: const Icon(Icons.close),
+                                label: const Text('Cancel Edit'),
                                 onPressed: () {
                                   setState(() {
                                     _editingSessionId = null;
@@ -171,36 +175,37 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                     _resetFormState();
                                   });
                                 },
-                                icon: const Icon(Icons.close),
-                                label: const Text('Cancel'),
-                              ),
-                            )
+                              )
                           ],
                         ),
                       ],
                     )
                   : const SizedBox.shrink(),
             ),
+            // END session entry form
           ],
         ),
       ),
     );
   }
 
+  // Ensure all option lists (including new oral findings) are loaded exactly once
+  bool _optionsLoaded = false;
   void _ensureOptionsLoaded(BuildContext context) {
-    final options = context.read<OptionsProvider>();
-    if (!options.isLoaded) {
-      options.ensureLoaded(
-        defaultComplaints: AppConstants.chiefComplaints,
-        defaultPlan: AppConstants.generalTreatmentPlanOptions,
-        defaultTreatmentDone: AppConstants.generalTreatmentDoneOptions,
-        defaultMedicines: AppConstants.prescriptionMedicines,
-        defaultPastDental: AppConstants.pastDentalHistoryOptions,
-        defaultPastMedical: AppConstants.pastMedicalHistoryOptions,
-        defaultMedicationOptions: AppConstants.medicationOptions,
-        defaultDrugAllergies: AppConstants.drugAllergyOptions,
-      );
-    }
+    if (_optionsLoaded) return;
+    final opt = context.read<OptionsProvider>();
+    opt.ensureLoaded(
+      defaultComplaints: AppConstants.chiefComplaints,
+      defaultOralFindings: AppConstants.oralFindings,
+      defaultPlan: AppConstants.generalTreatmentPlanOptions,
+      defaultTreatmentDone: AppConstants.generalTreatmentDoneOptions,
+      defaultMedicines: AppConstants.prescriptionMedicines,
+      defaultPastDental: AppConstants.pastDentalHistoryOptions,
+      defaultPastMedical: AppConstants.pastMedicalHistoryOptions,
+      defaultMedicationOptions: AppConstants.medicationOptions,
+      defaultDrugAllergies: AppConstants.drugAllergyOptions,
+    );
+    _optionsLoaded = true;
   }
 
   Widget _basicInfoCard(patient) {
@@ -385,25 +390,49 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                   ),
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                        child: TextField(
-                      controller: _inlineToothController,
-                      decoration: const InputDecoration(labelText: 'Tooth (FDI)'),
-                    )),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: TextField(
-                      controller: _inlineFindingController,
-                      decoration: const InputDecoration(labelText: 'Finding'),
-                    )),
-                    const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: _addInlineOralFinding,
-            child: const Text('Add'))
-                  ],
-                )
+                Builder(builder: (ctx){
+                  final opt = ctx.watch<OptionsProvider>();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SearchEditableMultiSelect(
+                        label: 'Select / Add Findings',
+                        options: opt.oralFindingsOptions,
+                        initial: _selectedOralFindingOptions,
+                        onChanged: (vals)=> setState(()=> _selectedOralFindingOptions = vals),
+                        onAdd: (v)=> opt.addValue('oralFindings', v),
+                        onDelete: (v) async {
+                          final ok = await opt.removeValue('oralFindings', v);
+                          if (!ok && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: finding in use.')));
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _inlineToothController,
+                              decoration: const InputDecoration(labelText: 'Tooth (optional, FDI)'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.add),
+                            onPressed: _addInlineOralFinding,
+                            label: const Text('Add'),
+                          )
+                        ],
+                      ),
+                      if (_selectedOralFindingOptions.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top:6),
+                          child: Text('Press Add to append selected findings${' with ' + (_inlineToothController.text.isEmpty ? 'no tooth' : 'tooth ' + _inlineToothController.text)}'),
+                        )
+                    ],
+                  );
+                })
               ],
             ),
           ),
@@ -791,6 +820,17 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
 
   TreatmentSession _createSession() {
     const uuid = Uuid();
+    // Before creating session, flush any pending oral finding selections not yet added
+    if (_selectedOralFindingOptions.isNotEmpty) {
+      final tooth = _inlineToothController.text.trim();
+      for (final f in _selectedOralFindingOptions) {
+        _oralFindings.add(OralExamFinding(toothNumber: tooth, finding: f));
+      }
+      _sortByTooth(_oralFindings, (f) => f.toothNumber);
+      _selectedOralFindingOptions.clear();
+      _inlineToothController.clear();
+      _inlineFindingController.clear();
+    }
     switch (_selectedType) {
       case TreatmentType.general:
         return TreatmentSession(
@@ -1089,12 +1129,26 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   }
 
   void _addInlineOralFinding() {
+    if (_selectedOralFindingOptions.isEmpty) {
+      // Fallback: if user typed manual finding text in old field (still present logically)
+      final manual = _inlineFindingController.text.trim();
+      if (manual.isEmpty) return;
+      final tooth = _inlineToothController.text.trim();
+      setState(() {
+        _oralFindings.add(OralExamFinding(toothNumber: tooth, finding: manual));
+        _sortByTooth(_oralFindings, (f) => f.toothNumber);
+        _inlineFindingController.clear();
+        _inlineToothController.clear();
+      });
+      return;
+    }
     final tooth = _inlineToothController.text.trim();
-    final finding = _inlineFindingController.text.trim();
-    if (tooth.isEmpty || finding.isEmpty) return;
     setState(() {
-      _oralFindings.add(OralExamFinding(toothNumber: tooth, finding: finding));
+      for (final f in _selectedOralFindingOptions) {
+        _oralFindings.add(OralExamFinding(toothNumber: tooth, finding: f));
+      }
       _sortByTooth(_oralFindings, (f) => f.toothNumber);
+      _selectedOralFindingOptions.clear();
       _inlineToothController.clear();
       _inlineFindingController.clear();
     });
@@ -1299,7 +1353,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     }
     // Sort parents by date descending
     parents.sort((a,b)=> b.date.compareTo(a.date));
-  Widget buildTile(TreatmentSession s, {bool isFollowUp=false, int? parentCount}) {
+    Widget buildTile(TreatmentSession s, {bool isFollowUp=false, int? parentCount, List<TreatmentSession>? childFollowUpsFiltered}) {
       List<String> planOpts;
       List<String> doneOpts;
       try {
@@ -1385,62 +1439,44 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                     child: Text(l),
                   )).toList(),
             ),
-          )
+          ),
+          if (!isFollowUp && (childFollowUpsFiltered?.isNotEmpty ?? false)) ...[
+            const Divider(height: 20),
+            Padding(
+              padding: const EdgeInsets.only(bottom:8),
+              child: Text('Follow-Ups', style: Theme.of(context).textTheme.labelSmall),
+            ),
+            for (var i=0;i<childFollowUpsFiltered!.length;i++)
+              Padding(
+                padding: const EdgeInsets.only(left:4),
+                child: buildTile(childFollowUpsFiltered[i], isFollowUp: true),
+              ),
+          ]
         ],
       );
     }
-    // Filtering logic: all tokens must match somewhere (type, date, details). Supports partial date search.
-    bool matches(TreatmentSession s, List<String> planOpts, List<String> doneOpts) {
+    bool matches(TreatmentSession s) {
       if (_sessionFilterDateStr == null) return true;
-      final dateStr = s.date.toLocal().toString().split(' ').first; // yyyy-mm-dd
-      return dateStr == _sessionFilterDateStr;
+      return s.date.toLocal().toString().split(' ').first == _sessionFilterDateStr;
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 4),
-        for (final p in parents) ...[
-          () {
-            // Evaluate parent & children for filter
-            final children = (followUps[p.id] ?? [])..sort((a,b)=> a.date.compareTo(b.date));
-            // Precompute plan/done for parent to test filter
-            List<String> parentPlan = [];
-            List<String> parentDone = [];
-            try { parentPlan = (p as dynamic).planOptions?.cast<String>() ?? []; } catch(_){ parentPlan = []; }
-            try { parentDone = (p as dynamic).treatmentDoneOptions?.cast<String>() ?? []; } catch(_){ parentDone = []; }
-            final childMatch = <TreatmentSession>[];
-            for (final c in children) {
-              List<String> cp = [];
-              List<String> cd = [];
-              try { cp = (c as dynamic).planOptions?.cast<String>() ?? []; } catch(_){ cp = []; }
-              try { cd = (c as dynamic).treatmentDoneOptions?.cast<String>() ?? []; } catch(_){ cd = []; }
-              if (matches(c, cp, cd)) childMatch.add(c);
-            }
-            final parentMatches = matches(p, parentPlan, parentDone);
-            if (!parentMatches && childMatch.isEmpty) {
-              return const SizedBox.shrink();
-            }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                buildTile(p, isFollowUp: false, parentCount: (followUps[p.id] ?? []).length),
-                if (childMatch.isNotEmpty) ...[
-                  // Render follow-ups with timeline connector; mark last
-                  for (var i=0;i<childMatch.length;i++)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(width: 8),
-                        Expanded(child: buildTile(childMatch[i], isFollowUp: true)),
-                      ],
-                    )
-                ]
-              ],
-            );
-          }(),
-        ]
-      ],
-    );
+
+    final parentTiles = <Widget>[];
+    for (final p in parents) {
+      final children = (followUps[p.id] ?? [])..sort((a,b)=> a.date.compareTo(b.date));
+      final filteredChildren = children.where(matches).toList();
+      if (!matches(p) && filteredChildren.isEmpty) continue;
+      parentTiles.add(buildTile(p,
+          isFollowUp: false,
+          parentCount: (followUps[p.id] ?? []).length,
+          childFollowUpsFiltered: filteredChildren));
+    }
+    if (parentTiles.isEmpty) return const SizedBox();
+    // Constrain with scroll if many entries
+    final content = Column(children: parentTiles);
+    if (parentTiles.length > 4) {
+      return SizedBox(height: 360, child: SingleChildScrollView(child: content));
+    }
+    return content;
   }
 
   List<String> _buildSessionDetailLines(TreatmentSession s, List<String> planOpts, List<String> doneOpts) {
@@ -1521,7 +1557,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       // 2. Oral findings enumerated a) tooth, finding
       final oralLine = oral.isNotEmpty
           ? oral.asMap().entries.map((e) {
-              final idx = e.key; final f = e.value; return '${_alphaIndex(idx)}) ${f.toothNumber}, ${f.finding}';
+              final idx = e.key; final f = e.value;
+              final display = f.toothNumber.trim().isEmpty ? f.finding : '${f.toothNumber}, ${f.finding}';
+              return '${_alphaIndex(idx)}) $display';
             }).join('  ')
           : 'None';
       children.add(RichText(
@@ -1823,9 +1861,13 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
 
     String complaintText = ccComplaints.isNotEmpty ? ccComplaints.join(', ') : 'No complaint recorded';
     String quadrantsText = ccQuadrants.isNotEmpty ? ccQuadrants.join(', ') : 'N/A';
-    String oralLine = oral.isNotEmpty
-        ? oral.asMap().entries.map((e) => '${alpha(e.key)}) ${e.value.toothNumber}, ${e.value.finding}').join('  ')
-        : 'None';
+  String oralLine = oral.isNotEmpty
+    ? oral.asMap().entries.map((e) {
+      final f = e.value; final idx = e.key;
+      final display = f.toothNumber.trim().isEmpty ? f.finding : '${f.toothNumber}, ${f.finding}';
+      return '${alpha(idx)}) $display';
+      }).join('  ')
+    : 'None';
     String invDoneLine = invDone.isEmpty ? 'None' : invDone.map((e) => e.label).join(', ');
     String invFindingsLine = invFindings.isNotEmpty
         ? invFindings.map((f) => '${f.toothNumber}, ${f.finding}').join('  ')

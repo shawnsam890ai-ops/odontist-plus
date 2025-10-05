@@ -34,6 +34,7 @@ class _AddPatientPageState extends State<AddPatientPage> {
     if (!opt.isLoaded) {
       opt.ensureLoaded(
         defaultComplaints: const [], // not needed here
+        defaultOralFindings: const [],
         defaultPlan: const [],
         defaultTreatmentDone: const [],
         defaultMedicines: const [],

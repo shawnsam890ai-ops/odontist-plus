@@ -9,6 +9,7 @@ class OptionsProvider extends ChangeNotifier {
   static const _storageKey = 'dynamic_options_v1';
 
   List<String> complaints = [];
+  List<String> oralFindingsOptions = [];
   List<String> planOptions = [];
   List<String> treatmentDoneOptions = [];
   List<String> medicineOptions = [];
@@ -28,6 +29,7 @@ class OptionsProvider extends ChangeNotifier {
 
   Future<void> ensureLoaded({
     required List<String> defaultComplaints,
+    required List<String> defaultOralFindings,
     required List<String> defaultPlan,
     required List<String> defaultTreatmentDone,
     required List<String> defaultMedicines,
@@ -43,6 +45,7 @@ class OptionsProvider extends ChangeNotifier {
       try {
         final map = jsonDecode(raw) as Map<String, dynamic>;
         complaints = (map['complaints'] as List<dynamic>? ?? []).cast<String>();
+  oralFindingsOptions = (map['oralFindings'] as List<dynamic>? ?? []).cast<String>();
         planOptions = (map['plan'] as List<dynamic>? ?? []).cast<String>();
         treatmentDoneOptions = (map['done'] as List<dynamic>? ?? []).cast<String>();
         medicineOptions = (map['medicines'] as List<dynamic>? ?? []).cast<String>();
@@ -55,6 +58,7 @@ class OptionsProvider extends ChangeNotifier {
       }
     }
     if (complaints.isEmpty) complaints = List.from(defaultComplaints);
+  if (oralFindingsOptions.isEmpty) oralFindingsOptions = List.from(defaultOralFindings);
     if (planOptions.isEmpty) planOptions = List.from(defaultPlan);
     if (treatmentDoneOptions.isEmpty) treatmentDoneOptions = List.from(defaultTreatmentDone);
     if (medicineOptions.isEmpty) medicineOptions = List.from(defaultMedicines);
@@ -65,6 +69,7 @@ class OptionsProvider extends ChangeNotifier {
 
     // Ensure all lists are sorted alphabetically (case-insensitive) once loaded
     _sortList(complaints);
+  _sortList(oralFindingsOptions);
     _sortList(planOptions);
     _sortList(treatmentDoneOptions);
     _sortList(medicineOptions);
@@ -80,6 +85,7 @@ class OptionsProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_storageKey, jsonEncode({
       'complaints': complaints,
+      'oralFindings': oralFindingsOptions,
       'plan': planOptions,
       'done': treatmentDoneOptions,
       'medicines': medicineOptions,
@@ -128,6 +134,8 @@ class OptionsProvider extends ChangeNotifier {
     switch (key) {
       case 'complaints':
         return complaints;
+      case 'oralFindings':
+        return oralFindingsOptions;
       case 'plan':
         return planOptions;
       case 'done':
@@ -165,6 +173,18 @@ class OptionsProvider extends ChangeNotifier {
           for (final s in p.sessions) {
             final cc = s.chiefComplaint?.complaints ?? const [];
             if (cc.any((c) => c.toLowerCase() == value.toLowerCase())) return true;
+          }
+        }
+        return false;
+      case 'oralFindings':
+        for (final p in patients) {
+          for (final s in p.sessions) {
+            for (final f in s.oralExamFindings) {
+              if (f.finding.toLowerCase() == value.toLowerCase()) return true;
+            }
+            for (final f in s.rootCanalFindings) {
+              if (f.finding.toLowerCase() == value.toLowerCase()) return true;
+            }
           }
         }
         return false;
