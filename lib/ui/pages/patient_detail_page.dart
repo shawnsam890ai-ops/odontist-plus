@@ -2119,14 +2119,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           // General sessions already show complaints below; still show date + type for consistency.
                           final dateStr = s.date.toLocal().toIso8601String().split('T').first;
                           final typeStr = s.type.label;
-                          // Orthodontic quick summary (bracket + doctor)
-                          String? orthoLine;
-                          if (s.type == TreatmentType.orthodontic) {
-                            final parts = <String>[];
-                            if (s.bracketType != null) parts.add(s.bracketType!.label);
-                            if (s.orthoDoctorInCharge != null && s.orthoDoctorInCharge!.trim().isNotEmpty) parts.add('Dr: '+s.orthoDoctorInCharge!);
-                            if (parts.isNotEmpty) orthoLine = parts.join(' • ');
-                          }
+                          // Orthodontic: bracket/doctor will be shown in separate container below.
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
@@ -2140,18 +2133,6 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                 ),
                                 softWrap: true,
                               ),
-                              if (orthoLine != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Text(
-                                    orthoLine,
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                          fontWeight: FontWeight.w500,
-                                          color: Theme.of(context).colorScheme.onSurface.withOpacity(.70),
-                                          fontSize: 11.5,
-                                        ),
-                                  ),
-                                ),
                             ],
                           );
                         }(),
@@ -2188,7 +2169,42 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                       ),
                     ],
                   ),
-                  if (movedComplaintToTitle) ...[
+                  if (!isFollowUp && s.type == TreatmentType.orthodontic) ...[
+                    const SizedBox(height: 6),
+                    if (s.bracketType != null)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _typeColor(s).withOpacity(.13),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: _typeColor(s).withOpacity(.30), width: .8),
+                        ),
+                        child: Text(
+                          s.bracketType!.label,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(.92),
+                            height: 1.15,
+                          ),
+                        ),
+                      ),
+                    if (s.orthoDoctorInCharge != null && s.orthoDoctorInCharge!.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
+                        child: Text(
+                          s.orthoDoctorInCharge!,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 11.5,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(.72),
+                            height: 1.1,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ] else if (movedComplaintToTitle) ...[
                     const SizedBox(height: 6),
                     Container(
                       width: double.infinity,
@@ -2302,8 +2318,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               // Removed separate subtitle & trailing; integrated into custom title Column (Option B)
               children: [
                 // Removed expanded Add Follow-Up button (only trailing icon now)
-                if (!isFollowUp && s.type == TreatmentType.orthodontic) ...[
-                  // Highlight bracket + doctor in a full-width pill
+                if (!isFollowUp && s.type == TreatmentType.orthodontic && s.orthoOralFindings.isNotEmpty) ...[
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.only(bottom: 12),
@@ -2313,26 +2328,13 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: _typeColor(s).withOpacity(.30), width: .9),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Bracket: ${s.bracketType?.label ?? 'N/A'}',
-                          style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withOpacity(.90)),
-                        ),
-                        if (s.orthoDoctorInCharge != null && s.orthoDoctorInCharge!.trim().isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text('Doctor: ${s.orthoDoctorInCharge!}',
-                                style: TextStyle(fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface.withOpacity(.80))),
-                          ),
-                        if (s.orthoOralFindings.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text('Ortho Findings: ${s.orthoOralFindings}',
-                                style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(.75))),
-                          ),
-                      ],
+                    child: Text(
+                      'Ortho Findings: ${s.orthoOralFindings}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(.80),
+                        height: 1.2,
+                      ),
                     ),
                   ),
                   // Monthly treatment sessions summary list
@@ -2710,7 +2712,93 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               ));
       return;
     }
-    // Non-general fallback to previous simple list formatting
+    // Non-general fallback; provide enhanced orthodontic formatting
+    if (s.type == TreatmentType.orthodontic) {
+      final lines = _buildSessionDetailLines(s, planOpts, doneOpts)
+          .where((l) => !l.startsWith('Steps:')) // steps will be rendered in richer format
+          .toList();
+      final steps = List<ProcedureStep>.from(s.orthoSteps)..sort((a,b)=> a.date.compareTo(b.date));
+      double runningPaid = 0;
+      final total = s.orthoTotalAmount ?? 0;
+      showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+                title: const Text('Orthodontic Session Details'),
+                content: SizedBox(
+                  width: 480,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ...lines.map((l) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Text(l),
+                            )),
+                        const SizedBox(height: 8),
+                        Text('Monthly Sessions', style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 6),
+                        if (steps.isEmpty)
+                          const Text('No monthly sessions recorded.')
+                        else
+                          Column(
+                            children: steps.map((st) {
+                              runningPaid += (st.payment ?? 0);
+                              final bal = total > 0 ? (total - runningPaid) : null;
+                              return Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(.35),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('${st.date.toLocal().toString().split(' ').first} • ${st.description}',
+                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                                          if (st.note != null && st.note!.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 2),
+                                              child: Text('Note: ${st.note}', style: Theme.of(context).textTheme.bodySmall),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(st.payment == null ? 'Paid: -' : 'Paid: ${st.payment}',
+                                            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.green.shade700, fontWeight: FontWeight.w600)),
+                                        if (bal != null)
+                                          Text('Bal: ${bal < 0 ? 0 : bal}',
+                                              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: bal <= 0 ? Colors.green : Colors.redAccent, fontWeight: FontWeight.w500)),
+                                      ],
+                                    )
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        if (total > 0) ...[
+                          const SizedBox(height: 8),
+                          Text('Total: $total  Paid: $runningPaid  Balance: ${total - runningPaid}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                        ]
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+                ],
+              ));
+      return;
+    }
     final lines = _buildSessionDetailLines(s, planOpts, doneOpts);
     showDialog(
         context: context,
