@@ -43,6 +43,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   final List<String> _treatmentPlan = []; // legacy
   final List<ToothPlanEntry> _toothPlans = [];
   final List<ToothTreatmentDoneEntry> _treatmentsDone = [];
+  // Inline FDI tooth number inputs for plan / done additions
+  final TextEditingController _planToothController = TextEditingController();
+  final TextEditingController _doneToothController = TextEditingController();
   // New multi-select buffers for plan and treatment done (legacy structured lists retained)
   List<String> _selectedPlanOptions = [];
   List<String> _selectedTreatmentDoneOptions = [];
@@ -1076,12 +1079,64 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           );
         }),
         const SizedBox(height: 8),
+        Row(
+          children: [
+            SizedBox(
+              width: 120,
+              child: TextField(
+                controller: _planToothController,
+                decoration: const InputDecoration(
+                  labelText: 'Tooth (FDI)',
+                  hintText: 'e.g. 11',
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.add),
+              label: const Text('Add w/ Tooth'),
+              onPressed: () {
+                final tooth = _planToothController.text.trim();
+                if (tooth.isEmpty || !_isValidFdi(tooth)) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter valid FDI tooth number')));
+                  return;
+                }
+                if (_selectedPlanOptions.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select plan option(s) first')));
+                  return;
+                }
+                setState(() {
+                  for (final p in _selectedPlanOptions) {
+                    _toothPlans.add(ToothPlanEntry(toothNumber: tooth, plan: p));
+                  }
+                  _planToothController.clear();
+                });
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
         if (_selectedPlanOptions.isEmpty) const Text('No plan options selected'),
         if (_selectedPlanOptions.isNotEmpty)
           Wrap(
             spacing: 6,
             children: _selectedPlanOptions.map((p) => Chip(label: Text(p))).toList(),
+          ),
+        if (_toothPlans.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text('Per-Tooth Plan Entries (${_toothPlans.length})', style: Theme.of(context).textTheme.bodyMedium),
+          Wrap(
+            spacing: 6,
+            children: [
+              for (int i=0;i<_toothPlans.length;i++)
+                Chip(
+                  label: Text('${_toothPlans[i].toothNumber}: ${_toothPlans[i].plan}'),
+                  onDeleted: () => setState(()=> _toothPlans.removeAt(i)),
+                )
+            ],
           )
+        ]
       ],
     );
   }
@@ -1107,14 +1162,72 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           );
         }),
         const SizedBox(height: 8),
+        Row(
+          children: [
+            SizedBox(
+              width: 120,
+              child: TextField(
+                controller: _doneToothController,
+                decoration: const InputDecoration(
+                  labelText: 'Tooth (FDI)',
+                  hintText: 'e.g. 46',
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.add_task),
+              label: const Text('Add w/ Tooth'),
+              onPressed: () {
+                final tooth = _doneToothController.text.trim();
+                if (tooth.isEmpty || !_isValidFdi(tooth)) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter valid FDI tooth number')));
+                  return;
+                }
+                if (_selectedTreatmentDoneOptions.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select treatment(s) done first')));
+                  return;
+                }
+                setState(() {
+                  for (final d in _selectedTreatmentDoneOptions) {
+                    _treatmentsDone.add(ToothTreatmentDoneEntry(toothNumber: tooth, treatment: d));
+                  }
+                  _doneToothController.clear();
+                });
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
         if (_selectedTreatmentDoneOptions.isEmpty) const Text('No treatments selected'),
         if (_selectedTreatmentDoneOptions.isNotEmpty)
           Wrap(
             spacing: 6,
             children: _selectedTreatmentDoneOptions.map((p) => Chip(label: Text(p))).toList(),
-          )
+          ),
+        if (_treatmentsDone.isNotEmpty) ...[
+          const SizedBox(height: 8),
+            Text('Per-Tooth Treatments (${_treatmentsDone.length})', style: Theme.of(context).textTheme.bodyMedium),
+            Wrap(
+              spacing: 6,
+              children: [
+                for (int i=0;i<_treatmentsDone.length;i++)
+                  Chip(
+                    label: Text('${_treatmentsDone[i].toothNumber}: ${_treatmentsDone[i].treatment}'),
+                    onDeleted: () => setState(()=> _treatmentsDone.removeAt(i)),
+                  )
+              ],
+            )
+        ]
       ],
     );
+  }
+
+  bool _isValidFdi(String value) {
+    // Accept 11-18,21-28,31-38,41-48 (permanent) and 51-55,61-65,71-75,81-85 (primary)
+    final reg = RegExp(r'^(1[1-8]|2[1-8]|3[1-8]|4[1-8]|5[1-5]|6[1-5]|7[1-5]|8[1-5])$');
+    return reg.hasMatch(value);
   }
 
   void _addInlineOralFinding() {
