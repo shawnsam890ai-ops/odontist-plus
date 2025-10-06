@@ -4,7 +4,10 @@ import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import '../../providers/patient_provider.dart';
 import '../../providers/options_provider.dart';
 import '../../core/enums.dart';
@@ -708,113 +711,187 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextField(
-          controller: _orthoFindings,
-          decoration: const InputDecoration(labelText: 'Oral Findings'),
-          maxLines: 2,
-        ),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<BracketType>(
-          value: _bracketType,
-          items: BracketType.values.map((b) => DropdownMenuItem(value: b, child: Text(b.label))).toList(),
-          onChanged: (v) => setState(() => _bracketType = v ?? BracketType.metalRegular),
-          decoration: const InputDecoration(labelText: 'Bracket Type'),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _orthoTotal,
-          decoration: const InputDecoration(labelText: 'Total Treatment Amount (Excluding Appliance)'),
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 12),
-        Builder(builder: (ctx){
-          final opt = ctx.watch<OptionsProvider>();
-          final doctors = opt.orthoDoctors;
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: _selectedOrthoDoctor,
-                  decoration: const InputDecoration(labelText: 'Doctor in Charge'),
-                  items: doctors.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                  onChanged: (v)=> setState(()=> _selectedOrthoDoctor = v),
+        // Card 1: Fixed Orthodontic Plan Info
+        Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Orthodontic Plan / Setup', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _orthoFindings,
+                  decoration: const InputDecoration(labelText: 'Oral Findings'),
+                  maxLines: 2,
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Add new doctor
-              IconButton(
-                tooltip: 'Add Doctor',
-                icon: const Icon(Icons.add),
-                onPressed: () async {
-                  final controller = TextEditingController();
-                  final val = await showDialog<String>(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        title: const Text('Add Doctor'),
-                        content: TextField(
-                          controller: controller,
-                          decoration: const InputDecoration(labelText: 'Doctor Name'),
-                          autofocus: true,
+                const SizedBox(height: 12),
+                DropdownButtonFormField<BracketType>(
+                  value: _bracketType,
+                  items: BracketType.values.map((b) => DropdownMenuItem(value: b, child: Text(b.label))).toList(),
+                  onChanged: (v) => setState(() => _bracketType = v ?? BracketType.metalRegular),
+                  decoration: const InputDecoration(labelText: 'Bracket Type'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _orthoTotal,
+                  decoration: const InputDecoration(labelText: 'Total Treatment Amount (Excluding Appliance)'),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                Builder(builder: (ctx){
+                  final opt = ctx.watch<OptionsProvider>();
+                  final doctors = opt.orthoDoctors;
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedOrthoDoctor,
+                          decoration: const InputDecoration(labelText: 'Doctor in Charge'),
+                          items: doctors.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                          onChanged: (v)=> setState(()=> _selectedOrthoDoctor = v),
                         ),
-                        actions: [
-                          TextButton(onPressed: ()=> Navigator.pop(context), child: const Text('Cancel')),
-                          ElevatedButton(onPressed: ()=> Navigator.pop(context, controller.text.trim()), child: const Text('Add')),
-                        ],
-                      ));
-                  if (val != null && val.isNotEmpty) {
-                    await opt.addValue('orthoDoctors', val);
-                    if (mounted) {
-                      setState(()=> _selectedOrthoDoctor = val);
-                    }
-                  }
-                },
-              ),
-              // Delete selected doctor (if unused)
-              IconButton(
-                tooltip: 'Delete Selected Doctor',
-                icon: const Icon(Icons.delete_outline),
-                onPressed: _selectedOrthoDoctor == null ? null : () async {
-                  final target = _selectedOrthoDoctor!;
-                  final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        title: const Text('Delete Doctor'),
-                        content: Text('Delete "$target"? This cannot be undone.'),
-                        actions: [
-                          TextButton(onPressed: ()=> Navigator.pop(context, false), child: const Text('Cancel')),
-                          ElevatedButton(onPressed: ()=> Navigator.pop(context, true), child: const Text('Delete')),
-                        ],
-                      ));
-                  if (confirm == true) {
-                    final ok = await opt.removeValue('orthoDoctors', target);
-                    if (!ok && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: doctor referenced in a session.')));
-                    } else if (ok && mounted) {
-                      setState(()=> _selectedOrthoDoctor = null);
-                    }
-                  }
-                },
-              ),
-            ],
-          );
-        }),
-        const Divider(height: 24),
-        Text('Procedure Steps', style: Theme.of(context).textTheme.titleMedium),
-        ElevatedButton(
-            onPressed: () => _addProcedureStep(isOrtho: true),
-            child: const Text('Add Step')),
-        ..._orthoSteps.map((s) => ListTile(
-              dense: true,
-              title: Text('${s.description}'),
-              subtitle: Text('${s.date.toLocal().toString().split(' ').first}${s.payment != null ? '  Paid: ${s.payment}' : ''}'),
-              trailing: IconButton(icon: const Icon(Icons.delete, size: 18), onPressed: () => setState(() => _orthoSteps.remove(s))),
-            )),
-        if (_orthoTotal.text.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(_orthoBalanceSummary(), style: Theme.of(context).textTheme.bodyMedium),
-          )
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Add Doctor',
+                        icon: const Icon(Icons.add),
+                        onPressed: () async {
+                          final controller = TextEditingController();
+                          final val = await showDialog<String>(
+                              context: context,
+                              builder: (_) => AlertDialog(
+                                title: const Text('Add Doctor'),
+                                content: TextField(
+                                  controller: controller,
+                                  decoration: const InputDecoration(labelText: 'Doctor Name'),
+                                  autofocus: true,
+                                ),
+                                actions: [
+                                  TextButton(onPressed: ()=> Navigator.pop(context), child: const Text('Cancel')),
+                                  ElevatedButton(onPressed: ()=> Navigator.pop(context, controller.text.trim()), child: const Text('Add')),
+                                ],
+                              ));
+                          if (val != null && val.isNotEmpty) {
+                            await opt.addValue('orthoDoctors', val);
+                            if (mounted) setState(()=> _selectedOrthoDoctor = val);
+                          }
+                        },
+                      ),
+                      IconButton(
+                        tooltip: 'Delete Selected Doctor',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: _selectedOrthoDoctor == null ? null : () async {
+                          final target = _selectedOrthoDoctor!;
+                          final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (_) => AlertDialog(
+                                title: const Text('Delete Doctor'),
+                                content: Text('Delete "$target"? This cannot be undone.'),
+                                actions: [
+                                  TextButton(onPressed: ()=> Navigator.pop(context, false), child: const Text('Cancel')),
+                                  ElevatedButton(onPressed: ()=> Navigator.pop(context, true), child: const Text('Delete')),
+                                ],
+                              ));
+                          if (confirm == true) {
+                            final ok = await opt.removeValue('orthoDoctors', target);
+                            if (!ok && mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: doctor referenced in a session.')));
+                            } else if (ok && mounted) {
+                              setState(()=> _selectedOrthoDoctor = null);
+                            }
+                          }
+                        },
+                      ),
+                    ],
+                  );
+                }),
+              ],
+            ),
+          ),
+        ),
+        // Card 2: Monthly Treatment Sessions (repurposed orthoSteps)
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: Text('Monthly Treatment Sessions', style: Theme.of(context).textTheme.titleMedium)),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Session'),
+                      onPressed: () => _addProcedureStep(isOrtho: true),
+                    )
+                  ],
+                ),
+                Row(
+                  children: [
+                    TextButton.icon(
+                      icon: const Icon(Icons.picture_as_pdf),
+                      label: const Text('Export PDF'),
+                      onPressed: _orthoSteps.isEmpty ? null : () async {
+                        final patient = context.read<PatientProvider>().byId(widget.patientId!);
+                        if (patient != null) {
+                          await _exportOrthodonticSummaryPdf(patient);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (_orthoSteps.isEmpty)
+                  const Text('No sessions recorded yet.')
+                else
+                  Column(
+                    children: _orthoSteps.map((s) {
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.event_available, size: 18),
+                        title: Text('${s.date.toLocal().toString().split(' ').first} • ${s.description}'),
+                        subtitle: Text((s.payment != null ? 'Payment: ${s.payment}' : 'No payment') + (s.note != null && s.note!.isNotEmpty ? '\nNote: ${s.note}' : '')),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          onPressed: () => setState(() => _orthoSteps.remove(s)),
+                        ),
+                        onTap: () => _editProcedureStep(s, isOrtho: true),
+                      );
+                    }).toList(),
+                  ),
+                if (_orthoTotal.text.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Builder(builder: (_) {
+                    final total = double.tryParse(_orthoTotal.text.trim()) ?? 0;
+                    final paid = _orthoSteps.fold<double>(0, (p, e) => p + (e.payment ?? 0));
+                    final pct = total > 0 ? (paid / total).clamp(0.0, 1.0) : 0.0;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_orthoBalanceSummary(), style: Theme.of(context).textTheme.bodyMedium),
+                        const SizedBox(height: 4),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            minHeight: 10,
+                            value: pct,
+                            backgroundColor: Colors.grey.shade300,
+                            valueColor: AlwaysStoppedAnimation<Color>(pct >= 1 ? Colors.green : Colors.teal),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text('Progress: ${(pct * 100).toStringAsFixed(1)}%', style: Theme.of(context).textTheme.labelSmall),
+                      ],
+                    );
+                  }),
+                ]
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -1450,41 +1527,136 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     final pay = TextEditingController();
     final note = TextEditingController();
     const uuid = Uuid();
+    DateTime selectedDate = DateTime.now();
     final result = await showDialog<ProcedureStep>(
         context: context,
-        builder: (_) => AlertDialog(
-              title: const Text('Add Procedure Step'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(controller: desc, decoration: const InputDecoration(labelText: 'Description')),
-                  TextField(controller: pay, decoration: const InputDecoration(labelText: 'Payment (optional)'), keyboardType: TextInputType.number),
-                  TextField(controller: note, decoration: const InputDecoration(labelText: 'Note (optional)')),
+        builder: (_) => StatefulBuilder(builder: (ctx, setSB) {
+              return AlertDialog(
+                title: const Text('Add Procedure Step'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isOrtho) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                              child: Text(
+                            'Date: ${selectedDate.toLocal().toString().split(' ').first}',
+                            style: const TextStyle(fontSize: 14),
+                          )),
+                          TextButton(
+                              onPressed: () async {
+                                final now = DateTime.now();
+                                final picked = await showDatePicker(
+                                    context: context,
+                                    firstDate: DateTime(now.year - 2),
+                                    lastDate: DateTime(now.year + 2),
+                                    initialDate: selectedDate);
+                                if (picked != null) setSB(() => selectedDate = picked);
+                              },
+                              child: const Text('Pick Date'))
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    TextField(controller: desc, decoration: const InputDecoration(labelText: 'Description')),
+                    TextField(controller: pay, decoration: const InputDecoration(labelText: 'Payment (optional)'), keyboardType: TextInputType.number),
+                    TextField(controller: note, decoration: const InputDecoration(labelText: 'Note (optional)')),
+                  ],
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                  ElevatedButton(
+                      onPressed: () {
+                        if (desc.text.trim().isEmpty) return;
+                        Navigator.pop(
+                            context,
+                            ProcedureStep(
+                                id: uuid.v4(),
+                                date: isOrtho ? selectedDate : DateTime.now(),
+                                description: desc.text.trim(),
+                                payment: double.tryParse(pay.text.trim()),
+                                note: note.text.trim().isEmpty ? null : note.text.trim()));
+                      },
+                      child: const Text('Add'))
                 ],
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                ElevatedButton(
-                    onPressed: () {
-                      if (desc.text.trim().isEmpty) return;
-                      Navigator.pop(
-                          context,
-                          ProcedureStep(
-                              id: uuid.v4(),
-                              date: DateTime.now(),
-                              description: desc.text.trim(),
-                              payment: double.tryParse(pay.text.trim()),
-                              note: note.text.trim().isEmpty ? null : note.text.trim()));
-                    },
-                    child: const Text('Add'))
-              ],
-            ));
+              );
+            }));
     if (result != null) {
       setState(() {
         if (isOrtho) {
           _orthoSteps.add(result);
         } else {
           _rcSteps.add(result);
+        }
+      });
+    }
+  }
+
+  void _editProcedureStep(ProcedureStep step, {required bool isOrtho}) async {
+    final desc = TextEditingController(text: step.description);
+    final pay = TextEditingController(text: step.payment?.toString() ?? '');
+    final note = TextEditingController(text: step.note ?? '');
+    DateTime editedDate = step.date;
+    final result = await showDialog<ProcedureStep>(
+        context: context,
+        builder: (_) => StatefulBuilder(builder: (ctx, setSB) {
+              return AlertDialog(
+                title: const Text('Edit Session'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isOrtho) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                              child: Text('Date: ${editedDate.toLocal().toString().split(' ').first}',
+                                  style: const TextStyle(fontSize: 14))),
+                          TextButton(
+                              onPressed: () async {
+                                final now = DateTime.now();
+                                final picked = await showDatePicker(
+                                    context: context,
+                                    firstDate: DateTime(now.year - 2),
+                                    lastDate: DateTime(now.year + 2),
+                                    initialDate: editedDate);
+                                if (picked != null) setSB(() => editedDate = picked);
+                              },
+                              child: const Text('Change'))
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    TextField(controller: desc, decoration: const InputDecoration(labelText: 'Description')),
+                    TextField(controller: pay, decoration: const InputDecoration(labelText: 'Payment (optional)'), keyboardType: TextInputType.number),
+                    TextField(controller: note, decoration: const InputDecoration(labelText: 'Note (optional)')),
+                  ],
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                  ElevatedButton(
+                      onPressed: () {
+                        if (desc.text.trim().isEmpty) return;
+                        Navigator.pop(
+                            context,
+                            ProcedureStep(
+                              id: step.id,
+                              date: isOrtho ? editedDate : step.date,
+                              description: desc.text.trim(),
+                              payment: double.tryParse(pay.text.trim()),
+                              note: note.text.trim().isEmpty ? null : note.text.trim(),
+                            ));
+                      },
+                      child: const Text('Save'))
+                ],
+              );
+            }));
+    if (result != null) {
+      setState(() {
+        final list = isOrtho ? _orthoSteps : _rcSteps;
+        final idx = list.indexWhere((e) => e.id == step.id);
+        if (idx != -1) {
+          list[idx] = result;
         }
       });
     }
@@ -1502,6 +1674,100 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     final paid = _rcSteps.fold<double>(0, (p, e) => p + (e.payment ?? 0));
     final bal = total - paid;
     return 'Paid: $paid / Total: $total  Balance: $bal';
+  }
+
+  Future<void> _exportOrthodonticSummaryPdf(Patient patient) async {
+    try {
+      // Collect all orthodontic sessions
+      final orthoSessions = patient.sessions.where((s) => s.type == TreatmentType.orthodontic).toList();
+      if (orthoSessions.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No orthodontic sessions to export.')));
+        }
+        return;
+      }
+      // Use latest ortho session for plan/setup details (assuming immutable plan fields there)
+      orthoSessions.sort((a,b)=> a.date.compareTo(b.date));
+      final first = orthoSessions.first;
+      final allSteps = <ProcedureStep>[];
+      for (final s in orthoSessions) {
+        allSteps.addAll(s.orthoSteps);
+      }
+      allSteps.sort((a,b)=> a.date.compareTo(b.date));
+      final total = first.orthoTotalAmount ?? 0;
+      final paid = allSteps.fold<double>(0, (p,e)=> p + (e.payment ?? 0));
+      final bal = total - paid;
+
+      final pdfDoc = pw.Document();
+      pdfDoc.addPage(
+        pw.MultiPage(
+          pageTheme: pw.PageTheme(margin: const pw.EdgeInsets.all(24)),
+          build: (ctx) => [
+            pw.Text('Orthodontic Treatment Summary', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 8),
+            pw.Text('Patient: ${patient.name}  (Age: ${patient.age}, Sex: ${patient.sex.label})'),
+            if (patient.phone.isNotEmpty) pw.Text('Phone: ${patient.phone}'),
+            pw.SizedBox(height: 12),
+            pw.Text('Plan / Setup', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+            if (first.orthoOralFindings.isNotEmpty) pw.Text('Findings: ${first.orthoOralFindings}'),
+            if (first.bracketType != null) pw.Text('Bracket: ${first.bracketType!.label}'),
+            if (first.orthoDoctorInCharge != null && first.orthoDoctorInCharge!.trim().isNotEmpty) pw.Text('Doctor: ${first.orthoDoctorInCharge}'),
+            if (first.orthoTotalAmount != null) pw.Text('Total Amount: ${first.orthoTotalAmount}'),
+            pw.SizedBox(height: 12),
+            pw.Text('Sessions (${allSteps.length})', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+            if (allSteps.isEmpty) pw.Text('No monthly sessions recorded.') else pw.Table(
+              border: pw.TableBorder.all(width: 0.5),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(1),
+                1: const pw.FlexColumnWidth(3),
+                2: const pw.FlexColumnWidth(1.2),
+                3: const pw.FlexColumnWidth(2),
+              },
+              children: [
+                pw.TableRow(
+                  decoration: pw.BoxDecoration(color: PdfColors.grey300),
+                  children: [
+                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Date', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Description', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Payment', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Note', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                  ],
+                ),
+                ...allSteps.map((st) => pw.TableRow(children: [
+                  pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(st.date.toLocal().toString().split(' ').first)),
+                  pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(st.description)),
+                  pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(st.payment == null ? '-' : st.payment.toString())),
+                  pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(st.note ?? '-')),
+                ]))
+              ],
+            ),
+            pw.SizedBox(height: 12),
+            pw.Text('Financial Summary', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+            pw.Text('Paid: $paid / Total: $total  Balance: $bal'),
+            if (total > 0)
+              pw.Container(
+                margin: const pw.EdgeInsets.only(top: 6),
+                child: pw.LinearProgressIndicator(value: total == 0 ? 0 : (paid / total).clamp(0,1)),
+              ),
+            pw.SizedBox(height: 16),
+            pw.Text('Generated: ${DateTime.now().toLocal()}'),
+          ],
+        ),
+      );
+      final bytes = await pdfDoc.save();
+      // Save to temporary directory
+      final dir = await getTemporaryDirectory();
+      final filePath = '${dir.path}/ortho_summary_${patient.id}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final file = File(filePath);
+      await file.writeAsBytes(bytes);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('PDF exported: $filePath')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      }
+    }
   }
 
   void _openLabWork(String patientId) {
