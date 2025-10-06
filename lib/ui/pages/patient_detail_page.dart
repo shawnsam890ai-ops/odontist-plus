@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart'; // keep Flutter material
 import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
@@ -1943,6 +1945,18 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     }
     // Sort parents by date descending
     parents.sort((a,b)=> b.date.compareTo(a.date));
+    // Precompute ordering index for general (parent) sessions to label them as #n General
+    final generalParentsOrdered = [
+      for (final p in parents.where((p) => p.type == TreatmentType.general)) p
+    ];
+    // We'll assign numbers in reverse chronological order (current sorting) so newest is #<length>? or #1?
+    // Requirement: "#1 General and so on based on no. of general session entry" – typically #1 means first (oldest) session.
+    // To avoid confusing re-numbering when new sessions added, we number by chronological ascending order.
+    final generalParentsChrono = [...generalParentsOrdered]..sort((a,b)=> a.date.compareTo(b.date));
+    final Map<String,int> generalNumber = {};
+    for (var i=0;i<generalParentsChrono.length;i++) {
+      generalNumber[generalParentsChrono[i].id] = i+1; // #1, #2, ...
+    }
     Widget buildTile(TreatmentSession s, {bool isFollowUp=false, int? parentCount, List<TreatmentSession>? childFollowUpsFiltered}) {
       List<String> planOpts;
       List<String> doneOpts;
@@ -2116,24 +2130,45 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           }
                           // Parent (non-follow-up) session: provide a header for ALL types.
                           // General sessions already show complaints below; still show date + type for consistency.
-                          final dateStr = s.date.toLocal().toIso8601String().split('T').first;
-                          final typeStr = s.type.label;
-                          // Orthodontic: bracket/doctor will be shown in separate container below.
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '$dateStr • $typeStr',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .85),
-                                  fontSize: 13.0,
+                          // For general sessions we now suppress date (shown below in complaints container) and show sequence number: #n General
+                          if (s.type == TreatmentType.general) {
+                            final numLabel = generalNumber[s.id];
+                            final label = numLabel == null ? s.type.label : '#$numLabel ${s.type.label}';
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  label,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .85),
+                                    fontSize: 13.0,
+                                  ),
+                                  softWrap: true,
                                 ),
-                                softWrap: true,
-                              ),
-                            ],
-                          );
+                              ],
+                            );
+                          } else {
+                            final dateStr = s.date.toLocal().toIso8601String().split('T').first;
+                            final typeStr = s.type.label;
+                            // Orthodontic: bracket/doctor will be shown in separate container below.
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '$dateStr • $typeStr',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .85),
+                                    fontSize: 13.0,
+                                  ),
+                                  softWrap: true,
+                                ),
+                              ],
+                            );
+                          }
                         }(),
                       ),
                       if (!isFollowUp) badge,
