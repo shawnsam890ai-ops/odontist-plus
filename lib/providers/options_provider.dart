@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'patient_provider.dart';
 import '../models/patient.dart';
+import '../core/enums.dart';
 
 // Manages dynamic option lists (complaints, plan, treatment done, medicines)
 class OptionsProvider extends ChangeNotifier {
@@ -19,6 +20,8 @@ class OptionsProvider extends ChangeNotifier {
   List<String> drugAllergyOptions = [];
   // New: dynamic list of orthodontic doctors
   List<String> orthoDoctors = [];
+  // New: dynamic list of root canal doctors
+  List<String> rcDoctors = [];
 
   bool _loaded = false;
   bool get isLoaded => _loaded;
@@ -40,6 +43,7 @@ class OptionsProvider extends ChangeNotifier {
     required List<String> defaultMedicationOptions,
     required List<String> defaultDrugAllergies,
     List<String>? defaultOrthoDoctors, // optional to avoid forcing callers now
+    List<String>? defaultRcDoctors,
   }) async {
     if (_loaded) return;
     final prefs = await SharedPreferences.getInstance();
@@ -57,6 +61,7 @@ class OptionsProvider extends ChangeNotifier {
         medicationOptions = (map['dynamicMedications'] as List<dynamic>? ?? []).cast<String>();
         drugAllergyOptions = (map['drugAllergies'] as List<dynamic>? ?? []).cast<String>();
         orthoDoctors = (map['orthoDoctors'] as List<dynamic>? ?? []).cast<String>();
+  rcDoctors = (map['rcDoctors'] as List<dynamic>? ?? []).cast<String>();
       } catch (_) {
         // fallback to defaults
       }
@@ -71,6 +76,7 @@ class OptionsProvider extends ChangeNotifier {
     if (medicationOptions.isEmpty) medicationOptions = List.from(defaultMedicationOptions);
     if (drugAllergyOptions.isEmpty) drugAllergyOptions = List.from(defaultDrugAllergies);
   if (orthoDoctors.isEmpty && (defaultOrthoDoctors != null)) orthoDoctors = List.from(defaultOrthoDoctors);
+    if (rcDoctors.isEmpty && (defaultRcDoctors != null)) rcDoctors = List.from(defaultRcDoctors);
 
     // Ensure all lists are sorted alphabetically (case-insensitive) once loaded
     _sortList(complaints);
@@ -83,6 +89,7 @@ class OptionsProvider extends ChangeNotifier {
     _sortList(medicationOptions);
     _sortList(drugAllergyOptions);
   _sortList(orthoDoctors);
+    _sortList(rcDoctors);
     _loaded = true;
     notifyListeners();
   }
@@ -100,6 +107,7 @@ class OptionsProvider extends ChangeNotifier {
       'dynamicMedications': medicationOptions,
       'drugAllergies': drugAllergyOptions,
       'orthoDoctors': orthoDoctors,
+      'rcDoctors': rcDoctors,
     }));
   }
 
@@ -159,6 +167,8 @@ class OptionsProvider extends ChangeNotifier {
         return drugAllergyOptions;
       case 'orthoDoctors':
         return orthoDoctors;
+      case 'rcDoctors':
+        return rcDoctors;
       default:
         return complaints;
     }
@@ -231,6 +241,15 @@ class OptionsProvider extends ChangeNotifier {
         for (final p in patients) {
           for (final s in p.sessions) {
             if (s.orthoDoctorInCharge != null && s.orthoDoctorInCharge!.toLowerCase() == value.toLowerCase()) return true;
+          }
+        }
+        return false;
+      case 'rcDoctors':
+        for (final p in patients) {
+          for (final s in p.sessions) {
+            if (s.type == TreatmentType.rootCanal && s.rootCanalDoctorInCharge != null && s.rootCanalDoctorInCharge!.toLowerCase() == value.toLowerCase()) {
+              return true;
+            }
           }
         }
         return false;

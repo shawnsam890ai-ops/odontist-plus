@@ -176,6 +176,9 @@ class TreatmentSession {
   final double? rootCanalTotalAmount;
   final List<String> rootCanalProcedures;
   final List<ProcedureStep> rootCanalSteps; // new
+  // New: root canal plan entries (similar to toothPlans) & doctor in charge
+  final List<ToothPlanEntry> rootCanalPlans; // per-tooth planned RCT steps
+  final String? rootCanalDoctorInCharge;
 
   final String? consentFormPath;
 
@@ -208,6 +211,8 @@ class TreatmentSession {
     this.rootCanalTotalAmount,
     List<String>? rootCanalProcedures,
     List<ProcedureStep>? rootCanalSteps,
+  List<ToothPlanEntry>? rootCanalPlans,
+    this.rootCanalDoctorInCharge,
     this.consentFormPath,
   })  : oralExamFindings = oralExamFindings ?? [],
         investigations = investigations ?? [],
@@ -224,7 +229,8 @@ class TreatmentSession {
         orthoSteps = orthoSteps ?? [],
         rootCanalFindings = rootCanalFindings ?? [],
         rootCanalProcedures = rootCanalProcedures ?? [],
-        rootCanalSteps = rootCanalSteps ?? [];
+  rootCanalSteps = rootCanalSteps ?? [],
+  rootCanalPlans = rootCanalPlans ?? [];
 
   TreatmentSession copyWith({
     String? id,
@@ -255,6 +261,8 @@ class TreatmentSession {
     double? rootCanalTotalAmount,
     List<String>? rootCanalProcedures,
     List<ProcedureStep>? rootCanalSteps,
+  List<ToothPlanEntry>? rootCanalPlans,
+    String? rootCanalDoctorInCharge,
     String? consentFormPath,
   }) => TreatmentSession(
         id: id ?? this.id,
@@ -285,6 +293,8 @@ class TreatmentSession {
         rootCanalTotalAmount: rootCanalTotalAmount ?? this.rootCanalTotalAmount,
         rootCanalProcedures: rootCanalProcedures ?? List.from(this.rootCanalProcedures),
         rootCanalSteps: rootCanalSteps ?? List.from(this.rootCanalSteps),
+  rootCanalPlans: rootCanalPlans ?? List.from(this.rootCanalPlans),
+        rootCanalDoctorInCharge: rootCanalDoctorInCharge ?? this.rootCanalDoctorInCharge,
         consentFormPath: consentFormPath ?? this.consentFormPath,
       );
 
@@ -317,6 +327,8 @@ class TreatmentSession {
         'rootCanalTotalAmount': rootCanalTotalAmount,
         'rootCanalProcedures': rootCanalProcedures,
         'rootCanalSteps': rootCanalSteps.map((e) => e.toJson()).toList(),
+        'rootCanalPlans': rootCanalPlans.map((e) => e.toJson()).toList(),
+        'rootCanalDoctorInCharge': rootCanalDoctorInCharge,
         'consentFormPath': consentFormPath,
       };
 
@@ -353,6 +365,8 @@ class TreatmentSession {
         rootCanalTotalAmount: (json['rootCanalTotalAmount'] as num?)?.toDouble(),
         rootCanalProcedures: (json['rootCanalProcedures'] as List<dynamic>).cast<String>(),
         rootCanalSteps: (json['rootCanalSteps'] as List<dynamic>? ?? []).map((e) => ProcedureStep.fromJson(e as Map<String, dynamic>)).toList(),
+  rootCanalPlans: (json['rootCanalPlans'] as List<dynamic>? ?? []).map((e) => ToothPlanEntry.fromJson(e as Map<String, dynamic>)).toList(),
+        rootCanalDoctorInCharge: json['rootCanalDoctorInCharge'] as String?,
         consentFormPath: json['consentFormPath'] as String?,
       );
 }

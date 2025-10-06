@@ -35,6 +35,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   String? _followUpParentId; // follow up parent id
   String? _editingSessionId; // when set, we update existing session instead of creating new
   bool _showRxForm = false; // hides main session entry form until Add Rx pressed
+  bool _savingSession = false; // shows progress when persisting a session
 
   // General form state
   List<String> _selectedComplaints = [];
@@ -94,6 +95,15 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   final List<OralExamFinding> _rcFindings = [];
   final TextEditingController _rcTotal = TextEditingController();
   final List<ProcedureStep> _rcSteps = [];
+  // Root canal plan & doctor state
+  final List<ToothPlanEntry> _rcPlans = [];
+  String? _selectedRcDoctor;
+  final TextEditingController _rcPlanTooth = TextEditingController();
+  final TextEditingController _rcPlanText = TextEditingController();
+  bool _addingRcSession = false;
+  DateTime _newRcSessionDate = DateTime.now();
+  final TextEditingController _newRcTreatment = TextEditingController();
+  final TextEditingController _newRcPayment = TextEditingController();
   // Session history filtering by registered date (unique existing session dates)
   String? _sessionFilterDateStr; // YYYY-MM-DD string currently selected
 
@@ -144,26 +154,49 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           children: [
                             Expanded(
                               child: ElevatedButton.icon(
-                                onPressed: () async {
-                                  if (_editingSessionId == null) {
-                                    final session = _createSession();
-                                    await context.read<PatientProvider>().addSession(patient.id, session);
-                                    if (!mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session saved.')));
-                                  } else {
-                                    final updated = _createSession().copyWith(id: _editingSessionId);
-                                    await context.read<PatientProvider>().updateSession(patient.id, updated);
-                                    if (!mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session updated.')));
-                                  }
-                                  setState(() {
-                                    _editingSessionId = null;
-                                    _showRxForm = false;
-                                    _resetFormState();
-                                  });
-                                },
-                                icon: Icon(_editingSessionId == null ? Icons.save : Icons.save_as),
-                                label: Text(_editingSessionId == null ? 'Save Session' : 'Update Session'),
+                                onPressed: _savingSession
+                                    ? null
+                                    : () async {
+                                        setState(() => _savingSession = true);
+                                        try {
+                                          if (_editingSessionId == null) {
+                                            final session = _createSession();
+                                            await context.read<PatientProvider>().addSession(patient.id, session);
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session saved.')));
+                                            }
+                                          } else {
+                                            final updated = _createSession().copyWith(id: _editingSessionId);
+                                            await context.read<PatientProvider>().updateSession(patient.id, updated);
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session updated.')));
+                                            }
+                                          }
+                                          if (mounted) {
+                                            setState(() {
+                                              _editingSessionId = null;
+                                              _showRxForm = false;
+                                              _resetFormState();
+                                            });
+                                          }
+                                        } catch (e) {
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e')));
+                                          }
+                                        } finally {
+                                          if (mounted) setState(() => _savingSession = false);
+                                        }
+                                      },
+                                icon: _savingSession
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : Icon(_editingSessionId == null ? Icons.save : Icons.save_as),
+                                label: Text(_savingSession
+                                    ? (_editingSessionId == null ? 'Saving...' : 'Updating...')
+                                    : (_editingSessionId == null ? 'Save Session' : 'Update Session')),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -207,6 +240,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       defaultPastMedical: AppConstants.pastMedicalHistoryOptions,
       defaultMedicationOptions: AppConstants.medicationOptions,
       defaultDrugAllergies: AppConstants.drugAllergyOptions,
+      defaultRcDoctors: const [],
     );
     _optionsLoaded = true;
   }
@@ -1045,58 +1079,267 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ElevatedButton(
-            onPressed: () async {
-              final toothController = TextEditingController();
-              final findingController = TextEditingController();
-              await showDialog(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                        title: const Text('Add Root Canal Finding'),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            TextField(controller: toothController, decoration: const InputDecoration(labelText: 'Tooth (FDI)')),
-                            TextField(controller: findingController, decoration: const InputDecoration(labelText: 'Finding')),
-                          ],
-                        ),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                          ElevatedButton(
-                              onPressed: () {
-                                if (toothController.text.isNotEmpty && findingController.text.isNotEmpty) {
-                                  setState(() {
-                                    _rcFindings.add(OralExamFinding(toothNumber: toothController.text, finding: findingController.text));
-                                  });
-                                }
-                                Navigator.pop(context);
-                              },
-                              child: const Text('Add'))
-                        ],
-                      ));
-            },
-            child: const Text('Add Finding')),
-        ..._rcFindings.map((f) => ListTile(title: Text('${f.toothNumber}: ${f.finding}'))),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _rcTotal,
-          decoration: const InputDecoration(labelText: 'Total Amount Payable'),
-          keyboardType: TextInputType.number,
+        // 1. RCT Plan Container
+        Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('RCT Plan', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                Text('1. Oral Findings', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Row(children:[
+                  SizedBox(
+                    width: 80,
+                    child: TextField(
+                      controller: _inlineToothController,
+                      decoration: const InputDecoration(labelText: 'Tooth'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _inlineFindingController,
+                      decoration: const InputDecoration(labelText: 'Oral Finding'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                      onPressed: () {
+                        final t = _inlineToothController.text.trim();
+                        final f = _inlineFindingController.text.trim();
+                        if (f.isEmpty) return;
+                        setState(() {
+                          _rcFindings.add(OralExamFinding(toothNumber: t, finding: f));
+                          _sortByTooth(_rcFindings, (e)=> e.toothNumber);
+                          _inlineToothController.clear();
+                          _inlineFindingController.clear();
+                        });
+                      },
+                      child: const Text('Add'))
+                ]),
+                if (_rcFindings.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top:8),
+                    child: Text('No oral findings added.'),
+                  )
+                else ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    children: _rcFindings.map((f) => Chip(label: Text('${f.toothNumber.isEmpty?'-':f.toothNumber}: ${f.finding}'), onDeleted: () => setState(() => _rcFindings.remove(f)))).toList(),
+                  )
+                ],
+                const Divider(height: 32),
+                Text('2. Treatment Plan', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Row(children:[
+                  SizedBox(
+                    width: 80,
+                    child: TextField(
+                      controller: _rcPlanTooth,
+                      decoration: const InputDecoration(labelText: 'Tooth'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _rcPlanText,
+                      decoration: const InputDecoration(labelText: 'Treatment Plan'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                      onPressed: () {
+                        final t = _rcPlanTooth.text.trim();
+                        final p = _rcPlanText.text.trim();
+                        if (p.isEmpty) return;
+                        setState(() {
+                          _rcPlans.add(ToothPlanEntry(toothNumber: t, plan: p));
+                          _sortByTooth(_rcPlans, (e)=> e.toothNumber);
+                          _rcPlanTooth.clear();
+                          _rcPlanText.clear();
+                        });
+                      },
+                      child: const Text('Add'))
+                ]),
+                if (_rcPlans.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top:8),
+                    child: Text('No RCT plan entries.'),
+                  )
+                else ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing:6,
+                    children: _rcPlans.map((e)=> Chip(label: Text('${e.toothNumber.isEmpty?'-':e.toothNumber}: ${e.plan}'), onDeleted: ()=> setState(()=> _rcPlans.remove(e)))).toList(),
+                  )
+                ],
+                const Divider(height: 32),
+                Builder(builder: (ctx){
+                  final opt = ctx.watch<OptionsProvider>();
+                  return Row(children:[
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedRcDoctor,
+                        decoration: const InputDecoration(labelText: 'Doctor In Charge'),
+                        items: opt.rcDoctors.map((d)=> DropdownMenuItem(value:d, child: Text(d))).toList(),
+                        onChanged: (v)=> setState(()=> _selectedRcDoctor = v),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add),
+                      tooltip: 'Add Doctor',
+                      onPressed: () async {
+                        final ctrl = TextEditingController();
+                        final name = await showDialog<String>(context: context, builder: (_)=> AlertDialog(title: const Text('Add Doctor'), content: TextField(controller: ctrl, decoration: const InputDecoration(labelText: 'Name')), actions:[
+                          TextButton(onPressed: ()=> Navigator.pop(context), child: const Text('Cancel')),
+                          ElevatedButton(onPressed: ()=> Navigator.pop(context, ctrl.text.trim()), child: const Text('Add'))
+                        ],));
+                        if (name!=null && name.isNotEmpty) opt.addValue('rcDoctors', name);
+                      },
+                    ),
+                    if (_selectedRcDoctor != null) IconButton(
+                      icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
+                      tooltip: 'Delete Doctor',
+                      onPressed: () async { await ctx.read<OptionsProvider>().removeValue('rcDoctors', _selectedRcDoctor!); setState(()=> _selectedRcDoctor=null); },
+                    )
+                  ]);
+                }),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _rcTotal,
+                  decoration: const InputDecoration(labelText: 'Total Amount'),
+                  keyboardType: TextInputType.number,
+                ),
+              ],
+            ),
+          ),
         ),
-        const Divider(height: 24),
-        Text('Procedure Steps', style: Theme.of(context).textTheme.titleMedium),
-        ElevatedButton(onPressed: () => _addProcedureStep(isOrtho: false), child: const Text('Add Step')),
-        ..._rcSteps.map((s) => ListTile(
-              dense: true,
-              title: Text(s.description),
-              subtitle: Text('${s.date.toLocal().toString().split(' ').first}${s.payment != null ? '  Paid: ${s.payment}' : ''}'),
-              trailing: IconButton(icon: const Icon(Icons.delete, size: 18), onPressed: () => setState(() => _rcSteps.remove(s))),
-            )),
-        if (_rcTotal.text.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(_rootCanalBalanceSummary(), style: Theme.of(context).textTheme.bodyMedium),
-          )
+        // 2. Treatment Sessions container
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Treatment Sessions', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                if (!_addingRcSession) ...[
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Treatment Session'),
+                    onPressed: ()=> setState(()=> _addingRcSession = true),
+                  ),
+                ] else ...[
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: .06),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha:.25)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Date selector on its own line to avoid horizontal overflow
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton(
+                            onPressed: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _newRcSessionDate,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime(2100),
+                              );
+                              if (picked!=null) setState(()=> _newRcSessionDate = picked);
+                            },
+                            child: Text(_newRcSessionDate.toLocal().toString().split(' ').first),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(children:[
+                          Expanded(
+                            child: Builder(builder: (ctx){
+                              final opt = ctx.watch<OptionsProvider>();
+                              return DropdownButtonFormField<String>(
+                                value: _newRcTreatment.text.isEmpty? null : _newRcTreatment.text,
+                                decoration: const InputDecoration(labelText: 'Treatment Done'),
+                                items: opt.treatmentDoneOptions.map((o)=> DropdownMenuItem(value:o, child: Text(o))).toList(),
+                                onChanged: (v){ if (v!=null) setState(()=> _newRcTreatment.text = v); },
+                              );
+                            }),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle_outline),
+                            tooltip: 'Add Option',
+                            onPressed: () async {
+                              final ctrl = TextEditingController();
+                              final val = await showDialog<String>(context: context, builder: (_)=> AlertDialog(title: const Text('Add Treatment Option'), content: TextField(controller: ctrl, decoration: const InputDecoration(labelText: 'Value')), actions:[
+                                TextButton(onPressed: ()=> Navigator.pop(context), child: const Text('Cancel')),
+                                ElevatedButton(onPressed: ()=> Navigator.pop(context, ctrl.text.trim()), child: const Text('Add'))
+                              ],));
+                              if (val!=null && val.isNotEmpty) context.read<OptionsProvider>().addValue('done', val);
+                            },
+                          ),
+                        ]),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _newRcPayment,
+                          decoration: const InputDecoration(labelText: 'Payment (optional)'),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(children:[
+                          ElevatedButton(
+                            onPressed: () {
+                              final desc = _newRcTreatment.text.trim();
+                              if (desc.isEmpty) return;
+                              final pay = double.tryParse(_newRcPayment.text.trim());
+                              final step = ProcedureStep(id: const Uuid().v4(), date: _newRcSessionDate, description: desc, payment: pay);
+                              setState(() {
+                                _rcSteps.add(step);
+                                _addingRcSession = false;
+                                _newRcTreatment.clear();
+                                _newRcPayment.clear();
+                                _newRcSessionDate = DateTime.now();
+                              });
+                            },
+                            child: const Text('Save'),
+                          ),
+                          const SizedBox(width: 12),
+                          TextButton(onPressed: () { setState(()=> _addingRcSession = false); }, child: const Text('Cancel')),
+                        ])
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                if (_rcSteps.isEmpty)
+                  const Text('No treatment sessions recorded.')
+                else
+                  Column(
+                    children: _rcSteps.map((s) => ListTile(
+                      dense: true,
+                      title: Text('${s.date.toLocal().toString().split(' ').first} • ${s.description}'),
+                      subtitle: s.payment==null? null : Text('Paid: ${s.payment}'),
+                      trailing: IconButton(icon: const Icon(Icons.delete, size: 18), onPressed: () => setState(() => _rcSteps.remove(s))),
+                    )).toList(),
+                  ),
+                if (_rcTotal.text.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(_rootCanalBalanceSummary(), style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                ]
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -1160,6 +1403,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           rootCanalFindings: List.from(_rcFindings),
           rootCanalTotalAmount: double.tryParse(_rcTotal.text.trim()),
           rootCanalSteps: List.from(_rcSteps),
+          rootCanalPlans: List.from(_rcPlans),
+          rootCanalDoctorInCharge: _selectedRcDoctor,
         );
       case TreatmentType.labWork:
         return TreatmentSession(
@@ -2942,6 +3187,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           _rcSteps
             ..clear()
             ..addAll(s.rootCanalSteps);
+          _rcPlans
+            ..clear()
+            ..addAll(s.rootCanalPlans);
+          _selectedRcDoctor = s.rootCanalDoctorInCharge;
           break;
         case TreatmentType.labWork:
           // Currently no editable fields for labWork sessions; keep as placeholder.
@@ -2979,6 +3228,11 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     _rcFindings.clear();
     _rcTotal.clear();
     _rcSteps.clear();
+  _rcPlans.clear();
+  _selectedRcDoctor = null;
+  _addingRcSession = false;
+  _newRcTreatment.clear();
+  _newRcPayment.clear();
   }
 
   void _startFollowUpFrom(TreatmentSession base) {
