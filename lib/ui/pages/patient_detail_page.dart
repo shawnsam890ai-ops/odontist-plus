@@ -632,13 +632,45 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             padding: const EdgeInsets.all(12),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               _sectionTitle('6. Prescription'),
-        _prescriptionBuilder(),
-        ..._prescription.map((p) => ListTile(
-              dense: true,
-              title: Text('#Rx-${p.serial.toString().padLeft(3, '0')}  ${p.medicine}  ${p.timing}'),
-              subtitle: Text('${p.tablets} tabs/ml x ${p.days} days'),
-              trailing: IconButton(icon: const Icon(Icons.delete, size: 18), onPressed: () => setState(() => _prescription.remove(p))),
-            )),
+              _prescriptionBuilder(),
+              if (_prescription.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text('No prescriptions added yet.'),
+                )
+              else if (_prescription.length <= 3) ...[
+                ..._prescription.map((p) => ListTile(
+                      dense: true,
+                      title: Text('#Rx-${p.serial.toString().padLeft(3, '0')}  ${p.medicine}  ${p.timing}'),
+                      subtitle: Text('${p.tablets} tabs/ml x ${p.days} days'),
+                      trailing: IconButton(
+                          icon: const Icon(Icons.delete, size: 18),
+                          onPressed: () => setState(() => _prescription.remove(p))),
+                    )),
+              ] else ...[
+                // Scrollable list when more than 3 items to prevent large layout growth
+                SizedBox(
+                  height: 156, // approx 3 dense tiles (~48 each) + small padding
+                  child: Scrollbar(
+                    thumbVisibility: true,
+                    child: ListView.builder(
+                      itemCount: _prescription.length,
+                      itemBuilder: (ctx, i) {
+                        final p = _prescription[i];
+                        return ListTile(
+                          dense: true,
+                          title: Text('#Rx-${p.serial.toString().padLeft(3, '0')}  ${p.medicine}  ${p.timing}'),
+                          subtitle: Text('${p.tablets} tabs/ml x ${p.days} days'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, size: 18),
+                            onPressed: () => setState(() => _prescription.remove(p)),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
             ]),
           ),
         ),
