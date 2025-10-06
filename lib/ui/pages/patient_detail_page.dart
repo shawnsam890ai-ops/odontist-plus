@@ -2238,41 +2238,66 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   }
 
   void _editExistingSession(TreatmentSession s) {
-    // For now: load into current form for editing only if same type (general). More types can be added later.
-    if (s.type != TreatmentType.general) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Edit only supported for General sessions currently.')));
-      return;
-    }
     setState(() {
       _editingSessionId = s.id;
+      _followUpParentId = s.parentSessionId; // retain linkage if it was a follow-up
       _selectedType = s.type;
-      _selectedComplaints = List.from(s.chiefComplaint?.complaints ?? []);
-      _selectedQuadrants = List.from(s.chiefComplaint?.quadrants ?? []);
-      _oralFindings
-        ..clear()
-        ..addAll(s.oralExamFindings);
-      _investigations
-        ..clear()
-        ..addAll(s.investigations);
-      _investigationFindings
-        ..clear()
-        ..addAll(s.investigationFindings);
-      _selectedPlanOptions = List.from(s.planOptions);
-      _selectedTreatmentDoneOptions = List.from(s.treatmentDoneOptions);
-      _toothPlans
-        ..clear()
-        ..addAll(s.toothPlans);
-      _treatmentsDone
-        ..clear()
-        ..addAll(s.treatmentsDone);
-      _prescription
-        ..clear()
-        ..addAll(s.prescription);
-      _notes.text = s.notes;
-      _nextAppointment = s.nextAppointment;
-      _showRxForm = true; // ensure form is visible when editing
+      _showRxForm = true;
+
+      // Clear all form collections first
+      _selectedComplaints.clear();
+      _selectedQuadrants.clear();
+      _oralFindings..clear();
+      _investigations..clear();
+      _investigationFindings..clear();
+      _treatmentPlan.clear();
+      _toothPlans.clear();
+      _treatmentsDone.clear();
+      _selectedPlanOptions.clear();
+      _selectedTreatmentDoneOptions.clear();
+      _prescription.clear();
+      _notes.clear();
+      _nextAppointment = null;
+
+      switch (s.type) {
+        case TreatmentType.general:
+          _selectedComplaints = List.from(s.chiefComplaint?.complaints ?? []);
+          _selectedQuadrants = List.from(s.chiefComplaint?.quadrants ?? []);
+          _oralFindings.addAll(s.oralExamFindings);
+          _investigations.addAll(s.investigations);
+          _investigationFindings.addAll(s.investigationFindings);
+          _selectedPlanOptions = List.from(s.planOptions);
+          _selectedTreatmentDoneOptions = List.from(s.treatmentDoneOptions);
+          _toothPlans.addAll(s.toothPlans);
+            _treatmentsDone.addAll(s.treatmentsDone);
+          _prescription.addAll(s.prescription);
+          _notes.text = s.notes;
+          _nextAppointment = s.nextAppointment;
+          break;
+        case TreatmentType.orthodontic:
+          _orthoFindings.text = s.orthoOralFindings;
+          _bracketType = s.bracketType ?? BracketType.metalRegular;
+          _orthoTotal.text = s.orthoTotalAmount?.toString() ?? '';
+          _selectedOrthoDoctor = s.orthoDoctorInCharge;
+          _orthoSteps
+            ..clear()
+            ..addAll(s.orthoSteps);
+          break;
+        case TreatmentType.rootCanal:
+          _rcFindings
+            ..clear()
+            ..addAll(s.rootCanalFindings);
+          _rcTotal.text = s.rootCanalTotalAmount?.toString() ?? '';
+          _rcSteps
+            ..clear()
+            ..addAll(s.rootCanalSteps);
+          break;
+        case TreatmentType.labWork:
+          // Currently no editable fields for labWork sessions; keep as placeholder.
+          break;
+      }
     });
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session data loaded. Make changes and Save Session.')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${s.type.label} session loaded. Make changes and Save Session.')));
   }
 
   void _resetFormState() {
