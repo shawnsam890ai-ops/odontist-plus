@@ -1977,42 +1977,6 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     _rcSteps.clear();
   }
 
-  Future<void> _openFollowUpPicker(List<TreatmentSession> generalSessions) async {
-    if (generalSessions.isEmpty) return;
-    // Sort sessions by date desc to show latest first
-    final sorted = List<TreatmentSession>.from(generalSessions)..sort((a,b)=> b.date.compareTo(a.date));
-    final selectedId = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Select Session for Follow-Up'),
-        content: SizedBox(
-          width: 420,
-          height: 400,
-          child: ListView.builder(
-            itemCount: sorted.length,
-            itemBuilder: (c,i){
-              final s = sorted[i];
-              return ListTile(
-                leading: const Icon(Icons.history),
-                title: Text('Session ${s.date.toLocal().toString().split(' ').first}'),
-                subtitle: Text('Complaints: ${(s.chiefComplaint?.complaints.join(', ') ?? '')}'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.pop(ctx, s.id),
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        ],
-      ),
-    );
-    if (selectedId != null) {
-      final session = generalSessions.firstWhere((s) => s.id == selectedId, orElse: () => generalSessions.first);
-      _startFollowUpFrom(session);
-    }
-  }
-
   void _startFollowUpFrom(TreatmentSession base) {
     // Only meaningful for general sessions; ignore others
     if (base.type != TreatmentType.general) return;
