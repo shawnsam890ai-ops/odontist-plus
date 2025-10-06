@@ -1106,10 +1106,12 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select plan option(s) first')));
                   return;
                 }
+                final optionsToAdd = List<String>.from(_selectedPlanOptions);
                 setState(() {
-                  for (final p in _selectedPlanOptions) {
+                  for (final p in optionsToAdd) {
                     _toothPlans.add(ToothPlanEntry(toothNumber: tooth, plan: p));
                   }
+                  _selectedPlanOptions.clear(); // prevent duplicate unassociated chips
                   _planToothController.clear();
                 });
               },
@@ -1189,10 +1191,12 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select treatment(s) done first')));
                   return;
                 }
+                final doneToAdd = List<String>.from(_selectedTreatmentDoneOptions);
                 setState(() {
-                  for (final d in _selectedTreatmentDoneOptions) {
+                  for (final d in doneToAdd) {
                     _treatmentsDone.add(ToothTreatmentDoneEntry(toothNumber: tooth, treatment: d));
                   }
+                  _selectedTreatmentDoneOptions.clear();
                   _doneToothController.clear();
                 });
               },
@@ -1225,9 +1229,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   }
 
   bool _isValidFdi(String value) {
-    // Accept 11-18,21-28,31-38,41-48 (permanent) and 51-55,61-65,71-75,81-85 (primary)
-    final reg = RegExp(r'^(1[1-8]|2[1-8]|3[1-8]|4[1-8]|5[1-5]|6[1-5]|7[1-5]|8[1-5])$');
-    return reg.hasMatch(value);
+    // Accept permanent (11-18,21-28,31-38,41-48) & primary (51-55,61-65,71-75,81-85)
+    // Allow optional retained prefix R and optional 1-2 letter supernumerary suffix (e.g., 11A, R53B)
+    final reg = RegExp(r'^(R)?(1[1-8]|2[1-8]|3[1-8]|4[1-8]|5[1-5]|6[1-5]|7[1-5]|8[1-5])([A-Z]{1,2})?$', caseSensitive: false);
+    return reg.hasMatch(value.trim());
   }
 
   void _addInlineOralFinding() {

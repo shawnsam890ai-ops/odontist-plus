@@ -14,39 +14,26 @@ class SearchEditableMultiSelect extends StatefulWidget {
 }
 
 class _SearchEditableMultiSelectState extends State<SearchEditableMultiSelect> {
-  late List<String> _selected;
-
-  @override
-  void initState() {
-    super.initState();
-    _selected = List.from(widget.initial);
-  }
-
-  @override
-  void didUpdateWidget(covariant SearchEditableMultiSelect oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.initial != widget.initial) {
-      _selected = List.from(widget.initial);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final current = widget.initial; // always reflect external source of truth
     return InkWell(
       onTap: _openDialog,
       child: InputDecorator(
         decoration: InputDecoration(labelText: widget.label, border: const OutlineInputBorder()),
         child: Wrap(
           spacing: 6,
-            runSpacing: -4,
-          children: _selected.isEmpty ? [Text('None', style: Theme.of(context).textTheme.bodySmall)] : _selected.map((e) => Chip(label: Text(e), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap)).toList(),
+          runSpacing: -4,
+          children: current.isEmpty
+              ? [Text('None', style: Theme.of(context).textTheme.bodySmall)]
+              : current.map((e) => Chip(label: Text(e), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap)).toList(),
         ),
       ),
     );
   }
 
   Future<void> _openDialog() async {
-    List<String> temp = List.from(_selected);
+    List<String> temp = List.from(widget.initial);
     final controller = TextEditingController();
     String query = '';
     final result = await showDialog<List<String>>(
@@ -131,8 +118,7 @@ class _SearchEditableMultiSelectState extends State<SearchEditableMultiSelect> {
       ),
     );
     if (result != null) {
-      setState(() => _selected = result);
-      widget.onChanged(_selected);
+      widget.onChanged(result); // parent rebuild controls display
     }
   }
 
