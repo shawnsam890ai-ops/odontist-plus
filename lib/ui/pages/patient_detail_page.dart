@@ -76,7 +76,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   final TextEditingController _orthoFindings = TextEditingController();
   BracketType _bracketType = BracketType.metalRegular;
   final TextEditingController _orthoTotal = TextEditingController();
-  final TextEditingController _orthoDoctor = TextEditingController();
+  // Ortho doctor selection now from dynamic dropdown list managed by OptionsProvider
+  String? _selectedOrthoDoctor;
   final List<ProcedureStep> _orthoSteps = [];
 
   // Root canal
@@ -726,10 +727,78 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           keyboardType: TextInputType.number,
         ),
         const SizedBox(height: 12),
-        TextField(
-          controller: _orthoDoctor,
-          decoration: const InputDecoration(labelText: 'Doctor in Charge'),
-        ),
+        Builder(builder: (ctx){
+          final opt = ctx.watch<OptionsProvider>();
+          final doctors = opt.orthoDoctors;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _selectedOrthoDoctor,
+                  decoration: const InputDecoration(labelText: 'Doctor in Charge'),
+                  items: doctors.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                  onChanged: (v)=> setState(()=> _selectedOrthoDoctor = v),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Add new doctor
+              IconButton(
+                tooltip: 'Add Doctor',
+                icon: const Icon(Icons.add),
+                onPressed: () async {
+                  final controller = TextEditingController();
+                  final val = await showDialog<String>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: const Text('Add Doctor'),
+                        content: TextField(
+                          controller: controller,
+                          decoration: const InputDecoration(labelText: 'Doctor Name'),
+                          autofocus: true,
+                        ),
+                        actions: [
+                          TextButton(onPressed: ()=> Navigator.pop(context), child: const Text('Cancel')),
+                          ElevatedButton(onPressed: ()=> Navigator.pop(context, controller.text.trim()), child: const Text('Add')),
+                        ],
+                      ));
+                  if (val != null && val.isNotEmpty) {
+                    await opt.addValue('orthoDoctors', val);
+                    if (mounted) {
+                      setState(()=> _selectedOrthoDoctor = val);
+                    }
+                  }
+                },
+              ),
+              // Delete selected doctor (if unused)
+              IconButton(
+                tooltip: 'Delete Selected Doctor',
+                icon: const Icon(Icons.delete_outline),
+                onPressed: _selectedOrthoDoctor == null ? null : () async {
+                  final target = _selectedOrthoDoctor!;
+                  final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: const Text('Delete Doctor'),
+                        content: Text('Delete "$target"? This cannot be undone.'),
+                        actions: [
+                          TextButton(onPressed: ()=> Navigator.pop(context, false), child: const Text('Cancel')),
+                          ElevatedButton(onPressed: ()=> Navigator.pop(context, true), child: const Text('Delete')),
+                        ],
+                      ));
+                  if (confirm == true) {
+                    final ok = await opt.removeValue('orthoDoctors', target);
+                    if (!ok && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: doctor referenced in a session.')));
+                    } else if (ok && mounted) {
+                      setState(()=> _selectedOrthoDoctor = null);
+                    }
+                  }
+                },
+              ),
+            ],
+          );
+        }),
         const Divider(height: 24),
         Text('Procedure Steps', style: Theme.of(context).textTheme.titleMedium),
         ElevatedButton(
@@ -857,7 +926,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           orthoOralFindings: _orthoFindings.text.trim(),
           bracketType: _bracketType,
           orthoTotalAmount: double.tryParse(_orthoTotal.text.trim()),
-          orthoDoctorInCharge: _orthoDoctor.text.trim(),
+          orthoDoctorInCharge: _selectedOrthoDoctor,
           orthoSteps: List.from(_orthoSteps),
         );
       case TreatmentType.rootCanal:
@@ -1624,51 +1693,90 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           child: Icon(_typeIcon(s), size: 18, color: _typeColor(s).withOpacity(.9)),
                         ),
                       Expanded(
-                        child: isFollowUp
-                            ? Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // First line: date + label
-                                  Text(
-                                    '${s.date.toLocal().toIso8601String().split('T').first} • Follow-Up',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(.85),
-                                      fontSize: 13.0,
-                                    ),
-                                    softWrap: true,
+                        child: () {
+                          if (isFollowUp) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '${s.date.toLocal().toIso8601String().split('T').first} • Follow-Up',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(.85),
+                                    fontSize: 13.0,
                                   ),
-                                  // Second line: Treatment Done summary if any
-                                  Builder(builder: (_) {
-                                    final structured = s.treatmentsDone;
-                                    final legacy = doneOpts;
-                                    if (structured.isEmpty && legacy.isEmpty) return const SizedBox.shrink();
-                                    String line;
-                                    if (structured.isNotEmpty) {
-                                      final entries = structured
-                                          .map((e) => (e.toothNumber.trim().isEmpty ? e.treatment : '${e.toothNumber}-${e.treatment}'))
-                                          .toList();
-                                      line = entries.join(', ');
-                                    } else {
-                                      line = legacy.join(', ');
-                                    }
-                                    return Padding(
-                                      padding: const EdgeInsets.only(top: 2),
-                                      child: Text(
-                                        'Done: ' + line,
-                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                              fontWeight: FontWeight.w500,
-                                              color: Theme.of(context).colorScheme.onSurface.withOpacity(.70),
-                                              fontSize: 11.5,
-                                            ),
-                                        softWrap: true,
-                                      ),
-                                    );
-                                  }),
-                                ],
-                              )
-                            : const SizedBox.shrink(),
+                                  softWrap: true,
+                                ),
+                                Builder(builder: (_) {
+                                  final structured = s.treatmentsDone;
+                                  final legacy = doneOpts;
+                                  if (structured.isEmpty && legacy.isEmpty) return const SizedBox.shrink();
+                                  String line;
+                                  if (structured.isNotEmpty) {
+                                    final entries = structured
+                                        .map((e) => (e.toothNumber.trim().isEmpty ? e.treatment : '${e.toothNumber}-${e.treatment}'))
+                                        .toList();
+                                    line = entries.join(', ');
+                                  } else {
+                                    line = legacy.join(', ');
+                                  }
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Text(
+                                      'Treatment Done: ' + line,
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            fontWeight: FontWeight.w500,
+                                            color: Theme.of(context).colorScheme.onSurface.withOpacity(.70),
+                                            fontSize: 11.5,
+                                          ),
+                                      softWrap: true,
+                                    ),
+                                  );
+                                }),
+                              ],
+                            );
+                          }
+                          // Parent (non-follow-up) session: provide a header for ALL types.
+                          // General sessions already show complaints below; still show date + type for consistency.
+                          final dateStr = s.date.toLocal().toIso8601String().split('T').first;
+                          final typeStr = s.type.label;
+                          // Orthodontic quick summary (bracket + doctor)
+                          String? orthoLine;
+                          if (s.type == TreatmentType.orthodontic) {
+                            final parts = <String>[];
+                            if (s.bracketType != null) parts.add(s.bracketType!.label);
+                            if (s.orthoDoctorInCharge != null && s.orthoDoctorInCharge!.trim().isNotEmpty) parts.add('Dr: '+s.orthoDoctorInCharge!);
+                            if (parts.isNotEmpty) orthoLine = parts.join(' • ');
+                          }
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '$dateStr • $typeStr',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(.85),
+                                  fontSize: 13.0,
+                                ),
+                                softWrap: true,
+                              ),
+                              if (orthoLine != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    orthoLine,
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          fontWeight: FontWeight.w500,
+                                          color: Theme.of(context).colorScheme.onSurface.withOpacity(.70),
+                                          fontSize: 11.5,
+                                        ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        }(),
                       ),
                       if (!isFollowUp) badge,
                       if (!isFollowUp && s.type == TreatmentType.general)
@@ -1885,6 +1993,24 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       lines.add('Chief Complaint: ${s.chiefComplaint!.complaints.join(', ')}');
       if (s.chiefComplaint!.quadrants.isNotEmpty) {
         lines.add('Quadrants: ${s.chiefComplaint!.quadrants.join(', ')}');
+      }
+    }
+    // Orthodontic specific quick details
+    if (s.type == TreatmentType.orthodontic) {
+      if (s.orthoOralFindings.isNotEmpty) {
+        lines.add('Ortho Findings: ${s.orthoOralFindings}');
+      }
+      if (s.bracketType != null) {
+        lines.add('Bracket: ${s.bracketType!.label}');
+      }
+      if (s.orthoDoctorInCharge != null && s.orthoDoctorInCharge!.trim().isNotEmpty) {
+        lines.add('Doctor: ${s.orthoDoctorInCharge}');
+      }
+      if (s.orthoTotalAmount != null) {
+        lines.add('Total: ${s.orthoTotalAmount}');
+      }
+      if (s.orthoSteps.isNotEmpty) {
+        lines.add('Steps: ${s.orthoSteps.length}');
       }
     }
     if (s.oralExamFindings.isNotEmpty) {
@@ -2171,7 +2297,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     _orthoFindings.clear();
     _bracketType = BracketType.metalRegular;
     _orthoTotal.clear();
-    _orthoDoctor.clear();
+  _selectedOrthoDoctor = null;
     _orthoSteps.clear();
     // Root canal
     _rcFindings.clear();

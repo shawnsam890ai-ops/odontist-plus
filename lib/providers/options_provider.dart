@@ -17,6 +17,8 @@ class OptionsProvider extends ChangeNotifier {
   List<String> pastMedicalHistory = [];
   List<String> medicationOptions = [];
   List<String> drugAllergyOptions = [];
+  // New: dynamic list of orthodontic doctors
+  List<String> orthoDoctors = [];
 
   bool _loaded = false;
   bool get isLoaded => _loaded;
@@ -37,6 +39,7 @@ class OptionsProvider extends ChangeNotifier {
     required List<String> defaultPastMedical,
     required List<String> defaultMedicationOptions,
     required List<String> defaultDrugAllergies,
+    List<String>? defaultOrthoDoctors, // optional to avoid forcing callers now
   }) async {
     if (_loaded) return;
     final prefs = await SharedPreferences.getInstance();
@@ -53,6 +56,7 @@ class OptionsProvider extends ChangeNotifier {
         pastMedicalHistory = (map['pastMedical'] as List<dynamic>? ?? []).cast<String>();
         medicationOptions = (map['dynamicMedications'] as List<dynamic>? ?? []).cast<String>();
         drugAllergyOptions = (map['drugAllergies'] as List<dynamic>? ?? []).cast<String>();
+        orthoDoctors = (map['orthoDoctors'] as List<dynamic>? ?? []).cast<String>();
       } catch (_) {
         // fallback to defaults
       }
@@ -66,6 +70,7 @@ class OptionsProvider extends ChangeNotifier {
     if (pastMedicalHistory.isEmpty) pastMedicalHistory = List.from(defaultPastMedical);
     if (medicationOptions.isEmpty) medicationOptions = List.from(defaultMedicationOptions);
     if (drugAllergyOptions.isEmpty) drugAllergyOptions = List.from(defaultDrugAllergies);
+  if (orthoDoctors.isEmpty && (defaultOrthoDoctors != null)) orthoDoctors = List.from(defaultOrthoDoctors);
 
     // Ensure all lists are sorted alphabetically (case-insensitive) once loaded
     _sortList(complaints);
@@ -77,6 +82,7 @@ class OptionsProvider extends ChangeNotifier {
     _sortList(pastMedicalHistory);
     _sortList(medicationOptions);
     _sortList(drugAllergyOptions);
+  _sortList(orthoDoctors);
     _loaded = true;
     notifyListeners();
   }
@@ -93,6 +99,7 @@ class OptionsProvider extends ChangeNotifier {
       'pastMedical': pastMedicalHistory,
       'dynamicMedications': medicationOptions,
       'drugAllergies': drugAllergyOptions,
+      'orthoDoctors': orthoDoctors,
     }));
   }
 
@@ -150,6 +157,8 @@ class OptionsProvider extends ChangeNotifier {
         return medicationOptions;
       case 'drugAllergies':
         return drugAllergyOptions;
+      case 'orthoDoctors':
+        return orthoDoctors;
       default:
         return complaints;
     }
@@ -217,6 +226,14 @@ class OptionsProvider extends ChangeNotifier {
         return patients.any((p) => p.currentMedications.any((e) => e.toLowerCase() == value.toLowerCase()));
       case 'drugAllergies':
         return patients.any((p) => p.drugAllergies.any((e) => e.toLowerCase() == value.toLowerCase()));
+      case 'orthoDoctors':
+        // Check if any session references this doctor
+        for (final p in patients) {
+          for (final s in p.sessions) {
+            if (s.orthoDoctorInCharge != null && s.orthoDoctorInCharge!.toLowerCase() == value.toLowerCase()) return true;
+          }
+        }
+        return false;
       default:
         return false;
     }

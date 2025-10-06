@@ -29,8 +29,15 @@ enum InvestigationType {
 }
 
 enum BracketType {
-  metalRegular('Metal Regular'),
-  metalPremium('Metal Premium');
+  // Existing values retained first to preserve stored index compatibility
+  metalRegular('Metal bracket regular'),
+  metalPremium('Metal bracket Premium'),
+  // Newly added options
+  metalPremiumPlus('Metal bracket premium Plus'),
+  ceramicRegular('Ceramic bracket regular'),
+  ceramicPremium('Ceramic bracket Premium'),
+  selfLigatingMetal('Self ligating metal bracket'),
+  selfLigatingCeramic('Self ligating Ceramic Bracket');
 
   const BracketType(this.label);
   final String label;
