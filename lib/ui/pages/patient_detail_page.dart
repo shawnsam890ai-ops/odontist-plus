@@ -1509,23 +1509,23 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         doneOpts = (td is List) ? td.cast<String>() : <String>[];
       } catch (_) { doneOpts = <String>[]; }
       final orderedDetails = _buildSessionDetailLines(s, planOpts, doneOpts);
-      final titlePrefix = isFollowUp ? 'Follow-Up' : s.type.label;
+  // titlePrefix removed (follow-up title constructed inline)
       // Determine if we should elevate chief complaint(s) into the title for general parent sessions
       bool movedComplaintToTitle = false;
       String datePart = s.date.toLocal().toString().split(' ').first;
-      String displayTitle; // used when not moving complaint or for follow-ups
+  // displayTitle no longer needed (follow-up title now custom composed)
       String complaintsFullForTitle = '';
       if (!isFollowUp && s.type == TreatmentType.general && s.chiefComplaint != null) {
         final complaintsFull = s.chiefComplaint!.complaints.join(', ');
         if (complaintsFull.trim().isNotEmpty) {
           complaintsFullForTitle = complaintsFull;
-          displayTitle = '$complaintsFull • $datePart'; // fallback usage not in container row mode
+          // (was: displayTitle assignment removed)
           movedComplaintToTitle = true;
         } else {
-          displayTitle = '$titlePrefix • $datePart';
+          // (was: displayTitle assignment removed)
         }
       } else {
-        displayTitle = '$titlePrefix • $datePart';
+  // (legacy displayTitle removed)
       }
       final badge = !isFollowUp && parentCount != null && parentCount > 0
           ? AnimatedContainer(
@@ -1625,14 +1625,48 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         ),
                       Expanded(
                         child: isFollowUp
-                            ? Text(
-                                displayTitle,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(.85),
-                                  fontSize: 13.5,
-                                ),
-                                overflow: TextOverflow.ellipsis,
+                            ? Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // First line: date + label
+                                  Text(
+                                    '${s.date.toLocal().toIso8601String().split('T').first} • Follow-Up',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(.85),
+                                      fontSize: 13.0,
+                                    ),
+                                    softWrap: true,
+                                  ),
+                                  // Second line: Treatment Done summary if any
+                                  Builder(builder: (_) {
+                                    final structured = s.treatmentsDone;
+                                    final legacy = doneOpts;
+                                    if (structured.isEmpty && legacy.isEmpty) return const SizedBox.shrink();
+                                    String line;
+                                    if (structured.isNotEmpty) {
+                                      final entries = structured
+                                          .map((e) => (e.toothNumber.trim().isEmpty ? e.treatment : '${e.toothNumber}-${e.treatment}'))
+                                          .toList();
+                                      line = entries.join(', ');
+                                    } else {
+                                      line = legacy.join(', ');
+                                    }
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        'Done: ' + line,
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              fontWeight: FontWeight.w500,
+                                              color: Theme.of(context).colorScheme.onSurface.withOpacity(.70),
+                                              fontSize: 11.5,
+                                            ),
+                                        softWrap: true,
+                                      ),
+                                    );
+                                  }),
+                                ],
                               )
                             : const SizedBox.shrink(),
                       ),
