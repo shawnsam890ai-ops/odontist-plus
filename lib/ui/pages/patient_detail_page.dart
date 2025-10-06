@@ -138,7 +138,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                     final session = _createSession();
                                     await context.read<PatientProvider>().addSession(patient.id, session);
                                     if (!mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_followUpParentId==null ? 'Session saved.' : 'Follow-up session saved.')));
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session saved.')));
                                   } else {
                                     final updated = _createSession().copyWith(id: _editingSessionId);
                                     await context.read<PatientProvider>().updateSession(patient.id, updated);
@@ -1704,15 +1704,35 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         ],
                       ),
                     ),
-                    if (doneOpts.isNotEmpty) ...[
+                    // Treatment Done summary (structured preferred)
+                    if (s.treatmentsDone.isNotEmpty || doneOpts.isNotEmpty) ...[
                       const SizedBox(height: 4),
-                      Text(
-                        'Treatment Done: ' + doneOpts.join(', '),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.onSurface.withOpacity(.75),
-                            ),
-                      ),
+                      Builder(builder: (_) {
+                        String line = '';
+                        if (s.treatmentsDone.isNotEmpty) {
+                          final entries = s.treatmentsDone
+                              .map((e) => (e.toothNumber.trim().isEmpty ? e.treatment : '${e.toothNumber}-${e.treatment}'))
+                              .toList();
+                          const maxItems = 4;
+                          if (entries.length > maxItems) {
+                            line = entries.take(maxItems).join(', ') + ' +${entries.length - maxItems} more';
+                          } else {
+                            line = entries.join(', ');
+                          }
+                        } else {
+                          line = doneOpts.join(', ');
+                        }
+                        if (line.isEmpty) return const SizedBox.shrink();
+                        return Text(
+                          'Treatment Done: ' + line,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(.75),
+                              ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        );
+                      }),
                     ],
                   ] else ...[
                     if (!isFollowUp) const SizedBox(height: 4),
@@ -1726,6 +1746,36 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
+                    if (!isFollowUp && (s.treatmentsDone.isNotEmpty || doneOpts.isNotEmpty)) ...[
+                      const SizedBox(height: 4),
+                      Builder(builder: (_) {
+                        final hasStructuredDone = s.treatmentsDone.isNotEmpty;
+                        String treatmentDoneLine = '';
+                        if (hasStructuredDone) {
+                          final entries = s.treatmentsDone
+                              .map((e) => (e.toothNumber.trim().isEmpty ? e.treatment : '${e.toothNumber}-${e.treatment}'))
+                              .toList();
+                          const maxItems = 4;
+                          if (entries.length > maxItems) {
+                            treatmentDoneLine = entries.take(maxItems).join(', ') + ' +${entries.length - maxItems} more';
+                          } else {
+                            treatmentDoneLine = entries.join(', ');
+                          }
+                        } else if (doneOpts.isNotEmpty) {
+                          treatmentDoneLine = doneOpts.join(', ');
+                        }
+                        if (treatmentDoneLine.isEmpty) return const SizedBox.shrink();
+                        return Text(
+                          'Treatment Done: ' + treatmentDoneLine,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(.75),
+                              ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        );
+                      }),
+                    ],
                   ]
                 ],
               ),
