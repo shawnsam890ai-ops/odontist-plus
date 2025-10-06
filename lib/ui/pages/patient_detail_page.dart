@@ -2406,7 +2406,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           if (total > 0)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
-                              child: Text('Total: $total  Paid: $runningPaid  Balance: ${total - runningPaid}',
+                              child: Text('Total: $total',
                                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withOpacity(.85))),
                             ),
                         ],
@@ -2418,10 +2418,17 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                   alignment: Alignment.centerLeft,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: orderedDetails.map((l) => Padding(
+                    children: [
+                      for (final l in (
+                        s.type == TreatmentType.orthodontic
+                          ? orderedDetails.where((d) => !['Ortho Findings:', 'Bracket:', 'Doctor:', 'Total:', 'Steps:'].any((p) => d.startsWith(p))).toList()
+                          : orderedDetails
+                      ))
+                        Padding(
                           padding: const EdgeInsets.only(bottom: 4),
                           child: Text(l),
-                        )).toList(),
+                        ),
+                    ],
                   ),
                 ),
                 if (!isFollowUp && (childFollowUpsFiltered?.isNotEmpty ?? false)) ...[
