@@ -72,15 +72,30 @@ class _SearchMultiSelectState extends State<SearchMultiSelect> {
                         child: ListView(
                           children: [
                             Row(children: [
-                              TextButton(onPressed: () { temp..clear()..addAll(widget.options); setStateDialog((){}); }, child: const Text('All')),
+                              TextButton(onPressed: () {
+                                temp
+                                  ..clear()
+                                  ..addAll(widget.options);
+                                setStateDialog((){});
+                              }, child: const Text('All')),
                               const SizedBox(width:8),
-                              TextButton(onPressed: () { temp.clear(); setStateDialog((){}); }, child: const Text('Clear')),
+                              TextButton(onPressed: () {
+                                temp.clear();
+                                setStateDialog((){});
+                              }, child: const Text('Clear')),
                             ]),
                             for (final o in filtered)
                               CheckboxListTile(
                                 dense: true,
                                 value: temp.contains(o),
-                                onChanged: (_) { if (temp.contains(o)) temp.remove(o); else temp.add(o); setStateDialog((){}); },
+                                onChanged: (_){
+                                  if (temp.contains(o)) {
+                                    temp.remove(o);
+                                  } else {
+                                    temp.add(o);
+                                  }
+                                  setStateDialog((){});
+                                },
                                 title: Text(o),
                               )
                           ],

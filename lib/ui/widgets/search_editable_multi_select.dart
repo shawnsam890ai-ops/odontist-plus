@@ -91,14 +91,31 @@ class _SearchEditableMultiSelectState extends State<SearchEditableMultiSelect> {
                                 dense: true,
                                 leading: Checkbox(
                                   value: selected,
-                                  onChanged: (_){ if (selected) temp.remove(o); else temp.add(o); setSB((){}); },
+                                  onChanged: (_){
+                                    if (selected) {
+                                      temp.remove(o);
+                                    } else {
+                                      temp.add(o);
+                                    }
+                                    setSB((){});
+                                  },
                                 ),
                                 title: Text(o),
                                 trailing: widget.onDelete == null ? null : IconButton(
                                   icon: const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () async { await widget.onDelete!(o); setSB((){ temp.remove(o); }); },
+                                  onPressed: () async {
+                                    await widget.onDelete!(o);
+                                    setSB((){ temp.remove(o); });
+                                  },
                                 ),
-                                onTap: () { if (selected) temp.remove(o); else temp.add(o); setSB((){}); },
+                                onTap: () {
+                                  if (selected) {
+                                    temp.remove(o);
+                                  } else {
+                                    temp.add(o);
+                                  }
+                                  setSB((){});
+                                },
                               );
                             },
                           ),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart'; // keep Flutter material
-import 'dart:ui';
 import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
@@ -430,7 +429,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                       if (_selectedOralFindingOptions.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top:6),
-                          child: Text('Press Add to append selected findings${' with ' + (_inlineToothController.text.isEmpty ? 'no tooth' : 'tooth ' + _inlineToothController.text)}'),
+                          child: Text('Press Add to append selected findings with ${_inlineToothController.text.isEmpty ? 'no tooth' : 'tooth ${_inlineToothController.text}'}'),
                         )
                     ],
                   );
@@ -1908,11 +1907,11 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
 
   List<Color> _typeGradientColors(TreatmentSession s, {bool followUp = false}) {
     final base = _typeColor(s);
-    final lighter = Color.alphaBlend(base.withOpacity(0.25), Colors.white);
+    final lighter = Color.alphaBlend(base.withValues(alpha: 0.25), Colors.white);
     if (followUp) {
-      return [lighter, base.withOpacity(0.12)];
+      return [lighter, base.withValues(alpha: 0.12)];
     }
-    return [base.withOpacity(0.22), base.withOpacity(0.05)];
+    return [base.withValues(alpha: 0.22), base.withValues(alpha: 0.05)];
   }
 
   IconData _typeIcon(TreatmentSession s, {bool isFollowUp = false}) {
@@ -1981,13 +1980,13 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               padding: const EdgeInsets.symmetric(horizontal:8, vertical:4),
               decoration: BoxDecoration(
                 gradient: LinearGradient(colors: [
-                  _typeColor(s).withOpacity(.85),
-                  _typeColor(s).withOpacity(.55),
+                  _typeColor(s).withValues(alpha: .85),
+                  _typeColor(s).withValues(alpha: .55),
                 ]),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: _typeColor(s).withOpacity(.35),
+                    color: _typeColor(s).withValues(alpha: .35),
                     blurRadius: 6,
                     offset: const Offset(0,2),
                   )
@@ -2016,7 +2015,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                   margin: const EdgeInsets.only(top: 2),
                   width: 2,
                   height: 18,
-                  color: Theme.of(context).dividerColor.withOpacity(0.5),
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
                 ),
             ],
           ),
@@ -2032,10 +2031,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             colors: gradient,
           ),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: _typeColor(s).withOpacity(.25), width: 1),
+          border: Border.all(color: _typeColor(s).withValues(alpha: .25), width: 1),
           boxShadow: [
             BoxShadow(
-              color: _typeColor(s).withOpacity(.20),
+              color: _typeColor(s).withValues(alpha: .20),
               blurRadius: 14,
               offset: const Offset(0,6),
               spreadRadius: -2,
@@ -2048,8 +2047,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
               initiallyExpanded: false,
-              iconColor: _typeColor(s).withOpacity(.9),
-              collapsedIconColor: _typeColor(s).withOpacity(.8),
+              iconColor: _typeColor(s).withValues(alpha: .9),
+              collapsedIconColor: _typeColor(s).withValues(alpha: .8),
               tilePadding: EdgeInsets.only(left: isFollowUp ? 8 : 12, right: 8, top: 4, bottom: 4),
               childrenPadding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
               title: Column(
@@ -2064,11 +2063,11 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         Container(
                           margin: const EdgeInsets.only(right: 8),
                           decoration: BoxDecoration(
-                            color: _typeColor(s).withOpacity(.18),
+                            color: _typeColor(s).withValues(alpha: .18),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           padding: const EdgeInsets.all(6),
-                          child: Icon(_typeIcon(s), size: 18, color: _typeColor(s).withOpacity(.9)),
+                          child: Icon(_typeIcon(s), size: 18, color: _typeColor(s).withValues(alpha: .9)),
                         ),
                       Expanded(
                         child: () {
@@ -2081,7 +2080,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                   '${s.date.toLocal().toIso8601String().split('T').first} • Follow-Up',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
-                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(.85),
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .85),
                                     fontSize: 13.0,
                                   ),
                                   softWrap: true,
@@ -2102,10 +2101,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                   return Padding(
                                     padding: const EdgeInsets.only(top: 2),
                                     child: Text(
-                                      'Treatment Done: ' + line,
+                                      'Treatment Done: $line',
                                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                             fontWeight: FontWeight.w500,
-                                            color: Theme.of(context).colorScheme.onSurface.withOpacity(.70),
+                                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .70),
                                             fontSize: 11.5,
                                           ),
                                       softWrap: true,
@@ -2128,7 +2127,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                 '$dateStr • $typeStr',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(.85),
+                                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .85),
                                   fontSize: 13.0,
                                 ),
                                 softWrap: true,
@@ -2176,15 +2175,15 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          color: _typeColor(s).withOpacity(.13),
+                          color: _typeColor(s).withValues(alpha: .13),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: _typeColor(s).withOpacity(.30), width: .8),
+                          border: Border.all(color: _typeColor(s).withValues(alpha: .30), width: .8),
                         ),
                         child: Text(
                           s.bracketType!.label,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(.92),
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .92),
                             height: 1.15,
                           ),
                         ),
@@ -2197,7 +2196,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           style: TextStyle(
                             fontWeight: FontWeight.w500,
                             fontSize: 11.5,
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(.72),
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .72),
                             height: 1.1,
                           ),
                           maxLines: 1,
@@ -2210,9 +2209,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: _typeColor(s).withOpacity(.13),
+                        color: _typeColor(s).withValues(alpha: .13),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: _typeColor(s).withOpacity(.30), width: .8),
+                        border: Border.all(color: _typeColor(s).withValues(alpha: .30), width: .8),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2222,7 +2221,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                               complaintsFullForTitle,
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(.92),
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .92),
                                 height: 1.15,
                               ),
                               softWrap: true,
@@ -2233,7 +2232,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                             datePart,
                             style: TextStyle(
                               fontWeight: FontWeight.w500,
-                              color: Theme.of(context).colorScheme.onSurface.withOpacity(.70),
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .70),
                               fontSize: 12.5,
                             ),
                           ),
@@ -2260,10 +2259,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         }
                         if (line.isEmpty) return const SizedBox.shrink();
                         return Text(
-                          'Treatment Done: ' + line,
+                          'Treatment Done: $line',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 fontWeight: FontWeight.w600,
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(.75),
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .75),
                               ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -2277,7 +2276,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         orderedDetails.first,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               fontWeight: FontWeight.w500,
-                              color: Theme.of(context).colorScheme.onSurface.withOpacity(.75),
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .75),
                             ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -2302,10 +2301,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         }
                         if (treatmentDoneLine.isEmpty) return const SizedBox.shrink();
                         return Text(
-                          'Treatment Done: ' + treatmentDoneLine,
+                          'Treatment Done: $treatmentDoneLine',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 fontWeight: FontWeight.w600,
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(.75),
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .75),
                               ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -2324,15 +2323,15 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: _typeColor(s).withOpacity(.18),
+                      color: _typeColor(s).withValues(alpha: .18),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: _typeColor(s).withOpacity(.30), width: .9),
+                      border: Border.all(color: _typeColor(s).withValues(alpha: .30), width: .9),
                     ),
                     child: Text(
                       'Ortho Findings: ${s.orthoOralFindings}',
                       style: TextStyle(
                         fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(.80),
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .80),
                         height: 1.2,
                       ),
                     ),
@@ -2353,9 +2352,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _typeColor(s).withOpacity(.10),
+                        color: _typeColor(s).withValues(alpha: .10),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: _typeColor(s).withOpacity(.28), width: .7),
+                        border: Border.all(color: _typeColor(s).withValues(alpha: .28), width: .7),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2369,9 +2368,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                               margin: const EdgeInsets.only(bottom: 6),
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(.55),
+                                color: Colors.white.withValues(alpha: .55),
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: _typeColor(s).withOpacity(.22), width: .6),
+                                border: Border.all(color: _typeColor(s).withValues(alpha: .22), width: .6),
                               ),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2381,11 +2380,11 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text('${st.date.toLocal().toString().split(' ').first} • ${st.description}',
-                                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, color: Theme.of(context).colorScheme.onSurface.withOpacity(.88))),
+                                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .88))),
                                         if (st.note != null && st.note!.isNotEmpty)
                                           Padding(
                                             padding: const EdgeInsets.only(top: 2),
-                                            child: Text('Note: ${st.note}', style: TextStyle(fontSize: 11.5, color: Theme.of(context).colorScheme.onSurface.withOpacity(.70))),
+                                            child: Text('Note: ${st.note}', style: TextStyle(fontSize: 11.5, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .70))),
                                           ),
                                       ],
                                     ),
@@ -2409,7 +2408,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
                               child: Text('Total: $total',
-                                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withOpacity(.85))),
+                                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .85))),
                             ),
                         ],
                       ),
@@ -2441,7 +2440,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         width: 6,
                         height: 6,
                         decoration: BoxDecoration(
-                          color: _typeColor(s).withOpacity(.85),
+                          color: _typeColor(s).withValues(alpha: .85),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -2549,7 +2548,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     // Custom rich formatting only for general sessions as requested
     if (s.type == TreatmentType.general) {
       final bold = Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold);
-      String _alphaIndex(int i) => String.fromCharCode(97 + i); // a, b, c
+  String alphaIndex(int i) => String.fromCharCode(97 + i); // a, b, c
 
       final ccComplaints = s.chiefComplaint?.complaints ?? [];
       final ccQuadrants = s.chiefComplaint?.quadrants ?? [];
@@ -2584,7 +2583,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           ? oral.asMap().entries.map((e) {
               final idx = e.key; final f = e.value;
               final display = f.toothNumber.trim().isEmpty ? f.finding : '${f.toothNumber}, ${f.finding}';
-              return '${_alphaIndex(idx)}) $display';
+              return '${alphaIndex(idx)}) $display';
             }).join('  ')
           : 'None';
       children.add(RichText(
@@ -2626,7 +2625,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       String planLine;
       if (planDisplayStructured && toothPlans.isNotEmpty) {
         planLine = toothPlans.asMap().entries.map((e) {
-          final idx = e.key; final p = e.value; return '${_alphaIndex(idx)}. ${p.toothNumber}, ${p.plan}';
+          final idx = e.key; final p = e.value; return '${alphaIndex(idx)}. ${p.toothNumber}, ${p.plan}';
         }).join('  ');
       } else if (planOpts.isNotEmpty) {
         planLine = planOpts.join(', ');
@@ -2647,7 +2646,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       String doneLine;
       if (treatmentDisplayStructured && toothTreatments.isNotEmpty) {
         doneLine = toothTreatments.asMap().entries.map((e) {
-          final idx = e.key; final t = e.value; return '${_alphaIndex(idx)}. ${t.toothNumber}, ${t.treatment}';
+          final idx = e.key; final t = e.value; return '${alphaIndex(idx)}. ${t.toothNumber}, ${t.treatment}';
         }).join('  ');
       } else if (doneOpts.isNotEmpty) {
         doneLine = doneOpts.join(', ');
@@ -2749,7 +2748,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                 margin: const EdgeInsets.only(bottom: 6),
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(.35),
+                                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: .35),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Row(
@@ -2832,9 +2831,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       // Clear all form collections first
       _selectedComplaints.clear();
       _selectedQuadrants.clear();
-      _oralFindings..clear();
-      _investigations..clear();
-      _investigationFindings..clear();
+  _oralFindings.clear();
+  _investigations.clear();
+  _investigationFindings.clear();
       _treatmentPlan.clear();
       _toothPlans.clear();
       _treatmentsDone.clear();
@@ -2988,7 +2987,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     } else {
       doneLine = 'None';
     }
-    final nextAppt = s.nextAppointment == null ? null : s.nextAppointment!.toLocal().toString().split(' ').first;
+  final nextAppt = s.nextAppointment?.toLocal().toString().split(' ').first;
 
     // Load optional header/footer images (ignore if missing)
     Future<pw.Widget?> loadImage(String assetPath) async {
