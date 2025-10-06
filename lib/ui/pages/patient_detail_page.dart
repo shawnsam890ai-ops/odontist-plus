@@ -82,6 +82,12 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   // Ortho doctor selection now from dynamic dropdown list managed by OptionsProvider
   String? _selectedOrthoDoctor;
   final List<ProcedureStep> _orthoSteps = [];
+  // Inline add orthodontic monthly session form state
+  bool _addingOrthoSession = false;
+  DateTime _newOrthoSessionDate = DateTime.now();
+  final TextEditingController _newOrthoDesc = TextEditingController();
+  final TextEditingController _newOrthoPay = TextEditingController();
+  final TextEditingController _newOrthoNote = TextEditingController();
 
   // Root canal
   final List<OralExamFinding> _rcFindings = [];
@@ -825,7 +831,18 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                     ElevatedButton.icon(
                       icon: const Icon(Icons.add),
                       label: const Text('Add Session'),
-                      onPressed: () => _addProcedureStep(isOrtho: true),
+                      onPressed: () => setState(() {
+                        if (_addingOrthoSession) {
+                          // toggling off clears
+                          _addingOrthoSession = false;
+                          _newOrthoDesc.clear();
+                          _newOrthoPay.clear();
+                          _newOrthoNote.clear();
+                        } else {
+                          _addingOrthoSession = true;
+                          _newOrthoSessionDate = DateTime.now();
+                        }
+                      }),
                     )
                   ],
                 ),
@@ -844,6 +861,101 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                   ],
                 ),
                 const SizedBox(height: 8),
+                if (_addingOrthoSession)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.4)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text('Date: ${_newOrthoSessionDate.toLocal().toString().split(' ').first}', style: const TextStyle(fontSize: 13)),
+                            ),
+                            TextButton(
+                              onPressed: () async {
+                                final now = DateTime.now();
+                                final picked = await showDatePicker(
+                                    context: context,
+                                    firstDate: DateTime(now.year - 2),
+                                    lastDate: DateTime(now.year + 2),
+                                    initialDate: _newOrthoSessionDate);
+                                if (picked != null) setState(() => _newOrthoSessionDate = picked);
+                              },
+                              child: const Text('Change Date'),
+                            )
+                          ],
+                        ),
+                        TextField(
+                          controller: _newOrthoDesc,
+                          decoration: const InputDecoration(labelText: 'Description *'),
+                        ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _newOrthoPay,
+                                decoration: const InputDecoration(labelText: 'Payment (optional)'),
+                                keyboardType: TextInputType.number,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextField(
+                                controller: _newOrthoNote,
+                                decoration: const InputDecoration(labelText: 'Note (optional)'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.save),
+                              label: const Text('Save Session'),
+                              onPressed: () {
+                                if (_newOrthoDesc.text.trim().isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Description required')));
+                                  return;
+                                }
+                                final step = ProcedureStep(
+                                  id: const Uuid().v4(),
+                                  date: _newOrthoSessionDate,
+                                  description: _newOrthoDesc.text.trim(),
+                                  payment: double.tryParse(_newOrthoPay.text.trim()),
+                                  note: _newOrthoNote.text.trim().isEmpty ? null : _newOrthoNote.text.trim(),
+                                );
+                                setState(() {
+                                  _orthoSteps.add(step);
+                                  _addingOrthoSession = false;
+                                  _newOrthoDesc.clear();
+                                  _newOrthoPay.clear();
+                                  _newOrthoNote.clear();
+                                });
+                              },
+                            ),
+                            const SizedBox(width: 12),
+                            TextButton(
+                              onPressed: () => setState(() {
+                                _addingOrthoSession = false;
+                                _newOrthoDesc.clear();
+                                _newOrthoPay.clear();
+                                _newOrthoNote.clear();
+                              }),
+                              child: const Text('Cancel'),
+                            )
+                          ],
+                        )
+                      ],
+                    ),
+                  ),
                 if (_orthoSteps.isEmpty)
                   const Text('No sessions recorded yet.')
                 else
@@ -2190,6 +2302,118 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               // Removed separate subtitle & trailing; integrated into custom title Column (Option B)
               children: [
                 // Removed expanded Add Follow-Up button (only trailing icon now)
+                if (!isFollowUp && s.type == TreatmentType.orthodontic) ...[
+                  // Highlight bracket + doctor in a full-width pill
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _typeColor(s).withOpacity(.18),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: _typeColor(s).withOpacity(.30), width: .9),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Bracket: ${s.bracketType?.label ?? 'N/A'}',
+                          style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withOpacity(.90)),
+                        ),
+                        if (s.orthoDoctorInCharge != null && s.orthoDoctorInCharge!.trim().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text('Doctor: ${s.orthoDoctorInCharge!}',
+                                style: TextStyle(fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface.withOpacity(.80))),
+                          ),
+                        if (s.orthoOralFindings.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text('Ortho Findings: ${s.orthoOralFindings}',
+                                style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(.75))),
+                          ),
+                      ],
+                    ),
+                  ),
+                  // Monthly treatment sessions summary list
+                  Builder(builder: (_) {
+                    final steps = s.orthoSteps;
+                    if (steps.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: Text('No monthly treatment sessions recorded.'),
+                      );
+                    }
+                    double runningPaid = 0;
+                    final total = s.orthoTotalAmount ?? 0;
+                    return Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: _typeColor(s).withOpacity(.10),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _typeColor(s).withOpacity(.28), width: .7),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Monthly Sessions', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 8),
+                          ...steps.map((st) {
+                            runningPaid += (st.payment ?? 0);
+                            final balance = total > 0 ? (total - runningPaid) : null;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(.55),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: _typeColor(s).withOpacity(.22), width: .6),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('${st.date.toLocal().toString().split(' ').first} • ${st.description}',
+                                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, color: Theme.of(context).colorScheme.onSurface.withOpacity(.88))),
+                                        if (st.note != null && st.note!.isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 2),
+                                            child: Text('Note: ${st.note}', style: TextStyle(fontSize: 11.5, color: Theme.of(context).colorScheme.onSurface.withOpacity(.70))),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(st.payment == null ? 'Paid: -' : 'Paid: ${st.payment}',
+                                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.green.shade700)),
+                                      if (balance != null)
+                                        Text('Bal: ${balance < 0 ? 0 : balance}',
+                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: balance <= 0 ? Colors.green : Colors.redAccent)),
+                                    ],
+                                  )
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          if (total > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text('Total: $total  Paid: $runningPaid  Balance: ${total - runningPaid}',
+                                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withOpacity(.85))),
+                            ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Column(
