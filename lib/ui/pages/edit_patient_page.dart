@@ -69,6 +69,7 @@ class _EditPatientPageState extends State<EditPatientPage> {
         defaultPastMedical: AppConstants.pastMedicalHistoryOptions,
         defaultMedicationOptions: AppConstants.medicationOptions,
         defaultDrugAllergies: AppConstants.drugAllergyOptions,
+        defaultProsthoDoctors: const [],
       );
     }
     return Scaffold(

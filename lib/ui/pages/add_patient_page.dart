@@ -42,6 +42,7 @@ class _AddPatientPageState extends State<AddPatientPage> {
         defaultPastMedical: AppConstants.pastMedicalHistoryOptions,
         defaultMedicationOptions: AppConstants.medicationOptions,
         defaultDrugAllergies: AppConstants.drugAllergyOptions,
+        defaultProsthoDoctors: const [],
       );
     }
     return Scaffold(

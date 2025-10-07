@@ -275,6 +275,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       defaultMedicationOptions: AppConstants.medicationOptions,
       defaultDrugAllergies: AppConstants.drugAllergyOptions,
       defaultRcDoctors: const [],
+      defaultProsthoDoctors: const [],
       defaultLabNames: const ['Maxima Lab', 'Crown Lab', 'Digital Dental Lab'],
       defaultNatureOfWork: const ['PFM Crown', 'Zirconia Crown', 'Sunflex RPD', 'Metal Partial', 'Complete Denture', 'Bridge Work'],
       defaultToothShades: const ['A1', 'A2', 'A3', 'B1', 'B2', 'C1', 'C2'],
@@ -3440,6 +3441,41 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                  ] else if (!isFollowUp && s.type == TreatmentType.prosthodontic) ...[
+                    const SizedBox(height: 6),
+                    if (s.prosthodonticPlans.isNotEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _typeColor(s).withValues(alpha: .13),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: _typeColor(s).withValues(alpha: .30), width: .8),
+                        ),
+                        child: Text(
+                          'Treatment Plan: ${s.prosthodonticPlans.map((e) => '${e.toothNumber}-${e.plan}').take(3).join(', ')}${s.prosthodonticPlans.length > 3 ? ' +${s.prosthodonticPlans.length - 3} more' : ''}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .92),
+                            height: 1.15,
+                          ),
+                        ),
+                      ),
+                    if (s.prosthodonticDoctorInCharge != null && s.prosthodonticDoctorInCharge!.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
+                        child: Text(
+                          s.prosthodonticDoctorInCharge!,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 11.5,
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .72),
+                            height: 1.1,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                   ] else if (s.type == TreatmentType.labWork) ...[
                     const SizedBox(height: 6),
                     if (s.labName != null || s.natureOfWork != null)
@@ -3722,6 +3758,125 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                     }
                     double runningPaid = 0;
                     final total = s.rootCanalTotalAmount ?? 0;
+                    return Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: _typeColor(s).withValues(alpha: .10),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _typeColor(s).withValues(alpha: .28), width: .7),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Treatment Sessions', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 8),
+                          ...steps.map((st) {
+                            runningPaid += (st.payment ?? 0);
+                            final balance = total > 0 ? (total - runningPaid) : null;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: .55),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: _typeColor(s).withValues(alpha: .22), width: .6),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('${st.date.toLocal().toString().split(' ').first} • ${st.description}',
+                                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .88))),
+                                        if (st.note != null && st.note!.isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 2),
+                                            child: Text('Note: ${st.note}', style: TextStyle(fontSize: 11.5, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .70))),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(st.payment == null ? 'Paid: -' : 'Paid: ${st.payment}',
+                                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.green.shade700)),
+                                      if (balance != null)
+                                        Text('Bal: ${balance < 0 ? 0 : balance}',
+                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: balance <= 0 ? Colors.green : Colors.redAccent)),
+                                    ],
+                                  )
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          if (total > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text('Total: $total',
+                                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .85))),
+                            ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+                // Prosthodontic treatment sessions expansion content
+                if (!isFollowUp && s.type == TreatmentType.prosthodontic) ...[
+                  if (s.prosthodonticFindings.isNotEmpty)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _typeColor(s).withValues(alpha: .18),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: _typeColor(s).withValues(alpha: .30), width: .9),
+                      ),
+                      child: Text(
+                        'Oral Findings: ${s.prosthodonticFindings.map((e) => '${e.toothNumber.isEmpty ? '' : '${e.toothNumber}-'}${e.finding}').join('; ')}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .80),
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                  if (s.prosthodonticDoctorInCharge != null && s.prosthodonticDoctorInCharge!.trim().isNotEmpty)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _typeColor(s).withValues(alpha: .18),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: _typeColor(s).withValues(alpha: .30), width: .9),
+                      ),
+                      child: Text(
+                        'Doctor In Charge: ${s.prosthodonticDoctorInCharge}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .80),
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                  // Prosthodontic treatment sessions summary list
+                  Builder(builder: (_) {
+                    final steps = s.prosthodonticSteps;
+                    if (steps.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: Text('No treatment sessions recorded.'),
+                      );
+                    }
+                    double runningPaid = 0;
+                    final total = s.prosthodonticTotalAmount ?? 0;
                     return Container(
                       width: double.infinity,
                       margin: const EdgeInsets.only(bottom: 12),
@@ -4310,6 +4465,108 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           context: context,
           builder: (_) => AlertDialog(
                 title: const Text('Root Canal Session Details'),
+                content: SizedBox(
+                  width: 480,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ...lines.map((l) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Text(l),
+                            )),
+                        const SizedBox(height: 8),
+                        Text('Treatment Sessions', style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 6),
+                        if (steps.isEmpty)
+                          const Text('No treatment sessions recorded.')
+                        else
+                          Column(
+                            children: steps.map((st) {
+                              runningPaid += (st.payment ?? 0);
+                              final bal = total > 0 ? (total - runningPaid) : null;
+                              return Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: .35),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('${st.date.toLocal().toString().split(' ').first} • ${st.description}',
+                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                                          if (st.note != null && st.note!.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 2),
+                                              child: Text('Note: ${st.note}', style: Theme.of(context).textTheme.bodySmall),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(st.payment == null ? 'Paid: -' : 'Paid: ${st.payment}',
+                                            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.green.shade700, fontWeight: FontWeight.w600)),
+                                        if (bal != null)
+                                          Text('Bal: ${bal < 0 ? 0 : bal}',
+                                              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: bal <= 0 ? Colors.green : Colors.redAccent, fontWeight: FontWeight.w500)),
+                                      ],
+                                    )
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        if (total > 0) ...[
+                          const SizedBox(height: 8),
+                          Text('Total: $total  Paid: $runningPaid  Balance: ${total - runningPaid}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                        ]
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+                ],
+              ));
+      return;
+    }
+    // Prosthodontic formatting with treatment sessions
+    if (s.type == TreatmentType.prosthodontic) {
+      // Build simple lines similar to root canal using existing helper then enrich
+      final lines = <String>[];
+      if (s.prosthodonticFindings.isNotEmpty) {
+        lines.add('Oral Findings: ' + s.prosthodonticFindings.map((e) => (e.toothNumber.trim().isEmpty ? e.finding : '${e.toothNumber}, ${e.finding}')).join(' | '));
+      } else {
+        lines.add('Oral Findings: None');
+      }
+      if (s.prosthodonticPlans.isNotEmpty) {
+        lines.add('Treatment Plan: ' + s.prosthodonticPlans.map((e) => (e.toothNumber.trim().isEmpty ? e.plan : '${e.toothNumber}, ${e.plan}')).join(' | '));
+      } else {
+        lines.add('Treatment Plan: None');
+      }
+      if (s.prosthodonticDoctorInCharge != null && s.prosthodonticDoctorInCharge!.trim().isNotEmpty) {
+        lines.add('Doctor In Charge: ${s.prosthodonticDoctorInCharge}');
+      }
+      if (s.prosthodonticTotalAmount != null) {
+        lines.add('Total Amount: ${s.prosthodonticTotalAmount}');
+      }
+      final steps = List<ProcedureStep>.from(s.prosthodonticSteps)..sort((a,b)=> a.date.compareTo(b.date));
+      double runningPaid = 0;
+      final total = s.prosthodonticTotalAmount ?? 0;
+      showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+                title: const Text('Prosthodontic Session Details'),
                 content: SizedBox(
                   width: 480,
                   child: SingleChildScrollView(
