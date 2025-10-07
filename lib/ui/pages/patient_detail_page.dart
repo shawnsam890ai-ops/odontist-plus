@@ -1,6 +1,7 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart'; // keep Flutter material
+import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
@@ -346,10 +347,18 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             if (patient.pastDentalHistory.isNotEmpty || patient.pastMedicalHistory.isNotEmpty || patient.currentMedications.isNotEmpty || patient.drugAllergies.isNotEmpty)
               const SizedBox(height: 8),
             Wrap(spacing: 8, children: [
+              // Call patient button
               ElevatedButton.icon(
-                onPressed: () => _openLabWork(patient.id),
-                icon: const Icon(Icons.biotech, size: 18),
-                label: const Text('Lab Work'),
+                onPressed: () => _callPatient(patient.phone),
+                icon: const Icon(Icons.call, size: 18),
+                label: const Text('Call'),
+              ),
+              // WhatsApp chat button
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white),
+                onPressed: () => _openWhatsApp(patient.phone),
+                icon: const Icon(Icons.chat, size: 18),
+                label: const Text('WhatsApp'),
               ),
               OutlinedButton.icon(
                 onPressed: () => Navigator.of(context).pushNamed(EditPatientPage.routeName, arguments: {'patientId': patient.id}),
@@ -401,6 +410,55 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         return _prosthodonticForm();
       case TreatmentType.labWork:
         return _labWorkForm();
+    }
+  }
+
+  // Communication helpers (require url_launcher dependency)
+  Future<void> _callPatient(String? phone) async {
+    if (phone == null || phone.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No phone number available')));
+      }
+      return;
+    }
+    final normalized = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final uri = Uri(scheme: 'tel', path: normalized);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot place call on this device')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Call failed: $e')));
+    }
+  }
+
+  Future<void> _openWhatsApp(String? phone) async {
+    if (phone == null || phone.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No phone number available')));
+      }
+      return;
+    }
+    // WhatsApp expects international format without leading '+' in wa.me URL
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid phone number')));
+      return;
+    }
+    final waUriWeb = Uri.parse('https://wa.me/$digits');
+    final waUriNative = Uri.parse('whatsapp://send?phone=$digits');
+    try {
+      if (await canLaunchUrl(waUriNative)) {
+        await launchUrl(waUriNative);
+      } else if (await canLaunchUrl(waUriWeb)) {
+        await launchUrl(waUriWeb, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('WhatsApp not available')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('WhatsApp open failed: $e')));
     }
   }
 
@@ -2790,76 +2848,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     });
   }
 
-  void _addProcedureStep({required bool isOrtho}) async {
-    final desc = TextEditingController();
-    final pay = TextEditingController();
-    final note = TextEditingController();
-    const uuid = Uuid();
-    DateTime selectedDate = DateTime.now();
-    final result = await showDialog<ProcedureStep>(
-        context: context,
-        builder: (_) => StatefulBuilder(builder: (ctx, setSB) {
-              return AlertDialog(
-                title: const Text('Add Procedure Step'),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isOrtho) ...[
-                      Row(
-                        children: [
-                          Expanded(
-                              child: Text(
-                            'Date: ${selectedDate.toLocal().toString().split(' ').first}',
-                            style: const TextStyle(fontSize: 14),
-                          )),
-                          TextButton(
-                              onPressed: () async {
-                                final now = DateTime.now();
-                                final picked = await showDatePicker(
-                                    context: context,
-                                    firstDate: DateTime(now.year - 2),
-                                    lastDate: DateTime(now.year + 2),
-                                    initialDate: selectedDate);
-                                if (picked != null) setSB(() => selectedDate = picked);
-                              },
-                              child: const Text('Pick Date'))
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    TextField(controller: desc, decoration: const InputDecoration(labelText: 'Description')),
-                    TextField(controller: pay, decoration: const InputDecoration(labelText: 'Payment (optional)'), keyboardType: TextInputType.number),
-                    TextField(controller: note, decoration: const InputDecoration(labelText: 'Note (optional)')),
-                  ],
-                ),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                  ElevatedButton(
-                      onPressed: () {
-                        if (desc.text.trim().isEmpty) return;
-                        Navigator.pop(
-                            context,
-                            ProcedureStep(
-                                id: uuid.v4(),
-                                date: isOrtho ? selectedDate : DateTime.now(),
-                                description: desc.text.trim(),
-                                payment: double.tryParse(pay.text.trim()),
-                                note: note.text.trim().isEmpty ? null : note.text.trim()));
-                      },
-                      child: const Text('Add'))
-                ],
-              );
-            }));
-    if (result != null) {
-      setState(() {
-        if (isOrtho) {
-          _orthoSteps.add(result);
-        } else {
-          _rcSteps.add(result);
-        }
-      });
-    }
-  }
+  // Removed unused _addProcedureStep (replaced by direct step creation flows elsewhere)
 
   void _editProcedureStep(ProcedureStep step, {required bool isOrtho}) async {
     final desc = TextEditingController(text: step.description);
@@ -3045,9 +3034,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     }
   }
 
-  void _openLabWork(String patientId) {
-    Navigator.of(context).pushNamed('/patient-lab-work', arguments: {'patientId': patientId});
-  }
+  // Removed unused _openLabWork (Lab Work button removed from card)
 
   // Generic sorter converting tooth numbers (possibly strings like 11, 12) to int where possible.
   void _sortByTooth<T>(List<T> list, String Function(T) toothExtractor) {
