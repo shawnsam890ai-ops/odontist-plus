@@ -3009,7 +3009,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                  ] else if (!isFollowUp && s.type == TreatmentType.labWork) ...[
+                  ] else if (s.type == TreatmentType.labWork) ...[
                     const SizedBox(height: 6),
                     if (s.labName != null || s.natureOfWork != null)
                       Container(
@@ -3359,8 +3359,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                     );
                   }),
                 ],
-                // Lab work expansion content
-                if (!isFollowUp && s.type == TreatmentType.labWork) ...[
+                // Lab work expansion content (show regardless of follow-up status)
+                if (s.type == TreatmentType.labWork) ...[
                   if (s.toothShade != null || s.labTotalAmount != null)
                     Container(
                       width: double.infinity,
