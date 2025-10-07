@@ -180,6 +180,14 @@ class TreatmentSession {
   final List<ToothPlanEntry> rootCanalPlans; // per-tooth planned RCT steps
   final String? rootCanalDoctorInCharge;
 
+  // Prosthodontic
+  final List<OralExamFinding> prosthodonticFindings;
+  final double? prosthodonticTotalAmount;
+  final List<String> prosthodonticProcedures;
+  final List<ProcedureStep> prosthodonticSteps;
+  final List<ToothPlanEntry> prosthodonticPlans;
+  final String? prosthodonticDoctorInCharge;
+
   // Lab Work specific fields
   final String? labName;
   final String? natureOfWork;
@@ -222,6 +230,12 @@ class TreatmentSession {
     List<ProcedureStep>? rootCanalSteps,
     List<ToothPlanEntry>? rootCanalPlans,
     this.rootCanalDoctorInCharge,
+    List<OralExamFinding>? prosthodonticFindings,
+    this.prosthodonticTotalAmount,
+    List<String>? prosthodonticProcedures,
+    List<ProcedureStep>? prosthodonticSteps,
+    List<ToothPlanEntry>? prosthodonticPlans,
+    this.prosthodonticDoctorInCharge,
     this.labName,
     this.natureOfWork,
     this.submissionDate,
@@ -247,6 +261,10 @@ class TreatmentSession {
         rootCanalProcedures = rootCanalProcedures ?? [],
   rootCanalSteps = rootCanalSteps ?? [],
   rootCanalPlans = rootCanalPlans ?? [],
+        prosthodonticFindings = prosthodonticFindings ?? [],
+        prosthodonticProcedures = prosthodonticProcedures ?? [],
+  prosthodonticSteps = prosthodonticSteps ?? [],
+  prosthodonticPlans = prosthodonticPlans ?? [],
         labSteps = labSteps ?? [];
 
   TreatmentSession copyWith({
@@ -280,6 +298,12 @@ class TreatmentSession {
     List<ProcedureStep>? rootCanalSteps,
     List<ToothPlanEntry>? rootCanalPlans,
     String? rootCanalDoctorInCharge,
+    List<OralExamFinding>? prosthodonticFindings,
+    double? prosthodonticTotalAmount,
+    List<String>? prosthodonticProcedures,
+    List<ProcedureStep>? prosthodonticSteps,
+    List<ToothPlanEntry>? prosthodonticPlans,
+    String? prosthodonticDoctorInCharge,
     String? labName,
     String? natureOfWork,
     DateTime? submissionDate,
@@ -319,6 +343,12 @@ class TreatmentSession {
         rootCanalSteps: rootCanalSteps ?? List.from(this.rootCanalSteps),
         rootCanalPlans: rootCanalPlans ?? List.from(this.rootCanalPlans),
         rootCanalDoctorInCharge: rootCanalDoctorInCharge ?? this.rootCanalDoctorInCharge,
+        prosthodonticFindings: prosthodonticFindings ?? List.from(this.prosthodonticFindings),
+        prosthodonticTotalAmount: prosthodonticTotalAmount ?? this.prosthodonticTotalAmount,
+        prosthodonticProcedures: prosthodonticProcedures ?? List.from(this.prosthodonticProcedures),
+        prosthodonticSteps: prosthodonticSteps ?? List.from(this.prosthodonticSteps),
+        prosthodonticPlans: prosthodonticPlans ?? List.from(this.prosthodonticPlans),
+        prosthodonticDoctorInCharge: prosthodonticDoctorInCharge ?? this.prosthodonticDoctorInCharge,
         labName: labName ?? this.labName,
         natureOfWork: natureOfWork ?? this.natureOfWork,
         submissionDate: submissionDate ?? this.submissionDate,
@@ -360,6 +390,12 @@ class TreatmentSession {
         'rootCanalSteps': rootCanalSteps.map((e) => e.toJson()).toList(),
         'rootCanalPlans': rootCanalPlans.map((e) => e.toJson()).toList(),
         'rootCanalDoctorInCharge': rootCanalDoctorInCharge,
+        'prosthodonticFindings': prosthodonticFindings.map((e) => e.toJson()).toList(),
+        'prosthodonticTotalAmount': prosthodonticTotalAmount,
+        'prosthodonticProcedures': prosthodonticProcedures,
+        'prosthodonticSteps': prosthodonticSteps.map((e) => e.toJson()).toList(),
+        'prosthodonticPlans': prosthodonticPlans.map((e) => e.toJson()).toList(),
+        'prosthodonticDoctorInCharge': prosthodonticDoctorInCharge,
         'labName': labName,
         'natureOfWork': natureOfWork,
         'submissionDate': submissionDate?.toIso8601String(),
@@ -405,6 +441,12 @@ class TreatmentSession {
         rootCanalSteps: (json['rootCanalSteps'] as List<dynamic>? ?? []).map((e) => ProcedureStep.fromJson(e as Map<String, dynamic>)).toList(),
         rootCanalPlans: (json['rootCanalPlans'] as List<dynamic>? ?? []).map((e) => ToothPlanEntry.fromJson(e as Map<String, dynamic>)).toList(),
         rootCanalDoctorInCharge: json['rootCanalDoctorInCharge'] as String?,
+        prosthodonticFindings: (json['prosthodonticFindings'] as List<dynamic>? ?? []).map((e) => OralExamFinding.fromJson(e as Map<String, dynamic>)).toList(),
+        prosthodonticTotalAmount: (json['prosthodonticTotalAmount'] as num?)?.toDouble(),
+        prosthodonticProcedures: (json['prosthodonticProcedures'] as List<dynamic>? ?? []).cast<String>(),
+        prosthodonticSteps: (json['prosthodonticSteps'] as List<dynamic>? ?? []).map((e) => ProcedureStep.fromJson(e as Map<String, dynamic>)).toList(),
+        prosthodonticPlans: (json['prosthodonticPlans'] as List<dynamic>? ?? []).map((e) => ToothPlanEntry.fromJson(e as Map<String, dynamic>)).toList(),
+        prosthodonticDoctorInCharge: json['prosthodonticDoctorInCharge'] as String?,
         labName: json['labName'] as String?,
         natureOfWork: json['natureOfWork'] as String?,
         submissionDate: json['submissionDate'] == null ? null : DateTime.parse(json['submissionDate'] as String),

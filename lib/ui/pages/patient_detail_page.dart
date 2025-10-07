@@ -111,6 +111,19 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   final TextEditingController _newRcTreatment = TextEditingController();
   final TextEditingController _newRcPayment = TextEditingController();
 
+  // Prosthodontic
+  final List<OralExamFinding> _prosthoFindings = [];
+  final TextEditingController _prosthoTotal = TextEditingController();
+  final List<ProcedureStep> _prosthoSteps = [];
+  final List<ToothPlanEntry> _prosthoPlans = [];
+  String? _selectedProsthoDoctor;
+  final TextEditingController _prosthoPlanTooth = TextEditingController();
+  final TextEditingController _prosthoPlanText = TextEditingController();
+  bool _addingProsthoSession = false;
+  DateTime _newProsthoSessionDate = DateTime.now();
+  final TextEditingController _newProsthoTreatment = TextEditingController();
+  final TextEditingController _newProsthoPayment = TextEditingController();
+
   // Lab Work
   String? _selectedLabName;
   String? _selectedNatureOfWork;
@@ -383,6 +396,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         return _orthoForm();
       case TreatmentType.rootCanal:
         return _rootCanalForm();
+      case TreatmentType.prosthodontic:
+        return _prosthodonticForm();
       case TreatmentType.labWork:
         return _labWorkForm();
     }
@@ -1482,6 +1497,278 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     );
   }
 
+  Widget _prosthodonticForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1. Prosthodontic Plan Container
+        Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Prosthodontic Plan', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                Text('1. Oral Findings', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Row(children:[
+                  SizedBox(
+                    width: 80,
+                    child: TextField(
+                      controller: _inlineToothController,
+                      decoration: const InputDecoration(labelText: 'Tooth'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _inlineFindingController,
+                      decoration: const InputDecoration(labelText: 'Oral Finding'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                      onPressed: () {
+                        final t = _inlineToothController.text.trim();
+                        final f = _inlineFindingController.text.trim();
+                        if (f.isEmpty) return;
+                        setState(() {
+                          _prosthoFindings.add(OralExamFinding(toothNumber: t, finding: f));
+                          _sortByTooth(_prosthoFindings, (e)=> e.toothNumber);
+                          _inlineToothController.clear();
+                          _inlineFindingController.clear();
+                        });
+                      },
+                      child: const Text('Add'))
+                ]),
+                if (_prosthoFindings.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top:8),
+                    child: Text('No oral findings added.'),
+                  )
+                else ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    children: _prosthoFindings.map((f) => Chip(label: Text('${f.toothNumber.isEmpty?'-':f.toothNumber}: ${f.finding}'), onDeleted: () => setState(() => _prosthoFindings.remove(f)))).toList(),
+                  )
+                ],
+                const Divider(height: 32),
+                Text('2. Treatment Plan', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Row(children:[
+                  SizedBox(
+                    width: 80,
+                    child: TextField(
+                      controller: _prosthoPlanTooth,
+                      decoration: const InputDecoration(labelText: 'Tooth'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _prosthoPlanText,
+                      decoration: const InputDecoration(labelText: 'Treatment Plan'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                      onPressed: () {
+                        final t = _prosthoPlanTooth.text.trim();
+                        final p = _prosthoPlanText.text.trim();
+                        if (p.isEmpty) return;
+                        setState(() {
+                          _prosthoPlans.add(ToothPlanEntry(toothNumber: t, plan: p));
+                          _sortByTooth(_prosthoPlans, (e)=> e.toothNumber);
+                          _prosthoPlanTooth.clear();
+                          _prosthoPlanText.clear();
+                        });
+                      },
+                      child: const Text('Add'))
+                ]),
+                if (_prosthoPlans.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top:8),
+                    child: Text('No prosthodontic plan entries.'),
+                  )
+                else ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing:6,
+                    children: _prosthoPlans.map((e)=> Chip(label: Text('${e.toothNumber.isEmpty?'-':e.toothNumber}: ${e.plan}'), onDeleted: ()=> setState(()=> _prosthoPlans.remove(e)))).toList(),
+                  )
+                ],
+                const Divider(height: 32),
+                Builder(builder: (ctx){
+                  final opt = ctx.watch<OptionsProvider>();
+                  return Row(children:[
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedProsthoDoctor,
+                        decoration: const InputDecoration(labelText: 'Doctor In Charge'),
+                        items: opt.prosthoDoctors.map((d)=> DropdownMenuItem(value:d, child: Text(d))).toList(),
+                        onChanged: (v)=> setState(()=> _selectedProsthoDoctor = v),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add),
+                      tooltip: 'Add Doctor',
+                      onPressed: () async {
+                        final ctrl = TextEditingController();
+                        final name = await showDialog<String>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Add Doctor'),
+                            content: TextField(controller: ctrl, decoration: const InputDecoration(labelText: 'Doctor Name')),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                              TextButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Add')),
+                            ],
+                          ),
+                        );
+                        if (name != null && name.isNotEmpty) {
+                          await opt.addValue('prosthoDoctors', name);
+                          setState(() => _selectedProsthoDoctor = name);
+                        }
+                      },
+                    ),
+                    if (_selectedProsthoDoctor != null) IconButton(
+                      icon: const Icon(Icons.delete),
+                      tooltip: 'Delete Doctor',
+                      onPressed: () async { await ctx.read<OptionsProvider>().removeValue('prosthoDoctors', _selectedProsthoDoctor!); setState(()=> _selectedProsthoDoctor=null); },
+                    )
+                  ]);
+                }),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _prosthoTotal,
+                  decoration: const InputDecoration(labelText: 'Total Amount'),
+                  keyboardType: TextInputType.number,
+                ),
+              ],
+            ),
+          ),
+        ),
+        // 2. Procedure Session Container
+        Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: Text('Add Procedure', style: Theme.of(context).textTheme.titleMedium)),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Session'),
+                      onPressed: () => setState(() {
+                        if (_addingProsthoSession) {
+                          _addingProsthoSession = false;
+                          _newProsthoTreatment.clear();
+                          _newProsthoPayment.clear();
+                        } else {
+                          _addingProsthoSession = true;
+                          _newProsthoSessionDate = DateTime.now();
+                        }
+                      }),
+                    )
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (_addingProsthoSession) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          const Text('Date: '),
+                          TextButton(
+                            onPressed: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _newProsthoSessionDate,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime(2030),
+                              );
+                              if (picked != null) setState(() => _newProsthoSessionDate = picked);
+                            },
+                            child: Text(_newProsthoSessionDate.toLocal().toString().split(' ').first),
+                          )
+                        ]),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _newProsthoTreatment,
+                          decoration: const InputDecoration(labelText: 'Treatment Description'),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _newProsthoPayment,
+                          decoration: const InputDecoration(labelText: 'Payment Amount'),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(children: [
+                          ElevatedButton(
+                            onPressed: () {
+                              final desc = _newProsthoTreatment.text.trim();
+                              if (desc.isEmpty) return;
+                              final payment = double.tryParse(_newProsthoPayment.text.trim());
+                              final step = ProcedureStep(
+                                id: const Uuid().v4(),
+                                date: _newProsthoSessionDate,
+                                description: desc,
+                                payment: payment,
+                              );
+                              setState(() {
+                                _prosthoSteps.add(step);
+                                _addingProsthoSession = false;
+                                _newProsthoTreatment.clear();
+                                _newProsthoPayment.clear();
+                              });
+                            },
+                            child: const Text('Save'),
+                          ),
+                          const SizedBox(width: 12),
+                          TextButton(onPressed: () { setState(()=> _addingProsthoSession = false); }, child: const Text('Cancel')),
+                        ])
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                if (_prosthoSteps.isEmpty)
+                  const Text('No treatment sessions recorded.')
+                else
+                  Column(
+                    children: _prosthoSteps.map((s) => ListTile(
+                      dense: true,
+                      title: Text('${s.date.toLocal().toString().split(' ').first} • ${s.description}'),
+                      subtitle: s.payment==null? null : Text('Paid: ${s.payment}'),
+                      trailing: IconButton(icon: const Icon(Icons.delete, size: 18), onPressed: () => setState(() => _prosthoSteps.remove(s))),
+                    )).toList(),
+                  ),
+                if (_prosthoTotal.text.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(_prosthodonticBalanceSummary(), style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                ]
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _labWorkForm() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1976,6 +2263,18 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           rootCanalSteps: List.from(_rcSteps),
           rootCanalPlans: List.from(_rcPlans),
           rootCanalDoctorInCharge: _selectedRcDoctor,
+        );
+      case TreatmentType.prosthodontic:
+        return TreatmentSession(
+          id: uuid.v4(),
+          type: TreatmentType.prosthodontic,
+          date: DateTime.now(),
+          parentSessionId: _followUpParentId,
+          prosthodonticFindings: List.from(_prosthoFindings),
+          prosthodonticTotalAmount: double.tryParse(_prosthoTotal.text.trim()),
+          prosthodonticSteps: List.from(_prosthoSteps),
+          prosthodonticPlans: List.from(_prosthoPlans),
+          prosthodonticDoctorInCharge: _selectedProsthoDoctor,
         );
       case TreatmentType.labWork:
         return TreatmentSession(
@@ -2644,6 +2943,13 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     return 'Paid: $paid / Total: $total  Balance: $bal';
   }
 
+  String _prosthodonticBalanceSummary() {
+    final total = double.tryParse(_prosthoTotal.text.trim()) ?? 0;
+    final paid = _prosthoSteps.fold<double>(0, (p, e) => p + (e.payment ?? 0));
+    final bal = total - paid;
+    return 'Paid: $paid / Total: $total  Balance: $bal';
+  }
+
   Future<void> _exportOrthodonticSummaryPdf(Patient patient) async {
     try {
       // Collect all orthodontic sessions
@@ -2757,6 +3063,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         return Colors.purpleAccent.shade400;
       case TreatmentType.rootCanal:
         return Colors.teal.shade600;
+      case TreatmentType.prosthodontic:
+        return Colors.deepPurple.shade600;
       case TreatmentType.labWork:
         return Colors.orange.shade700;
     }
@@ -2780,6 +3088,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         return Icons.settings_input_component;
       case TreatmentType.rootCanal:
         return Icons.healing_outlined;
+      case TreatmentType.prosthodontic:
+        return Icons.build_outlined;
       case TreatmentType.labWork:
         return Icons.science_outlined;
     }
@@ -4245,6 +4555,19 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             ..addAll(s.rootCanalPlans);
           _selectedRcDoctor = s.rootCanalDoctorInCharge;
           break;
+        case TreatmentType.prosthodontic:
+          _prosthoFindings
+            ..clear()
+            ..addAll(s.prosthodonticFindings);
+          _prosthoTotal.text = s.prosthodonticTotalAmount?.toString() ?? '';
+          _prosthoSteps
+            ..clear()
+            ..addAll(s.prosthodonticSteps);
+          _prosthoPlans
+            ..clear()
+            ..addAll(s.prosthodonticPlans);
+          _selectedProsthoDoctor = s.prosthodonticDoctorInCharge;
+          break;
         case TreatmentType.labWork:
           _selectedLabName = s.labName;
           _selectedNatureOfWork = s.natureOfWork;
@@ -4298,6 +4621,15 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   _addingRcSession = false;
   _newRcTreatment.clear();
   _newRcPayment.clear();
+    // Prosthodontic
+    _prosthoFindings.clear();
+    _prosthoTotal.clear();
+    _prosthoSteps.clear();
+  _prosthoPlans.clear();
+  _selectedProsthoDoctor = null;
+  _addingProsthoSession = false;
+  _newProsthoTreatment.clear();
+  _newProsthoPayment.clear();
     // Lab Work
     _selectedLabName = null;
     _selectedNatureOfWork = null;

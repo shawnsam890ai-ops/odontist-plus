@@ -22,6 +22,8 @@ class OptionsProvider extends ChangeNotifier {
   List<String> orthoDoctors = [];
   // New: dynamic list of root canal doctors
   List<String> rcDoctors = [];
+  // New: dynamic list of prosthodontic doctors
+  List<String> prosthoDoctors = [];
   // New: dynamic lists for lab work
   List<String> labNames = [];
   List<String> natureOfWorkOptions = [];
@@ -48,6 +50,7 @@ class OptionsProvider extends ChangeNotifier {
     required List<String> defaultDrugAllergies,
     List<String>? defaultOrthoDoctors, // optional to avoid forcing callers now
     List<String>? defaultRcDoctors,
+    List<String>? defaultProsthoDoctors,
     List<String>? defaultLabNames,
     List<String>? defaultNatureOfWork,
     List<String>? defaultToothShades,
@@ -69,6 +72,7 @@ class OptionsProvider extends ChangeNotifier {
         drugAllergyOptions = (map['drugAllergies'] as List<dynamic>? ?? []).cast<String>();
         orthoDoctors = (map['orthoDoctors'] as List<dynamic>? ?? []).cast<String>();
   rcDoctors = (map['rcDoctors'] as List<dynamic>? ?? []).cast<String>();
+        prosthoDoctors = (map['prosthoDoctors'] as List<dynamic>? ?? []).cast<String>();
         labNames = (map['labNames'] as List<dynamic>? ?? []).cast<String>();
         natureOfWorkOptions = (map['natureOfWork'] as List<dynamic>? ?? []).cast<String>();
         toothShades = (map['toothShades'] as List<dynamic>? ?? []).cast<String>();
@@ -87,6 +91,7 @@ class OptionsProvider extends ChangeNotifier {
     if (drugAllergyOptions.isEmpty) drugAllergyOptions = List.from(defaultDrugAllergies);
   if (orthoDoctors.isEmpty && (defaultOrthoDoctors != null)) orthoDoctors = List.from(defaultOrthoDoctors);
     if (rcDoctors.isEmpty && (defaultRcDoctors != null)) rcDoctors = List.from(defaultRcDoctors);
+    if (prosthoDoctors.isEmpty && (defaultProsthoDoctors != null)) prosthoDoctors = List.from(defaultProsthoDoctors);
     if (labNames.isEmpty && (defaultLabNames != null)) labNames = List.from(defaultLabNames);
     if (natureOfWorkOptions.isEmpty && (defaultNatureOfWork != null)) natureOfWorkOptions = List.from(defaultNatureOfWork);
     if (toothShades.isEmpty && (defaultToothShades != null)) toothShades = List.from(defaultToothShades);
@@ -103,6 +108,7 @@ class OptionsProvider extends ChangeNotifier {
     _sortList(drugAllergyOptions);
   _sortList(orthoDoctors);
     _sortList(rcDoctors);
+    _sortList(prosthoDoctors);
     _sortList(labNames);
     _sortList(natureOfWorkOptions);
     _sortList(toothShades);
@@ -124,6 +130,7 @@ class OptionsProvider extends ChangeNotifier {
       'drugAllergies': drugAllergyOptions,
       'orthoDoctors': orthoDoctors,
       'rcDoctors': rcDoctors,
+      'prosthoDoctors': prosthoDoctors,
       'labNames': labNames,
       'natureOfWork': natureOfWorkOptions,
       'toothShades': toothShades,
@@ -188,6 +195,8 @@ class OptionsProvider extends ChangeNotifier {
         return orthoDoctors;
       case 'rcDoctors':
         return rcDoctors;
+      case 'prosthoDoctors':
+        return prosthoDoctors;
       case 'labNames':
         return labNames;
       case 'natureOfWork':
@@ -273,6 +282,15 @@ class OptionsProvider extends ChangeNotifier {
         for (final p in patients) {
           for (final s in p.sessions) {
             if (s.type == TreatmentType.rootCanal && s.rootCanalDoctorInCharge != null && s.rootCanalDoctorInCharge!.toLowerCase() == value.toLowerCase()) {
+              return true;
+            }
+          }
+        }
+        return false;
+      case 'prosthoDoctors':
+        for (final p in patients) {
+          for (final s in p.sessions) {
+            if (s.type == TreatmentType.prosthodontic && s.prosthodonticDoctorInCharge != null && s.prosthodonticDoctorInCharge!.toLowerCase() == value.toLowerCase()) {
               return true;
             }
           }

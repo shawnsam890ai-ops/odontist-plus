@@ -4,6 +4,7 @@ enum TreatmentType {
   general('General'),
   orthodontic('Orthodontic'),
   rootCanal('Root Canal'),
+  prosthodontic('Prosthodontic'),
   labWork('Lab Work');
 
   const TreatmentType(this.label);
