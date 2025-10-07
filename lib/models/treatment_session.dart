@@ -180,6 +180,15 @@ class TreatmentSession {
   final List<ToothPlanEntry> rootCanalPlans; // per-tooth planned RCT steps
   final String? rootCanalDoctorInCharge;
 
+  // Lab Work specific fields
+  final String? labName;
+  final String? natureOfWork;
+  final DateTime? submissionDate;
+  final DateTime? deliveryDate;
+  final String? toothShade;
+  final double? labTotalAmount;
+  final List<ProcedureStep> labSteps;
+
   final String? consentFormPath;
 
   TreatmentSession({
@@ -211,8 +220,15 @@ class TreatmentSession {
     this.rootCanalTotalAmount,
     List<String>? rootCanalProcedures,
     List<ProcedureStep>? rootCanalSteps,
-  List<ToothPlanEntry>? rootCanalPlans,
+    List<ToothPlanEntry>? rootCanalPlans,
     this.rootCanalDoctorInCharge,
+    this.labName,
+    this.natureOfWork,
+    this.submissionDate,
+    this.deliveryDate,
+    this.toothShade,
+    this.labTotalAmount,
+    List<ProcedureStep>? labSteps,
     this.consentFormPath,
   })  : oralExamFindings = oralExamFindings ?? [],
         investigations = investigations ?? [],
@@ -230,7 +246,8 @@ class TreatmentSession {
         rootCanalFindings = rootCanalFindings ?? [],
         rootCanalProcedures = rootCanalProcedures ?? [],
   rootCanalSteps = rootCanalSteps ?? [],
-  rootCanalPlans = rootCanalPlans ?? [];
+  rootCanalPlans = rootCanalPlans ?? [],
+        labSteps = labSteps ?? [];
 
   TreatmentSession copyWith({
     String? id,
@@ -261,8 +278,15 @@ class TreatmentSession {
     double? rootCanalTotalAmount,
     List<String>? rootCanalProcedures,
     List<ProcedureStep>? rootCanalSteps,
-  List<ToothPlanEntry>? rootCanalPlans,
+    List<ToothPlanEntry>? rootCanalPlans,
     String? rootCanalDoctorInCharge,
+    String? labName,
+    String? natureOfWork,
+    DateTime? submissionDate,
+    DateTime? deliveryDate,
+    String? toothShade,
+    double? labTotalAmount,
+    List<ProcedureStep>? labSteps,
     String? consentFormPath,
   }) => TreatmentSession(
         id: id ?? this.id,
@@ -293,8 +317,15 @@ class TreatmentSession {
         rootCanalTotalAmount: rootCanalTotalAmount ?? this.rootCanalTotalAmount,
         rootCanalProcedures: rootCanalProcedures ?? List.from(this.rootCanalProcedures),
         rootCanalSteps: rootCanalSteps ?? List.from(this.rootCanalSteps),
-  rootCanalPlans: rootCanalPlans ?? List.from(this.rootCanalPlans),
+        rootCanalPlans: rootCanalPlans ?? List.from(this.rootCanalPlans),
         rootCanalDoctorInCharge: rootCanalDoctorInCharge ?? this.rootCanalDoctorInCharge,
+        labName: labName ?? this.labName,
+        natureOfWork: natureOfWork ?? this.natureOfWork,
+        submissionDate: submissionDate ?? this.submissionDate,
+        deliveryDate: deliveryDate ?? this.deliveryDate,
+        toothShade: toothShade ?? this.toothShade,
+        labTotalAmount: labTotalAmount ?? this.labTotalAmount,
+        labSteps: labSteps ?? List.from(this.labSteps),
         consentFormPath: consentFormPath ?? this.consentFormPath,
       );
 
@@ -329,6 +360,13 @@ class TreatmentSession {
         'rootCanalSteps': rootCanalSteps.map((e) => e.toJson()).toList(),
         'rootCanalPlans': rootCanalPlans.map((e) => e.toJson()).toList(),
         'rootCanalDoctorInCharge': rootCanalDoctorInCharge,
+        'labName': labName,
+        'natureOfWork': natureOfWork,
+        'submissionDate': submissionDate?.toIso8601String(),
+        'deliveryDate': deliveryDate?.toIso8601String(),
+        'toothShade': toothShade,
+        'labTotalAmount': labTotalAmount,
+        'labSteps': labSteps.map((e) => e.toJson()).toList(),
         'consentFormPath': consentFormPath,
       };
 
@@ -365,8 +403,15 @@ class TreatmentSession {
         rootCanalTotalAmount: (json['rootCanalTotalAmount'] as num?)?.toDouble(),
         rootCanalProcedures: (json['rootCanalProcedures'] as List<dynamic>).cast<String>(),
         rootCanalSteps: (json['rootCanalSteps'] as List<dynamic>? ?? []).map((e) => ProcedureStep.fromJson(e as Map<String, dynamic>)).toList(),
-  rootCanalPlans: (json['rootCanalPlans'] as List<dynamic>? ?? []).map((e) => ToothPlanEntry.fromJson(e as Map<String, dynamic>)).toList(),
+        rootCanalPlans: (json['rootCanalPlans'] as List<dynamic>? ?? []).map((e) => ToothPlanEntry.fromJson(e as Map<String, dynamic>)).toList(),
         rootCanalDoctorInCharge: json['rootCanalDoctorInCharge'] as String?,
+        labName: json['labName'] as String?,
+        natureOfWork: json['natureOfWork'] as String?,
+        submissionDate: json['submissionDate'] == null ? null : DateTime.parse(json['submissionDate'] as String),
+        deliveryDate: json['deliveryDate'] == null ? null : DateTime.parse(json['deliveryDate'] as String),
+        toothShade: json['toothShade'] as String?,
+        labTotalAmount: (json['labTotalAmount'] as num?)?.toDouble(),
+        labSteps: (json['labSteps'] as List<dynamic>? ?? []).map((e) => ProcedureStep.fromJson(e as Map<String, dynamic>)).toList(),
         consentFormPath: json['consentFormPath'] as String?,
       );
 }

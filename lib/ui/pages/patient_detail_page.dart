@@ -104,6 +104,21 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   DateTime _newRcSessionDate = DateTime.now();
   final TextEditingController _newRcTreatment = TextEditingController();
   final TextEditingController _newRcPayment = TextEditingController();
+
+  // Lab Work
+  String? _selectedLabName;
+  String? _selectedNatureOfWork;
+  DateTime? _labSubmissionDate;
+  DateTime? _labDeliveryDate;
+  final TextEditingController _toothShade = TextEditingController();
+  final TextEditingController _labTotal = TextEditingController();
+  final List<ProcedureStep> _labSteps = [];
+  bool _addingLabProcedure = false;
+  String? _linkedSessionId; // For linking lab work to existing General/Root Canal session
+  DateTime _newLabProcedureDate = DateTime.now();
+  final TextEditingController _newLabProcedure = TextEditingController();
+  final TextEditingController _newLabPayment = TextEditingController();
+
   // Session history filtering by registered date (unique existing session dates)
   String? _sessionFilterDateStr; // YYYY-MM-DD string currently selected
 
@@ -241,6 +256,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       defaultMedicationOptions: AppConstants.medicationOptions,
       defaultDrugAllergies: AppConstants.drugAllergyOptions,
       defaultRcDoctors: const [],
+      defaultLabNames: const ['Maxima Lab', 'Crown Lab', 'Digital Dental Lab'],
+      defaultNatureOfWork: const ['PFM Crown', 'Zirconia Crown', 'Sunflex RPD', 'Metal Partial', 'Complete Denture', 'Bridge Work'],
+      defaultToothShades: const ['A1', 'A2', 'A3', 'B1', 'B2', 'C1', 'C2'],
     );
     _optionsLoaded = true;
   }
@@ -360,7 +378,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       case TreatmentType.rootCanal:
         return _rootCanalForm();
       case TreatmentType.labWork:
-        return const Text('Lab work linking handled separately');
+        return _labWorkForm();
     }
   }
 
@@ -1344,6 +1362,438 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     );
   }
 
+  Widget _labWorkForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Card 1: Lab Details Container
+        Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Lab Details', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                
+                // Lab Name dropdown with add/delete options
+                Builder(builder: (ctx) {
+                  final opt = ctx.watch<OptionsProvider>();
+                  final labNames = opt.labNames;
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedLabName,
+                          decoration: const InputDecoration(labelText: 'Lab Name'),
+                          items: labNames.map((name) => DropdownMenuItem(value: name, child: Text(name))).toList(),
+                          onChanged: (v) => setState(() => _selectedLabName = v),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Add Lab Name',
+                        icon: const Icon(Icons.add),
+                        onPressed: () async {
+                          final controller = TextEditingController();
+                          final val = await showDialog<String>(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              title: const Text('Add Lab Name'),
+                              content: TextField(
+                                controller: controller,
+                                decoration: const InputDecoration(labelText: 'Lab Name'),
+                                autofocus: true,
+                              ),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                                ElevatedButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Add')),
+                              ],
+                            )
+                          );
+                          if (val != null && val.isNotEmpty) {
+                            await opt.addValue('labNames', val);
+                            if (mounted) {
+                              setState(() => _selectedLabName = val);
+                              // Force a rebuild to refresh the dropdown options
+                              Future.delayed(const Duration(milliseconds: 100), () {
+                                if (mounted) setState(() {});
+                              });
+                            }
+                          }
+                        },
+                      ),
+                      IconButton(
+                        tooltip: 'Delete Selected Lab Name',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: _selectedLabName == null ? null : () async {
+                          final target = _selectedLabName!;
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              title: const Text('Delete Lab Name'),
+                              content: Text('Delete "$target"? This cannot be undone.'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                                ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+                              ],
+                            )
+                          );
+                          if (confirm == true) {
+                            final ok = await opt.removeValue('labNames', target);
+                            if (!ok && mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: lab name referenced in a session.')));
+                            } else if (ok && mounted) {
+                              setState(() => _selectedLabName = null);
+                            }
+                          }
+                        },
+                      ),
+                    ],
+                  );
+                }),
+                const SizedBox(height: 12),
+
+                // Nature of Work dropdown with add/delete options  
+                Builder(builder: (ctx) {
+                  final opt = ctx.watch<OptionsProvider>();
+                  final natureOptions = opt.natureOfWorkOptions;
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedNatureOfWork,
+                          decoration: const InputDecoration(labelText: 'Nature of Work'),
+                          items: natureOptions.map((work) => DropdownMenuItem(value: work, child: Text(work))).toList(),
+                          onChanged: (v) => setState(() => _selectedNatureOfWork = v),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Add Nature of Work',
+                        icon: const Icon(Icons.add),
+                        onPressed: () async {
+                          final controller = TextEditingController();
+                          final val = await showDialog<String>(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              title: const Text('Add Nature of Work'),
+                              content: TextField(
+                                controller: controller,
+                                decoration: const InputDecoration(labelText: 'Nature of Work (e.g., PFM crown, zirconia crown, sunflex RPD)'),
+                                autofocus: true,
+                              ),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                                ElevatedButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Add')),
+                              ],
+                            )
+                          );
+                          if (val != null && val.isNotEmpty) {
+                            await opt.addValue('natureOfWork', val);
+                            if (mounted) {
+                              setState(() => _selectedNatureOfWork = val);
+                              // Force a rebuild to refresh the dropdown options
+                              Future.delayed(const Duration(milliseconds: 100), () {
+                                if (mounted) setState(() {});
+                              });
+                            }
+                          }
+                        },
+                      ),
+                      IconButton(
+                        tooltip: 'Delete Selected Nature of Work',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: _selectedNatureOfWork == null ? null : () async {
+                          final target = _selectedNatureOfWork!;
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              title: const Text('Delete Nature of Work'),
+                              content: Text('Delete "$target"? This cannot be undone.'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                                ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+                              ],
+                            )
+                          );
+                          if (confirm == true) {
+                            final ok = await opt.removeValue('natureOfWork', target);
+                            if (!ok && mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: nature of work referenced in a session.')));
+                            } else if (ok && mounted) {
+                              setState(() => _selectedNatureOfWork = null);
+                            }
+                          }
+                        },
+                      ),
+                    ],
+                  );
+                }),
+                const SizedBox(height: 12),
+
+                // Submission Date picker
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final date = await showDatePicker(
+                            context: context,
+                            initialDate: _labSubmissionDate ?? DateTime.now(),
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (date != null) {
+                            setState(() => _labSubmissionDate = date);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(labelText: 'Date of Submission'),
+                          child: Text(
+                            _labSubmissionDate == null 
+                              ? 'Select Date' 
+                              : '${_labSubmissionDate!.day}/${_labSubmissionDate!.month}/${_labSubmissionDate!.year}',
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_labSubmissionDate != null)
+                      IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => setState(() => _labSubmissionDate = null),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Expected Delivery Date picker
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final date = await showDatePicker(
+                            context: context,
+                            initialDate: _labDeliveryDate ?? DateTime.now().add(const Duration(days: 7)),
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (date != null) {
+                            setState(() => _labDeliveryDate = date);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(labelText: 'Expected Delivery Date'),
+                          child: Text(
+                            _labDeliveryDate == null 
+                              ? 'Select Date' 
+                              : '${_labDeliveryDate!.day}/${_labDeliveryDate!.month}/${_labDeliveryDate!.year}',
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_labDeliveryDate != null)
+                      IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => setState(() => _labDeliveryDate = null),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Tooth Shade text field
+                TextField(
+                  controller: _toothShade,
+                  decoration: const InputDecoration(
+                    labelText: 'Tooth Shade',
+                    hintText: 'e.g., A1, A2, B1, etc.',
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Link to existing session
+                Builder(builder: (ctx) {
+                  final patientProvider = ctx.watch<PatientProvider>();
+                  final patient = patientProvider.byId(widget.patientId!);
+                  if (patient == null) return const SizedBox.shrink();
+                  
+                  final eligibleSessions = patient.sessions
+                      .where((s) => s.type == TreatmentType.general || s.type == TreatmentType.rootCanal)
+                      .toList()
+                    ..sort((a, b) => b.date.compareTo(a.date)); // newest first
+                  
+                  if (eligibleSessions.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Link to Session (Optional)', 
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: _linkedSessionId,
+                        decoration: const InputDecoration(
+                          labelText: 'Select Session to Link',
+                          hintText: 'None - Create independent session',
+                        ),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: null,
+                            child: Text('None - Independent Session'),
+                          ),
+                          ...eligibleSessions.map((s) => DropdownMenuItem(
+                            value: s.id,
+                            child: Text(
+                              '${s.date.day}/${s.date.month}/${s.date.year} - ${s.type.label}${s.chiefComplaint?.complaints.isNotEmpty == true ? ' (${s.chiefComplaint!.complaints.first})' : ''}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          )).toList(),
+                        ],
+                        onChanged: (v) => setState(() => _linkedSessionId = v),
+                      ),
+                    ],
+                  );
+                }),
+                const SizedBox(height: 12),
+
+                // Total Amount
+                TextField(
+                  controller: _labTotal,
+                  decoration: const InputDecoration(labelText: 'Total Amount'),
+                  keyboardType: TextInputType.number,
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Card 2: Add Procedure Container
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: Text('Add Procedure', style: Theme.of(context).textTheme.titleMedium)),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Procedure'),
+                      onPressed: () => setState(() {
+                        if (_addingLabProcedure) {
+                          // toggling off clears
+                          _addingLabProcedure = false;
+                          _newLabProcedure.clear();
+                          _newLabPayment.clear();
+                        } else {
+                          _addingLabProcedure = true;
+                          _newLabProcedureDate = DateTime.now();
+                        }
+                      }),
+                    )
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (_addingLabProcedure)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('Date: '),
+                            TextButton(
+                              onPressed: () async {
+                                final date = await showDatePicker(
+                                  context: context,
+                                  initialDate: _newLabProcedureDate,
+                                  firstDate: DateTime(2000),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (date != null) setState(() => _newLabProcedureDate = date);
+                              },
+                              child: Text('${_newLabProcedureDate.day}/${_newLabProcedureDate.month}/${_newLabProcedureDate.year}'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _newLabProcedure,
+                          decoration: const InputDecoration(labelText: 'Procedure Done'),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _newLabPayment,
+                          decoration: const InputDecoration(labelText: 'Payment Done'),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(children: [
+                          ElevatedButton(
+                            onPressed: () {
+                              final desc = _newLabProcedure.text.trim();
+                              if (desc.isEmpty) return;
+                              final pay = double.tryParse(_newLabPayment.text.trim());
+                              final step = ProcedureStep(
+                                id: const Uuid().v4(), 
+                                date: _newLabProcedureDate, 
+                                description: desc, 
+                                payment: pay
+                              );
+                              setState(() {
+                                _labSteps.add(step);
+                                _addingLabProcedure = false;
+                                _newLabProcedure.clear();
+                                _newLabPayment.clear();
+                                _newLabProcedureDate = DateTime.now();
+                              });
+                            },
+                            child: const Text('Save'),
+                          ),
+                          const SizedBox(width: 12),
+                          TextButton(
+                            onPressed: () => setState(() => _addingLabProcedure = false), 
+                            child: const Text('Cancel')
+                          ),
+                        ])
+                      ],
+                    ),
+                  ),
+                if (_labSteps.isEmpty)
+                  const Text('No procedures recorded.')
+                else
+                  Column(
+                    children: _labSteps.map((s) => ListTile(
+                      dense: true,
+                      title: Text('${s.date.toLocal().toString().split(' ').first} • ${s.description}'),
+                      subtitle: s.payment == null ? null : Text('Paid: \$${s.payment}'),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete, size: 18), 
+                        onPressed: () => setState(() => _labSteps.remove(s))
+                      ),
+                    )).toList(),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   TreatmentSession _createSession() {
     const uuid = Uuid();
     // Before creating session, flush any pending oral finding selections not yet added
@@ -1411,7 +1861,14 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           id: uuid.v4(),
           type: TreatmentType.labWork,
           date: DateTime.now(),
-          parentSessionId: _followUpParentId,
+          parentSessionId: _linkedSessionId ?? _followUpParentId, // Use linked session if selected
+          labName: _selectedLabName,
+          natureOfWork: _selectedNatureOfWork,
+          submissionDate: _labSubmissionDate,
+          deliveryDate: _labDeliveryDate,
+          toothShade: _toothShade.text.trim().isEmpty ? null : _toothShade.text.trim(),
+          labTotalAmount: double.tryParse(_labTotal.text.trim()),
+          labSteps: List.from(_labSteps),
         );
     }
   }
@@ -2363,12 +2820,14 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                       Expanded(
                         child: () {
                           if (isFollowUp) {
+                            // For lab work sessions, show 'Lab Work' instead of 'Follow-Up'
+                            final sessionTypeName = s.type == TreatmentType.labWork ? 'Lab Work' : 'Follow-Up';
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  '${s.date.toLocal().toIso8601String().split('T').first} • Follow-Up',
+                                  '${s.date.toLocal().toIso8601String().split('T').first} • $sessionTypeName',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .85),
@@ -2540,6 +2999,44 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
                         child: Text(
                           s.rootCanalDoctorInCharge!,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 11.5,
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .72),
+                            height: 1.1,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ] else if (!isFollowUp && s.type == TreatmentType.labWork) ...[
+                    const SizedBox(height: 6),
+                    if (s.labName != null || s.natureOfWork != null)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _typeColor(s).withValues(alpha: .13),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: _typeColor(s).withValues(alpha: .30), width: .8),
+                        ),
+                        child: Text(
+                          'Lab Details: ${s.labName ?? 'Unspecified Lab'}${s.natureOfWork != null ? ' • ${s.natureOfWork}' : ''}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .92),
+                            height: 1.15,
+                          ),
+                        ),
+                      ),
+                    if (s.submissionDate != null || s.deliveryDate != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
+                        child: Text(
+                          [
+                            if (s.submissionDate != null) 'Submitted: ${s.submissionDate!.day}/${s.submissionDate!.month}/${s.submissionDate!.year}',
+                            if (s.deliveryDate != null) 'Expected: ${s.deliveryDate!.day}/${s.deliveryDate!.month}/${s.deliveryDate!.year}',
+                          ].join(' • '),
                           style: TextStyle(
                             fontWeight: FontWeight.w500,
                             fontSize: 11.5,
@@ -2862,6 +3359,109 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                     );
                   }),
                 ],
+                // Lab work expansion content
+                if (!isFollowUp && s.type == TreatmentType.labWork) ...[
+                  if (s.toothShade != null || s.labTotalAmount != null)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _typeColor(s).withValues(alpha: .18),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: _typeColor(s).withValues(alpha: .30), width: .9),
+                      ),
+                      child: Text(
+                        [
+                          if (s.toothShade != null) 'Shade: ${s.toothShade}',
+                          if (s.labTotalAmount != null) 'Total: \$${s.labTotalAmount}',
+                        ].join(' • '),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .80),
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                  // Lab work procedures summary list
+                  Builder(builder: (_) {
+                    final steps = s.labSteps;
+                    if (steps.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: Text('No procedures recorded.'),
+                      );
+                    }
+                    double runningPaid = 0;
+                    final total = s.labTotalAmount ?? 0;
+                    return Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: _typeColor(s).withValues(alpha: .10),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _typeColor(s).withValues(alpha: .28), width: .7),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Lab Procedures', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 8),
+                          ...steps.map((st) {
+                            runningPaid += (st.payment ?? 0);
+                            final balance = total > 0 ? (total - runningPaid) : null;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: .55),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: _typeColor(s).withValues(alpha: .22), width: .6),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('${st.date.toLocal().toString().split(' ').first} • ${st.description}',
+                                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .88))),
+                                        if (st.note != null && st.note!.isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 2),
+                                            child: Text('Note: ${st.note}', style: TextStyle(fontSize: 11.5, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .70))),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(st.payment == null ? 'Paid: -' : 'Paid: \$${st.payment}',
+                                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.green.shade700)),
+                                      if (balance != null)
+                                        Text('Bal: \$${balance < 0 ? 0 : balance}',
+                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: balance <= 0 ? Colors.green : Colors.redAccent)),
+                                    ],
+                                  )
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          if (total > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text('Total: \$$total',
+                                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .85))),
+                            ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Column(
@@ -2872,7 +3472,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           ? orderedDetails.where((d) => !['Ortho Findings:', 'Bracket:', 'Doctor:', 'Total:', 'Steps:'].any((p) => d.startsWith(p))).toList()
                           : s.type == TreatmentType.rootCanal
                             ? orderedDetails.where((d) => !['RC Findings:', 'Treatment Plans:', 'Doctor:', 'Total:', 'Steps:'].any((p) => d.startsWith(p))).toList()
-                            : orderedDetails
+                            : s.type == TreatmentType.labWork
+                              ? orderedDetails.where((d) => !['Lab Name:', 'Nature of Work:', 'Submission Date:', 'Delivery Date:', 'Tooth Shade:', 'Total:', 'Lab Steps:'].any((p) => d.startsWith(p))).toList()
+                              : orderedDetails
                       ))
                         Padding(
                           padding: const EdgeInsets.only(bottom: 4),
@@ -3352,6 +3954,93 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               ));
       return;
     }
+    // Enhanced lab work formatting with procedures
+    if (s.type == TreatmentType.labWork) {
+      final lines = _buildSessionDetailLines(s, planOpts, doneOpts)
+          .where((l) => !l.startsWith('Lab Steps:')) // steps will be rendered in richer format
+          .toList();
+      final steps = List<ProcedureStep>.from(s.labSteps)..sort((a,b)=> a.date.compareTo(b.date));
+      double runningPaid = 0;
+      final total = s.labTotalAmount ?? 0;
+      showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+                title: const Text('Lab Work Session Details'),
+                content: SizedBox(
+                  width: 480,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ...lines.map((l) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Text(l),
+                            )),
+                        const SizedBox(height: 8),
+                        Text('Lab Procedures', style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 6),
+                        if (steps.isEmpty)
+                          const Text('No procedures recorded.')
+                        else
+                          Column(
+                            children: steps.map((st) {
+                              runningPaid += (st.payment ?? 0);
+                              final bal = total > 0 ? (total - runningPaid) : null;
+                              return Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: .35),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('${st.date.toLocal().toString().split(' ').first} • ${st.description}',
+                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                                          if (st.note != null && st.note!.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 2),
+                                              child: Text('Note: ${st.note}', style: Theme.of(context).textTheme.bodySmall),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(st.payment == null ? 'Paid: -' : 'Paid: \$${st.payment}',
+                                            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.green.shade700, fontWeight: FontWeight.w600)),
+                                        if (bal != null)
+                                          Text('Bal: \$${bal < 0 ? 0 : bal}',
+                                              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: bal <= 0 ? Colors.green : Colors.redAccent, fontWeight: FontWeight.w500)),
+                                      ],
+                                    )
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        if (total > 0) ...[
+                          const SizedBox(height: 8),
+                          Text('Total: \$$total  Paid: \$$runningPaid  Balance: \$${total - runningPaid}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                        ]
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+                ],
+              ));
+      return;
+    }
     final lines = _buildSessionDetailLines(s, planOpts, doneOpts);
     showDialog(
         context: context,
@@ -3435,7 +4124,16 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           _selectedRcDoctor = s.rootCanalDoctorInCharge;
           break;
         case TreatmentType.labWork:
-          // Currently no editable fields for labWork sessions; keep as placeholder.
+          _selectedLabName = s.labName;
+          _selectedNatureOfWork = s.natureOfWork;
+          _labSubmissionDate = s.submissionDate;
+          _labDeliveryDate = s.deliveryDate;
+          _toothShade.text = s.toothShade ?? '';
+          _labTotal.text = s.labTotalAmount?.toString() ?? '';
+          _labSteps
+            ..clear()
+            ..addAll(s.labSteps);
+          _linkedSessionId = s.parentSessionId;
           break;
       }
     });
@@ -3475,6 +4173,18 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   _addingRcSession = false;
   _newRcTreatment.clear();
   _newRcPayment.clear();
+    // Lab Work
+    _selectedLabName = null;
+    _selectedNatureOfWork = null;
+    _labSubmissionDate = null;
+    _labDeliveryDate = null;
+    _toothShade.clear();
+    _labTotal.clear();
+    _labSteps.clear();
+    _addingLabProcedure = false;
+    _newLabProcedure.clear();
+    _newLabPayment.clear();
+    _linkedSessionId = null;
   }
 
   void _startFollowUpFrom(TreatmentSession base) {

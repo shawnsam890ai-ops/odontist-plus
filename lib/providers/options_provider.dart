@@ -22,6 +22,10 @@ class OptionsProvider extends ChangeNotifier {
   List<String> orthoDoctors = [];
   // New: dynamic list of root canal doctors
   List<String> rcDoctors = [];
+  // New: dynamic lists for lab work
+  List<String> labNames = [];
+  List<String> natureOfWorkOptions = [];
+  List<String> toothShades = [];
 
   bool _loaded = false;
   bool get isLoaded => _loaded;
@@ -44,6 +48,9 @@ class OptionsProvider extends ChangeNotifier {
     required List<String> defaultDrugAllergies,
     List<String>? defaultOrthoDoctors, // optional to avoid forcing callers now
     List<String>? defaultRcDoctors,
+    List<String>? defaultLabNames,
+    List<String>? defaultNatureOfWork,
+    List<String>? defaultToothShades,
   }) async {
     if (_loaded) return;
     final prefs = await SharedPreferences.getInstance();
@@ -62,6 +69,9 @@ class OptionsProvider extends ChangeNotifier {
         drugAllergyOptions = (map['drugAllergies'] as List<dynamic>? ?? []).cast<String>();
         orthoDoctors = (map['orthoDoctors'] as List<dynamic>? ?? []).cast<String>();
   rcDoctors = (map['rcDoctors'] as List<dynamic>? ?? []).cast<String>();
+        labNames = (map['labNames'] as List<dynamic>? ?? []).cast<String>();
+        natureOfWorkOptions = (map['natureOfWork'] as List<dynamic>? ?? []).cast<String>();
+        toothShades = (map['toothShades'] as List<dynamic>? ?? []).cast<String>();
       } catch (_) {
         // fallback to defaults
       }
@@ -77,6 +87,9 @@ class OptionsProvider extends ChangeNotifier {
     if (drugAllergyOptions.isEmpty) drugAllergyOptions = List.from(defaultDrugAllergies);
   if (orthoDoctors.isEmpty && (defaultOrthoDoctors != null)) orthoDoctors = List.from(defaultOrthoDoctors);
     if (rcDoctors.isEmpty && (defaultRcDoctors != null)) rcDoctors = List.from(defaultRcDoctors);
+    if (labNames.isEmpty && (defaultLabNames != null)) labNames = List.from(defaultLabNames);
+    if (natureOfWorkOptions.isEmpty && (defaultNatureOfWork != null)) natureOfWorkOptions = List.from(defaultNatureOfWork);
+    if (toothShades.isEmpty && (defaultToothShades != null)) toothShades = List.from(defaultToothShades);
 
     // Ensure all lists are sorted alphabetically (case-insensitive) once loaded
     _sortList(complaints);
@@ -90,6 +103,9 @@ class OptionsProvider extends ChangeNotifier {
     _sortList(drugAllergyOptions);
   _sortList(orthoDoctors);
     _sortList(rcDoctors);
+    _sortList(labNames);
+    _sortList(natureOfWorkOptions);
+    _sortList(toothShades);
     _loaded = true;
     notifyListeners();
   }
@@ -108,6 +124,9 @@ class OptionsProvider extends ChangeNotifier {
       'drugAllergies': drugAllergyOptions,
       'orthoDoctors': orthoDoctors,
       'rcDoctors': rcDoctors,
+      'labNames': labNames,
+      'natureOfWork': natureOfWorkOptions,
+      'toothShades': toothShades,
     }));
   }
 
@@ -169,6 +188,12 @@ class OptionsProvider extends ChangeNotifier {
         return orthoDoctors;
       case 'rcDoctors':
         return rcDoctors;
+      case 'labNames':
+        return labNames;
+      case 'natureOfWork':
+        return natureOfWorkOptions;
+      case 'toothShades':
+        return toothShades;
       default:
         return complaints;
     }
@@ -248,6 +273,33 @@ class OptionsProvider extends ChangeNotifier {
         for (final p in patients) {
           for (final s in p.sessions) {
             if (s.type == TreatmentType.rootCanal && s.rootCanalDoctorInCharge != null && s.rootCanalDoctorInCharge!.toLowerCase() == value.toLowerCase()) {
+              return true;
+            }
+          }
+        }
+        return false;
+      case 'labNames':
+        for (final p in patients) {
+          for (final s in p.sessions) {
+            if (s.type == TreatmentType.labWork && s.labName != null && s.labName!.toLowerCase() == value.toLowerCase()) {
+              return true;
+            }
+          }
+        }
+        return false;
+      case 'natureOfWork':
+        for (final p in patients) {
+          for (final s in p.sessions) {
+            if (s.type == TreatmentType.labWork && s.natureOfWork != null && s.natureOfWork!.toLowerCase() == value.toLowerCase()) {
+              return true;
+            }
+          }
+        }
+        return false;
+      case 'toothShades':
+        for (final p in patients) {
+          for (final s in p.sessions) {
+            if (s.type == TreatmentType.labWork && s.toothShade != null && s.toothShade!.toLowerCase() == value.toLowerCase()) {
               return true;
             }
           }
