@@ -3265,6 +3265,93 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               ));
       return;
     }
+    // Enhanced root canal formatting with treatment sessions
+    if (s.type == TreatmentType.rootCanal) {
+      final lines = _buildSessionDetailLines(s, planOpts, doneOpts)
+          .where((l) => !l.startsWith('Steps:')) // steps will be rendered in richer format
+          .toList();
+      final steps = List<ProcedureStep>.from(s.rootCanalSteps)..sort((a,b)=> a.date.compareTo(b.date));
+      double runningPaid = 0;
+      final total = s.rootCanalTotalAmount ?? 0;
+      showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+                title: const Text('Root Canal Session Details'),
+                content: SizedBox(
+                  width: 480,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ...lines.map((l) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Text(l),
+                            )),
+                        const SizedBox(height: 8),
+                        Text('Treatment Sessions', style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 6),
+                        if (steps.isEmpty)
+                          const Text('No treatment sessions recorded.')
+                        else
+                          Column(
+                            children: steps.map((st) {
+                              runningPaid += (st.payment ?? 0);
+                              final bal = total > 0 ? (total - runningPaid) : null;
+                              return Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: .35),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('${st.date.toLocal().toString().split(' ').first} • ${st.description}',
+                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                                          if (st.note != null && st.note!.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 2),
+                                              child: Text('Note: ${st.note}', style: Theme.of(context).textTheme.bodySmall),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(st.payment == null ? 'Paid: -' : 'Paid: ${st.payment}',
+                                            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.green.shade700, fontWeight: FontWeight.w600)),
+                                        if (bal != null)
+                                          Text('Bal: ${bal < 0 ? 0 : bal}',
+                                              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: bal <= 0 ? Colors.green : Colors.redAccent, fontWeight: FontWeight.w500)),
+                                      ],
+                                    )
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        if (total > 0) ...[
+                          const SizedBox(height: 8),
+                          Text('Total: $total  Paid: $runningPaid  Balance: ${total - runningPaid}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                        ]
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+                ],
+              ));
+      return;
+    }
     final lines = _buildSessionDetailLines(s, planOpts, doneOpts);
     showDialog(
         context: context,
