@@ -66,6 +66,12 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   final TextEditingController _rxTablets = TextEditingController();
   final TextEditingController _rxDays = TextEditingController();
 
+  // General Payment
+  final List<PaymentEntry> _generalPayments = [];
+  bool _addingPayment = false;
+  DateTime _newPaymentDate = DateTime.now();
+  final TextEditingController _newPaymentAmount = TextEditingController();
+
   // Inline oral
   final TextEditingController _inlineToothController = TextEditingController();
   final TextEditingController _inlineFindingController = TextEditingController();
@@ -767,13 +773,127 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             ]),
           ),
         ),
-        // 9. Attachments
+        // 9. Payment
+        Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _sectionTitle('9. Payment')),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Payment'),
+                      onPressed: () => setState(() {
+                        if (_addingPayment) {
+                          _addingPayment = false;
+                          _newPaymentAmount.clear();
+                        } else {
+                          _addingPayment = true;
+                          _newPaymentDate = DateTime.now();
+                        }
+                      }),
+                    )
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (_addingPayment)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('Date: '),
+                            TextButton(
+                              onPressed: () async {
+                                final date = await showDatePicker(
+                                  context: context,
+                                  initialDate: _newPaymentDate,
+                                  firstDate: DateTime(2000),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (date != null) setState(() => _newPaymentDate = date);
+                              },
+                              child: Text('${_newPaymentDate.day}/${_newPaymentDate.month}/${_newPaymentDate.year}'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _newPaymentAmount,
+                          decoration: const InputDecoration(labelText: 'Payment Amount'),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(children: [
+                          ElevatedButton(
+                            onPressed: () {
+                              final amount = double.tryParse(_newPaymentAmount.text.trim());
+                              if (amount != null && amount > 0) {
+                                final payment = PaymentEntry(
+                                  date: _newPaymentDate,
+                                  amount: amount,
+                                );
+                                setState(() {
+                                  _generalPayments.add(payment);
+                                  _addingPayment = false;
+                                  _newPaymentAmount.clear();
+                                  _newPaymentDate = DateTime.now();
+                                });
+                              }
+                            },
+                            child: const Text('Save'),
+                          ),
+                          const SizedBox(width: 12),
+                          TextButton(
+                            onPressed: () => setState(() => _addingPayment = false), 
+                            child: const Text('Cancel')
+                          ),
+                        ])
+                      ],
+                    ),
+                  ),
+                if (_generalPayments.isEmpty)
+                  const Text('No payments recorded.')
+                else
+                  Column(
+                    children: _generalPayments.map((p) => ListTile(
+                      dense: true,
+                      title: Text('${p.date.toLocal().toString().split(' ').first} • \$${p.amount}'),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete, size: 18), 
+                        onPressed: () => setState(() => _generalPayments.remove(p))
+                      ),
+                    )).toList(),
+                  ),
+                if (_generalPayments.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Total Paid: \$${_generalPayments.fold<double>(0, (sum, p) => sum + p.amount)}', 
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)
+                  ),
+                ]
+              ],
+            ),
+          ),
+        ),
+        // 10. Attachments
         Card(
           margin: const EdgeInsets.only(bottom: 16),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              _sectionTitle('9. Attachments (Media)'),
+              _sectionTitle('10. Attachments (Media)'),
               Wrap(
           spacing: 8,
           children: [
@@ -1829,6 +1949,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           treatmentDoneOptions: List.from(_selectedTreatmentDoneOptions),
           notes: _notes.text.trim(),
           prescription: List.from(_prescription),
+          payments: List.from(_generalPayments),
           mediaPaths: List.from(_mediaPaths),
           nextAppointment: _nextAppointment,
         );
@@ -4098,6 +4219,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           _toothPlans.addAll(s.toothPlans);
             _treatmentsDone.addAll(s.treatmentsDone);
           _prescription.addAll(s.prescription);
+          _generalPayments.addAll(s.payments);
           _notes.text = s.notes;
           _nextAppointment = s.nextAppointment;
           break;
@@ -4158,6 +4280,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     _nextAppointment = null;
     _notes.clear();
     _prescription.clear();
+    _generalPayments.clear();
+    _addingPayment = false;
+    _newPaymentAmount.clear();
     // Ortho
     _orthoFindings.clear();
     _bracketType = BracketType.metalRegular;
