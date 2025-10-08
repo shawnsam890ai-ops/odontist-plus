@@ -1079,7 +1079,7 @@ class _AttendanceOverviewWidgetState extends State<_AttendanceOverviewWidget> {
       // Scale content to fit available space
       final content = SingleChildScrollView(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
             // Title row
@@ -1127,7 +1127,7 @@ class _AttendanceOverviewWidgetState extends State<_AttendanceOverviewWidget> {
               SizedBox(
                 height: 32,
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
@@ -1164,7 +1164,7 @@ class _AttendanceOverviewWidgetState extends State<_AttendanceOverviewWidget> {
       );
       
       return Align(
-        alignment: Alignment.topLeft,
+        alignment: Alignment.topCenter,
         child: SizedBox(
           width: availableWidth.clamp(240, 560),
           height: availableHeight,
@@ -1259,7 +1259,7 @@ class _AttendanceOverviewWidgetState extends State<_AttendanceOverviewWidget> {
       }
       return rows.isEmpty ? const SizedBox() : SizedBox(
         height: weeks * cell + (weeks-1) * gap,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: rows),
       );
     });
   }

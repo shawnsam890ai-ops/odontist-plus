@@ -123,7 +123,7 @@ class _CasesOverviewChartState extends State<CasesOverviewChart> with SingleTick
     }
     final animatedValues = _currentValues();
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         // Title
         Padding(
@@ -135,10 +135,11 @@ class _CasesOverviewChartState extends State<CasesOverviewChart> with SingleTick
         ),
         // Chart
         Expanded(
-          child: SizedBox(
-            height: widget.size,
-            width: widget.size,
-            child: MouseRegion(
+          child: Center(
+            child: SizedBox(
+              height: widget.size,
+              width: widget.size,
+              child: MouseRegion(
               onHover: _handleHover,
               onExit: _handleExit,
               child: GestureDetector(
@@ -209,6 +210,7 @@ class _CasesOverviewChartState extends State<CasesOverviewChart> with SingleTick
                 ),
               ),
             ),
+          ),
           ),
         ),
       ],
