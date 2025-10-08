@@ -4,6 +4,9 @@ import '../../providers/patient_provider.dart';
 import '../../providers/revenue_provider.dart';
 import 'add_patient_page.dart';
 import 'patient_list_page.dart';
+import '../../providers/inventory_provider.dart';
+import '../../models/inventory_item.dart';
+import 'attendance_view.dart';
 
 /// Dashboard main page with side navigation and section placeholders.
 class DashboardPage extends StatefulWidget {
@@ -31,6 +34,12 @@ enum DashboardSection {
 
 class _DashboardPageState extends State<DashboardPage> {
   DashboardSection _section = DashboardSection.overview;
+  bool _menuCollapsed = false;
+
+  double _estimateProfit(double totalRevenue, double labCosts) {
+    // Placeholder profit logic: revenue - lab costs (inventory purchase costs not subtracted yet)
+    return totalRevenue - labCosts;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,28 +57,51 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildSideMenu() {
-    return Container(
-      width: 230,
+    final collapsed = _menuCollapsed;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: collapsed ? 68 : 230,
       color: Theme.of(context).colorScheme.surface,
-      child: ListView(
+      child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16,16,16,8),
-            child: Text('Main Menu', style: Theme.of(context).textTheme.titleMedium),
+          SizedBox(
+            height: 56,
+            child: Row(
+              children: [
+                const SizedBox(width: 8),
+                if (!collapsed)
+                  Text('Main Menu', style: Theme.of(context).textTheme.titleMedium),
+                const Spacer(),
+                IconButton(
+                  tooltip: collapsed ? 'Expand' : 'Collapse',
+                  icon: Icon(collapsed ? Icons.chevron_right : Icons.chevron_left),
+                  onPressed: () => setState(() => _menuCollapsed = !collapsed),
+                ),
+              ],
+            ),
           ),
-          ...DashboardSection.values.map((s) => _menuTile(s)).toList(),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView(
+              children: DashboardSection.values.map((s) => _menuTile(s, iconsOnly: collapsed)).toList(),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _menuTile(DashboardSection s) {
+  Widget _menuTile(DashboardSection s, {bool iconsOnly = false}) {
     final selected = s == _section;
     return ListTile(
       leading: Icon(s.icon, color: selected ? Theme.of(context).colorScheme.primary : null),
-      title: Text(s.label, style: TextStyle(fontWeight: selected ? FontWeight.w600 : FontWeight.w400)),
+      title: iconsOnly ? null : Text(s.label, style: TextStyle(fontWeight: selected ? FontWeight.w600 : FontWeight.w400)),
+      horizontalTitleGap: iconsOnly ? 0 : null,
       selected: selected,
       onTap: () => setState(() => _section = s),
+      dense: iconsOnly,
+      minLeadingWidth: 0,
+      contentPadding: EdgeInsets.symmetric(horizontal: iconsOnly ? 12 : 16),
     );
   }
 
@@ -96,8 +128,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // ================= Overview =================
   Widget _overviewSection() {
-    final patientProvider = context.watch<PatientProvider>();
-    final revenueProvider = context.watch<RevenueProvider>();
+  final patientProvider = context.watch<PatientProvider>();
+  final revenueProvider = context.watch<RevenueProvider>();
+  final inventoryProvider = context.watch<InventoryProvider>();
     final today = DateTime.now();
     double todaysRevenue = revenueProvider.entries
         .where((e) => e.date.year == today.year && e.date.month == today.month && e.date.day == today.day)
@@ -119,7 +152,8 @@ class _DashboardPageState extends State<DashboardPage> {
               _DashCard(title: 'Total Revenue', value: '₹${revenueProvider.total.toStringAsFixed(0)}', icon: Icons.account_balance, width: 200),
               _DashCard(title: "Today's Revenue", value: '₹${todaysRevenue.toStringAsFixed(0)}', icon: Icons.today, width: 200),
               _DashCard(title: 'Monthly Revenue', value: '₹${monthlyRevenue.toStringAsFixed(0)}', icon: Icons.calendar_month, width: 220),
-              _DashCard(title: 'Clinic Inventory', value: '—', icon: Icons.inventory_2, width: 200),
+              _DashCard(title: 'Clinic Inventory', value: '₹${inventoryProvider.totalInventoryValue.toStringAsFixed(0)}', icon: Icons.inventory_2, width: 200),
+              _DashCard(title: 'Profit (Est.)', value: '₹${_estimateProfit(revenueProvider.total, inventoryProvider.totalLabCost).toStringAsFixed(0)}', icon: Icons.trending_up, width: 200),
             ]),
             const SizedBox(height: 24),
             _LargePanel(
@@ -223,20 +257,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // ============== Staff Attendance ==============
   Widget _staffAttendanceSection() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Staff Attendance', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 16),
-        Row(children: [
-          ElevatedButton.icon(onPressed: () {}, icon: const Icon(Icons.playlist_add_check), label: const Text('Mark Attendance')),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(onPressed: () {}, icon: const Icon(Icons.summarize), label: const Text('Monthly Summary')),
-        ]),
-        const SizedBox(height: 24),
-        Expanded(child: Center(child: Text('Staff attendance table placeholder')))
-      ]),
-    );
+    return const MonthlyAttendanceView();
   }
 
   // ============== Doctors Attendance ==============
@@ -253,50 +274,263 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // ============== Inventory ==============
   Widget _inventorySection() {
+    final inventoryProvider = context.watch<InventoryProvider>();
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Clinic Inventory & Lab Costs', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Row(children: [
-          ElevatedButton.icon(onPressed: () {}, icon: const Icon(Icons.add), label: const Text('Add Item')),
+          ElevatedButton.icon(onPressed: () => _showAddInventoryDialog(), icon: const Icon(Icons.add), label: const Text('Add Item')),
           const SizedBox(width: 12),
-          ElevatedButton.icon(onPressed: () {}, icon: const Icon(Icons.biotech), label: const Text('Add Lab Cost')),
+          ElevatedButton.icon(onPressed: () => _showAddLabCostDialog(), icon: const Icon(Icons.biotech), label: const Text('Add Lab Cost')),
+          Text('Total Inv: ₹${inventoryProvider.totalInventoryValue.toStringAsFixed(0)}  | Lab Cost: ₹${inventoryProvider.totalLabCost.toStringAsFixed(0)}')
         ]),
-        const SizedBox(height: 24),
-        Expanded(child: Center(child: Text('Inventory & lab cost list placeholder')))
+        const SizedBox(height: 16),
+        Expanded(
+          child: Row(children: [
+            Expanded(
+              child: Card(
+                child: Column(
+                  children: [
+                    const ListTile(title: Text('Inventory Items')),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: inventoryProvider.items.isEmpty
+                          ? const Center(child: Text('No items'))
+                          : ListView.builder(
+                              itemCount: inventoryProvider.items.length,
+                              itemBuilder: (c, i) {
+                                final item = inventoryProvider.items[i];
+                                return ListTile(
+                                  title: Text(item.name),
+                                  subtitle: Text('Qty: ${item.quantity}  Unit: ₹${item.unitCost.toStringAsFixed(0)}  Total: ₹${item.total.toStringAsFixed(0)}'),
+                                  trailing: PopupMenuButton<String>(
+                                    onSelected: (v) {
+                                      if (v == 'edit') _showEditInventoryDialog(item.id, item.name, item.quantity, item.unitCost);
+                                      if (v == 'delete') inventoryProvider.removeItem(item.id);
+                                    },
+                                    itemBuilder: (_) => [
+                                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                                      const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    )
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Card(
+                child: Column(children: [
+                  const ListTile(title: Text('Lab Work Costs')),
+                  const Divider(height: 1),
+                  Expanded(
+                      child: inventoryProvider.labCosts.isEmpty
+                          ? const Center(child: Text('No lab costs'))
+                          : ListView.builder(
+                              itemCount: inventoryProvider.labCosts.length,
+                              itemBuilder: (c, i) {
+                                final cost = inventoryProvider.labCosts[i];
+                                return ListTile(
+                                  title: Text(cost.description),
+                                  subtitle: Text('₹${cost.cost.toStringAsFixed(0)}'),
+                                  trailing: PopupMenuButton<String>(
+                                    onSelected: (v) {
+                                      if (v == 'edit') _showEditLabCostDialog(cost.id, cost.description, cost.cost);
+                                      if (v == 'delete') inventoryProvider.removeLabCost(cost.id);
+                                    },
+                                    itemBuilder: (_) => const [
+                                      PopupMenuItem(value: 'edit', child: Text('Edit')),
+                                      PopupMenuItem(value: 'delete', child: Text('Delete')),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ))
+                ]),
+              ),
+            )
+          ]),
+        )
       ]),
     );
   }
 
   // ============== Settings ==============
   Widget _settingsSection() {
-    return Center(child: Text('Settings placeholder'));
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 16),
+        const Text('General configuration placeholders will appear here.'),
+        const SizedBox(height: 24),
+        Wrap(spacing: 12, runSpacing: 12, children: const [
+          Chip(label: Text('Theme: Light/Dark')),
+          Chip(label: Text('Backup: Not Configured')),
+        ])
+      ]),
+    );
   }
+
+  // ========= Inventory Dialog Helpers =========
+  void _showAddInventoryDialog() {
+    final nameCtrl = TextEditingController();
+    final qtyCtrl = TextEditingController(text: '0');
+    final costCtrl = TextEditingController(text: '0');
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Add Inventory Item'),
+        content: SizedBox(
+          width: 320,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name')),
+            TextField(controller: qtyCtrl, decoration: const InputDecoration(labelText: 'Quantity'), keyboardType: TextInputType.number),
+            TextField(controller: costCtrl, decoration: const InputDecoration(labelText: 'Unit Cost'), keyboardType: TextInputType.number),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              final qty = int.tryParse(qtyCtrl.text) ?? 0;
+              final cost = double.tryParse(costCtrl.text) ?? 0;
+              context.read<InventoryProvider>().addItem(InventoryItem(name: name, quantity: qty, unitCost: cost));
+              Navigator.pop(context);
+            },
+            child: const Text('Add'),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _showEditInventoryDialog(String id, String name, int quantity, double unitCost) {
+    final nameCtrl = TextEditingController(text: name);
+    final qtyCtrl = TextEditingController(text: quantity.toString());
+    final costCtrl = TextEditingController(text: unitCost.toString());
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Edit Inventory Item'),
+        content: SizedBox(
+          width: 320,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name')),
+            TextField(controller: qtyCtrl, decoration: const InputDecoration(labelText: 'Quantity'), keyboardType: TextInputType.number),
+            TextField(controller: costCtrl, decoration: const InputDecoration(labelText: 'Unit Cost'), keyboardType: TextInputType.number),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final n = nameCtrl.text.trim();
+              if (n.isEmpty) return;
+              final q = int.tryParse(qtyCtrl.text) ?? quantity;
+              final c = double.tryParse(costCtrl.text) ?? unitCost;
+              context.read<InventoryProvider>().updateItem(id, name: n, quantity: q, unitCost: c);
+              Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _showAddLabCostDialog() {
+    final descCtrl = TextEditingController();
+    final costCtrl = TextEditingController(text: '0');
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Add Lab Cost'),
+        content: SizedBox(
+          width: 320,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Description')),
+            TextField(controller: costCtrl, decoration: const InputDecoration(labelText: 'Cost'), keyboardType: TextInputType.number),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final d = descCtrl.text.trim();
+              if (d.isEmpty) return;
+              final c = double.tryParse(costCtrl.text) ?? 0;
+              context.read<InventoryProvider>().addLabCost(LabCostItem(description: d, cost: c));
+              Navigator.pop(context);
+            },
+            child: const Text('Add'),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _showEditLabCostDialog(String id, String desc, double cost) {
+    final descCtrl = TextEditingController(text: desc);
+    final costCtrl = TextEditingController(text: cost.toString());
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Edit Lab Cost'),
+        content: SizedBox(
+          width: 320,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Description')),
+            TextField(controller: costCtrl, decoration: const InputDecoration(labelText: 'Cost'), keyboardType: TextInputType.number),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final d = descCtrl.text.trim();
+              if (d.isEmpty) return;
+              final c = double.tryParse(costCtrl.text) ?? cost;
+              context.read<InventoryProvider>().updateLabCost(id, description: d, cost: c);
+              Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          )
+        ],
+      ),
+    );
+  }
+
+  // ========= Reusable Dashboard Widgets =========
 }
 
-// ================= Reusable Widgets =================
 class _DashCard extends StatelessWidget {
   final String title;
   final String value;
   final IconData icon;
   final double width;
   const _DashCard({required this.title, required this.value, required this.icon, this.width = 180});
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
-      height: 120,
       child: Card(
         elevation: 1,
-        clipBehavior: Clip.antiAlias,
         child: Padding(
-          padding: const EdgeInsets.all(12.0),
+          padding: const EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(icon, size: 26),
-            const Spacer(),
-            Text(title, style: Theme.of(context).textTheme.labelMedium),
-            Text(value, style: Theme.of(context).textTheme.titleLarge),
+            Row(children: [Icon(icon, size: 20), const SizedBox(width: 6), Expanded(child: Text(title, style: const TextStyle(fontSize: 12)))]),
+            const SizedBox(height: 8),
+            Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           ]),
         ),
       ),
@@ -308,17 +542,20 @@ class _LargePanel extends StatelessWidget {
   final String title;
   final Widget child;
   const _LargePanel({required this.title, required this.child});
+
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 12),
-          SizedBox(height: 160, child: child)
-        ]),
+      child: SizedBox(
+        width: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            SizedBox(height: 160, child: child)
+          ]),
+        ),
       ),
     );
   }
