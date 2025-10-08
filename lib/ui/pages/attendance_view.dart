@@ -6,6 +6,7 @@ import '../../models/staff_member.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+// Removed patient / session imports after extracting schedule panel to dashboard
 
 class MonthlyAttendanceView extends StatefulWidget {
   const MonthlyAttendanceView({super.key});
@@ -19,6 +20,7 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
   final _monthlySalaryController = TextEditingController();
   bool _staffCollapsed = false;
   String _staffSearch = '';
+  // Schedule day state removed (schedule moved to dashboard overview)
   // Inline add-staff form removed in favor of a dialog.
 
   @override
@@ -309,7 +311,8 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final isNarrow = width < 860 || width < 1100 && !_staffCollapsed && width < 1000;
+  // Threshold for moving to vertical stacking.
+  final isNarrow = width < 1040; // stack vertically below this width
         return Padding(
           padding: const EdgeInsets.all(16),
           child: isNarrow
@@ -317,11 +320,11 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 250),
                     curve: Curves.easeInOut,
-                    height: _staffCollapsed ? 56 : 280,
+                    height: _staffCollapsed ? 56 : 260,
                     child: staffPanel,
                   ),
                   const SizedBox(height: 12),
-                  Expanded(child: calendarCard),
+                  Expanded(child: Card(clipBehavior: Clip.antiAlias, child: calendarCard)),
                 ])
               : Row(children: [
                   AnimatedContainer(
@@ -337,6 +340,8 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
       },
     );
   }
+
+  // Removed: appointment schedule helper widgets and state since schedule moved out
 
   Widget _weekdayHeaderRow() {
     const labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
@@ -850,7 +855,10 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
       }
     }
   }
+
 }
+
+// Removed _ApptEntry class (schedule extraction)
 
 // === Staff View Dialog Content (moved top-level to avoid nesting issues) ===
 class _StaffViewContent extends StatefulWidget {
