@@ -5,6 +5,11 @@ import 'providers/patient_provider.dart';
 import 'providers/revenue_provider.dart';
 import 'providers/lab_provider.dart';
 import 'providers/options_provider.dart';
+import 'providers/appointment_provider.dart';
+import 'providers/clinic_provider.dart';
+import 'providers/inventory_provider.dart';
+import 'providers/staff_attendance_provider.dart';
+import 'providers/doctor_attendance_provider.dart';
 import 'ui/pages/splash_page.dart';
 
 void main() {
@@ -22,6 +27,11 @@ class DentalClinicApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => RevenueProvider()),
         ChangeNotifierProvider(create: (_) => LabProvider()),
         ChangeNotifierProvider(create: (_) => OptionsProvider()),
+        ChangeNotifierProvider(create: (_) => AppointmentProvider()),
+        ChangeNotifierProvider(create: (_) => ClinicProvider()),
+        ChangeNotifierProvider(create: (_) => InventoryProvider()),
+        ChangeNotifierProvider(create: (_) => StaffAttendanceProvider()),
+        ChangeNotifierProvider(create: (_) => DoctorAttendanceProvider()),
       ],
       child: Builder(
         builder: (ctx) {
