@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/staff_attendance_provider.dart';
 import '../../models/staff_member.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class MonthlyAttendanceView extends StatefulWidget {
   const MonthlyAttendanceView({super.key});
@@ -867,6 +870,7 @@ class _StaffViewContent extends StatefulWidget {
 class _StaffViewContentState extends State<_StaffViewContent> {
   bool _historyExpanded = false;
   String _historyMode = 'recent'; // 'recent' or year string
+  String _paidFilter = 'all'; // all | paid | unpaid
 
   List<int> get _availableYears => widget.allHistory.map((e) => e.year).toSet().toList()..sort((a,b)=>b.compareTo(a));
 
@@ -935,6 +939,72 @@ class _StaffViewContentState extends State<_StaffViewContent> {
       ),
     );
   }
+
+  Future<void> _exportCsv() async {
+    final buffer = StringBuffer();
+    buffer.writeln('Month,Year,Present,Absent,Salary,Paid,Payment Date');
+    for (final r in _filteredForExport()) {
+      final present = widget.provider.presentCount(widget.member.name, r.year, r.month);
+      final absent = widget.provider.absentCount(widget.member.name, r.year, r.month);
+      buffer.writeln('${r.month},${r.year},$present,$absent,${r.totalSalary.toStringAsFixed(0)},${r.paid ? 'Yes':'No'},${_formatDate(r.paymentDate)}');
+    }
+    final data = buffer.toString();
+    // Try Clipboard
+    try {
+      await Clipboard.setData(ClipboardData(text: data));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('CSV copied to clipboard')));
+    } catch (_) {}
+  }
+
+  Future<void> _exportPdf() async {
+    final pdfDoc = pw.Document();
+    final rows = <pw.TableRow>[];
+    rows.add(pw.TableRow(children: [
+      _pdfHeaderCell('Month'),
+      _pdfHeaderCell('Present'),
+      _pdfHeaderCell('Absent'),
+      _pdfHeaderCell('Salary'),
+      _pdfHeaderCell('Paid'),
+      _pdfHeaderCell('Payment Date'),
+    ]));
+    for (final r in _filteredForExport()) {
+      final present = widget.provider.presentCount(widget.member.name, r.year, r.month);
+      final absent = widget.provider.absentCount(widget.member.name, r.year, r.month);
+      rows.add(pw.TableRow(children: [
+        _pdfCell('${_monthLabel(r.month)} ${r.year}'),
+        _pdfCell(present.toString()),
+        _pdfCell(absent.toString()),
+        _pdfCell('₹${r.totalSalary.toStringAsFixed(0)}'),
+        _pdfCell(r.paid ? 'Yes' : 'No'),
+        _pdfCell(_formatDate(r.paymentDate)),
+      ]));
+    }
+    pdfDoc.addPage(
+      pw.MultiPage(
+        build: (context) => [
+          pw.Text('Salary History - ${widget.member.name}', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 12),
+          pw.Table(border: pw.TableBorder.all(width: .5), children: rows),
+        ],
+      ),
+    );
+    await Printing.layoutPdf(onLayout: (format) async => pdfDoc.save());
+  }
+
+  Iterable<MonthlySalaryRecord> _filteredForExport() {
+    final base = _displayHistory;
+    return base.where((r) {
+      if (_paidFilter == 'paid') return r.paid;
+      if (_paidFilter == 'unpaid') return !r.paid;
+      return true;
+    });
+  }
+
+  pw.Widget _pdfHeaderCell(String text) => pw.Padding(
+        padding: const pw.EdgeInsets.all(4),
+        child: pw.Text(text, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+      );
+  pw.Widget _pdfCell(String text) => pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(text));
 
   List<DataRow> _buildPrintRows() {
     final provider = widget.provider;
@@ -1084,6 +1154,17 @@ class _StaffViewContentState extends State<_StaffViewContent> {
                             children: [
                               Text(_historyMode == 'recent' ? 'Recent 12 Months' : 'Year $_historyMode', style: const TextStyle(fontWeight: FontWeight.w600)),
                               const Spacer(),
+                              _paidFilterDropdown(),
+                              IconButton(
+                                tooltip: 'CSV Export (copies to clipboard)',
+                                icon: const Icon(Icons.download, size: 20),
+                                onPressed: _exportCsv,
+                              ),
+                              IconButton(
+                                tooltip: 'PDF Export',
+                                icon: const Icon(Icons.picture_as_pdf, size: 20),
+                                onPressed: _exportPdf,
+                              ),
                               IconButton(
                                 tooltip: 'Print / Export View',
                                 icon: const Icon(Icons.print, size: 20),
@@ -1105,6 +1186,8 @@ class _StaffViewContentState extends State<_StaffViewContent> {
   Widget _historyRow(MonthlySalaryRecord rec) {
     final present = widget.provider.presentCount(widget.member.name, rec.year, rec.month);
     final absent = widget.provider.absentCount(widget.member.name, rec.year, rec.month);
+    if (_paidFilter == 'paid' && !rec.paid) return const SizedBox.shrink();
+    if (_paidFilter == 'unpaid' && rec.paid) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(children: [
@@ -1127,6 +1210,20 @@ class _StaffViewContentState extends State<_StaffViewContent> {
           ...years.map((y) => DropdownMenuItem(value: y.toString(), child: Text(y.toString()))),
         ],
         onChanged: (v) => setState(() => _historyMode = v ?? 'recent'),
+      ),
+    );
+  }
+
+  Widget _paidFilterDropdown() {
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: _paidFilter,
+        items: const [
+          DropdownMenuItem(value: 'all', child: Text('All')),
+          DropdownMenuItem(value: 'paid', child: Text('Paid')),
+          DropdownMenuItem(value: 'unpaid', child: Text('Unpaid')),
+        ],
+        onChanged: (v) => setState(() => _paidFilter = v ?? 'all'),
       ),
     );
   }
