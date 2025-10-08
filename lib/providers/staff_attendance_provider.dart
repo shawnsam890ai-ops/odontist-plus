@@ -120,6 +120,39 @@ class StaffAttendanceProvider with ChangeNotifier {
     final rec = ensureSalaryRecord(staffName, year, month);
     if (amount != null) rec.paidAmount = amount;
     rec.paid = true;
+    rec.paymentDate = DateTime.now();
+    notifyListeners();
+  }
+
+  void unmarkSalaryPaid(String staffName, int year, int month) {
+    final rec = getSalaryRecord(staffName, year, month);
+    if (rec == null) return;
+    rec.paid = false;
+    rec.paymentDate = null;
+    notifyListeners();
+  }
+
+  /// Returns a list of salary records (most recent first) for a staff member.
+  List<MonthlySalaryRecord> salaryHistory(String staffName) {
+    final map = _salaryRecords[staffName];
+    if (map == null) return [];
+    final list = map.values.toList();
+    list.sort((a, b) {
+      if (a.year != b.year) return b.year.compareTo(a.year);
+      return b.month.compareTo(a.month);
+    });
+    return list;
+  }
+
+  /// Filter salary history by year (descending months)
+  List<MonthlySalaryRecord> salaryHistoryForYear(String staffName, int year) {
+    return salaryHistory(staffName).where((r) => r.year == year).toList();
+  }
+
+  /// Manually set payment date (e.g., when user adjusts)
+  void setPaymentDate(String staffName, int year, int month, DateTime date) {
+    final rec = ensureSalaryRecord(staffName, year, month);
+    rec.paymentDate = date;
     notifyListeners();
   }
 
@@ -159,5 +192,6 @@ class MonthlySalaryRecord {
   double totalSalary; // decided externally (fixed or computed)
   bool paid;
   double paidAmount;
-  MonthlySalaryRecord({required this.year, required this.month, this.totalSalary = 0, this.paid = false, this.paidAmount = 0});
+  DateTime? paymentDate;
+  MonthlySalaryRecord({required this.year, required this.month, this.totalSalary = 0, this.paid = false, this.paidAmount = 0, this.paymentDate});
 }

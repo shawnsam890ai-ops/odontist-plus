@@ -124,8 +124,6 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                     final name = filtered[i];
                     final member = provider.staffMembers.firstWhere((m) => m.name == name, orElse: () => StaffMember(id: '', name: name));
                     final selected = name == selectedStaff;
-                    final p = provider.presentCount(name, _month.year, _month.month);
-                    final a = provider.absentCount(name, _month.year, _month.month);
                     final primaryPhone = member.phoneNumbers.isNotEmpty ? member.phoneNumbers.first : '';
                     return GestureDetector(
                       onTap: () => setState(() => _staff = name),
@@ -160,8 +158,7 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                                     Text('(${member.age})', style: const TextStyle(fontSize: 12, color: Colors.grey))
                                   ]
                                 ]),
-                                const SizedBox(height: 2),
-                                Text('P:$p A:$a', style: const TextStyle(fontSize: 11)),
+                                // Removed P:A stats per new requirement
                               ],
                             ),
                           ),
@@ -171,6 +168,11 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                               child: Text(primaryPhone, style: const TextStyle(fontSize: 12)),
                             ),
                           Wrap(spacing: 4, children: [
+                            IconButton(
+                              tooltip: 'View Details',
+                              icon: const Icon(Icons.info_outline, size: 18),
+                              onPressed: () => _showViewStaffDialog(member),
+                            ),
                             IconButton(
                               tooltip: 'Edit',
                               icon: const Icon(Icons.edit, size: 18),
@@ -211,19 +213,7 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                   Text(_monthLabel(_month), style: const TextStyle(fontWeight: FontWeight.w600)),
                   IconButton(onPressed: () => _changeMonth(1), icon: const Icon(Icons.chevron_right)),
                   const Spacer(),
-                  SizedBox(
-                    width: 160,
-                    child: TextField(
-                      controller: _monthlySalaryController,
-                      decoration: const InputDecoration(labelText: 'Monthly Salary'),
-                      keyboardType: TextInputType.number,
-                      onSubmitted: (v) {
-                        final val = double.tryParse(v) ?? 0;
-                        provider.setMonthlySalary(selectedStaff, _month.year, _month.month, val);
-                        setState(() {});
-                      },
-                    ),
-                  )
+                  Text('Salary: ₹${monthlySalary.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w500))
                 ]),
                 const SizedBox(height: 8),
                 Row(children: [
@@ -240,11 +230,12 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                 const SizedBox(height: 4),
                 Expanded(
                   child: GridView.builder(
+                    padding: const EdgeInsets.only(top: 2),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 7,
-                      mainAxisSpacing: 4,
-                      crossAxisSpacing: 4,
-                      childAspectRatio: .9,
+                      mainAxisSpacing: 6,
+                      crossAxisSpacing: 6,
+                      childAspectRatio: 1.4, // wider than tall to visually shrink height
                     ),
                     itemCount: days.length,
                     itemBuilder: (c, i) {
@@ -255,18 +246,22 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                           provider.cycle(selectedStaff, day);
                           setState(() {});
                         },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: _cellColor(state),
-                            borderRadius: BorderRadius.circular(5),
+                        child: Center(
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: _cellColor(state),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text('${day.day}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                  color: state == false ? Colors.white : Colors.black87,
+                                )),
                           ),
-                          alignment: Alignment.center,
-                          child: Text('${day.day}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                                color: state == false ? Colors.white : Colors.black87,
-                              )),
                         ),
                       );
                     },
@@ -275,24 +270,28 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                 const SizedBox(height: 8),
                 Wrap(spacing: 12, runSpacing: 8, children: [
                   ElevatedButton.icon(
-                    onPressed: () {
-                      final val = double.tryParse(_monthlySalaryController.text) ?? 0;
-                      provider.setMonthlySalary(selectedStaff, _month.year, _month.month, val);
-                      setState(() {});
-                    },
-                    icon: const Icon(Icons.save),
-                    label: const Text('Save Salary'),
+                    onPressed: () => _showSetSalaryDialog(selectedStaff),
+                    icon: const Icon(Icons.edit),
+                    label: const Text('Set Salary'),
                   ),
                   ElevatedButton.icon(
-                    onPressed: paid
-                        ? null
-                        : () {
-              provider.markSalaryPaid(selectedStaff, _month.year, _month.month,
-                amount: double.tryParse(_monthlySalaryController.text));
-                            setState(() {});
-                          },
-                    icon: const Icon(Icons.check_circle),
-                    label: const Text('Mark Paid'),
+                    onPressed: () async {
+                      if (!paid) {
+                        final confirm = await _confirmMarkPaid(selectedStaff, monthlySalary);
+                        if (confirm == true) {
+                          provider.markSalaryPaid(selectedStaff, _month.year, _month.month, amount: monthlySalary);
+                          setState(() {});
+                        }
+                      } else {
+                        final confirm = await _confirmUnmarkPaid(selectedStaff);
+                        if (confirm == true) {
+                          provider.unmarkSalaryPaid(selectedStaff, _month.year, _month.month);
+                          setState(() {});
+                        }
+                      }
+                    },
+                    icon: Icon(paid ? Icons.undo : Icons.check_circle),
+                    label: Text(paid ? 'Unmark Paid' : 'Mark Paid'),
                   ),
                   OutlinedButton.icon(
                     onPressed: _launchUPIPayment,
@@ -536,6 +535,49 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
     );
   }
 
+  Future<void> _showSetSalaryDialog(String staffName) async {
+    final provider = context.read<StaffAttendanceProvider>();
+    final existing = provider.getSalaryRecord(staffName, _month.year, _month.month);
+    final ctrl = TextEditingController(text: existing == null || existing.totalSalary == 0 ? '' : existing.totalSalary.toStringAsFixed(0));
+    final formKey = GlobalKey<FormState>();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Set Salary - $staffName'),
+        content: Form(
+          key: formKey,
+          child: SizedBox(
+            width: 260,
+            child: TextFormField(
+              controller: ctrl,
+              decoration: const InputDecoration(labelText: 'Monthly Salary', prefixText: '₹'),
+              keyboardType: TextInputType.number,
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Enter amount';
+                final d = double.tryParse(v); if (d == null || d < 0) return 'Invalid';
+                return null;
+              },
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              final val = double.parse(ctrl.text);
+              provider.setMonthlySalary(staffName, _month.year, _month.month, val);
+              _monthlySalaryController.text = val.toStringAsFixed(0); // keep internal reference for mark paid earlier logic
+              setState(() {});
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          )
+        ],
+      ),
+    );
+  }
+
   Future<void> _showEditStaffDialog(StaffMember member) async {
     final provider = context.read<StaffAttendanceProvider>();
     final formKey = GlobalKey<FormState>();
@@ -701,6 +743,65 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
     );
   }
 
+  Future<void> _showViewStaffDialog(StaffMember member) async {
+    final provider = context.read<StaffAttendanceProvider>();
+    final salaryRec = provider.getSalaryRecord(member.name, _month.year, _month.month);
+    final present = provider.presentCount(member.name, _month.year, _month.month);
+    final absent = provider.absentCount(member.name, _month.year, _month.month);
+    final history = provider.salaryHistory(member.name);
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560, maxHeight: 660),
+            child: _StaffViewContent(
+              member: member,
+              provider: provider,
+              salaryRec: salaryRec,
+              present: present,
+              absent: absent,
+              allHistory: history,
+              currentMonth: _month,
+              onClose: () => Navigator.pop(ctx),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // (old _detailRow helper removed; replaced by localized _row in dialog widget)
+  Future<bool?> _confirmMarkPaid(String staff, double amount) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Mark Paid'),
+        content: Text('Mark salary of ₹${amount.toStringAsFixed(0)} as PAID for $staff?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes, Mark Paid')),
+        ],
+      ),
+    );
+  }
+
+  Future<bool?> _confirmUnmarkPaid(String staff) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Undo Paid Status'),
+        content: Text('Set salary status back to UNPAID for $staff?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes, Undo')),
+        ],
+      ),
+    );
+  }
+
   bool _matchesPhone(StaffAttendanceProvider provider, String staffName, String query) {
     if (query.isEmpty) return true;
     final m = provider.staffMembers.firstWhere((s) => s.name == staffName, orElse: () => StaffMember(id: '', name: staffName));
@@ -747,3 +848,287 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
     }
   }
 }
+
+// === Staff View Dialog Content (moved top-level to avoid nesting issues) ===
+class _StaffViewContent extends StatefulWidget {
+  final StaffMember member;
+  final StaffAttendanceProvider provider;
+  final MonthlySalaryRecord? salaryRec;
+  final int present;
+  final int absent;
+  final List<MonthlySalaryRecord> allHistory; // already sorted desc
+  final DateTime currentMonth;
+  final VoidCallback onClose;
+  const _StaffViewContent({required this.member, required this.provider, required this.salaryRec, required this.present, required this.absent, required this.allHistory, required this.currentMonth, required this.onClose});
+  @override
+  State<_StaffViewContent> createState() => _StaffViewContentState();
+}
+
+class _StaffViewContentState extends State<_StaffViewContent> {
+  bool _historyExpanded = false;
+  String _historyMode = 'recent'; // 'recent' or year string
+
+  List<int> get _availableYears => widget.allHistory.map((e) => e.year).toSet().toList()..sort((a,b)=>b.compareTo(a));
+
+  List<MonthlySalaryRecord> get _displayHistory {
+    if (widget.allHistory.isEmpty) return const [];
+    if (_historyMode == 'recent') {
+      return widget.allHistory.take(12).toList();
+    }
+    final year = int.tryParse(_historyMode);
+    if (year == null) return widget.allHistory.take(12).toList();
+    return widget.allHistory.where((r) => r.year == year).toList()..sort((a,b){
+      if (a.year != b.year) return b.year.compareTo(a.year);
+      return b.month.compareTo(a.month);
+    });
+  }
+
+  String _monthLabel(int m) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[m-1];
+  }
+
+  String _formatDate(DateTime? d){
+    if(d==null) return '—';
+    return '${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')}/${d.year}';
+  }
+
+  Future<void> _pickPaymentDate(MonthlySalaryRecord rec) async {
+    final initial = rec.paymentDate ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      widget.provider.setPaymentDate(widget.member.name, rec.year, rec.month, picked);
+      setState(() {});
+    }
+  }
+
+  Future<void> _showPrintDialog() async {
+    final rows = _buildPrintRows();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Salary History - ${widget.member.name}'),
+        content: SizedBox(
+          width: 600,
+          child: rows.isEmpty ? const Text('No data to print') : SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columns: const [
+                DataColumn(label: Text('Month')),
+                DataColumn(label: Text('Present')),
+                DataColumn(label: Text('Absent')),
+                DataColumn(label: Text('Salary')),
+                DataColumn(label: Text('Payment Date')),
+              ],
+              rows: rows,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  List<DataRow> _buildPrintRows() {
+    final provider = widget.provider;
+    final list = widget.allHistory.take(36).toList(); // reasonable cap for print (3 years)
+    return list.map((r) {
+      final present = provider.presentCount(widget.member.name, r.year, r.month);
+      final absent = provider.absentCount(widget.member.name, r.year, r.month);
+      return DataRow(cells: [
+        DataCell(Text('${_monthLabel(r.month)} ${r.year}')),
+        DataCell(Text(present.toString())),
+        DataCell(Text(absent.toString())),
+        DataCell(Text('₹${r.totalSalary.toStringAsFixed(0)}${r.paid ? '' : ''}')),
+        DataCell(Text(_formatDate(r.paymentDate))),
+      ]);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final member = widget.member;
+    final salaryRec = widget.salaryRec;
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Scrollbar(
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Expanded(child: Text(member.name, style: Theme.of(context).textTheme.headlineSmall)),
+                IconButton(onPressed: widget.onClose, icon: const Icon(Icons.close))
+              ]),
+              const SizedBox(height: 4),
+              _row('Age', member.age?.toString() ?? '—'),
+              _row('Sex', member.sex ?? '—'),
+              _row('Phone', member.phoneNumbers.isEmpty ? '—' : member.phoneNumbers.first),
+              if (member.phoneNumbers.length > 1) _row('Alt Phone', member.phoneNumbers[1]),
+              _row('Address', member.address ?? '—'),
+              _row('Salary (This Month)', salaryRec == null ? '—' : '₹${salaryRec.totalSalary.toStringAsFixed(0)}'),
+              _row('Paid', salaryRec == null ? '—' : (salaryRec.paid ? 'Yes' : 'No')),
+              if (salaryRec != null) _paymentDateRow(salaryRec),
+              _row('Present Days', widget.present.toString()),
+              _row('Absent Days', widget.absent.toString()),
+              const SizedBox(height: 12),
+              _buildHistorySection(),
+              const SizedBox(height: 20),
+              Text('Emergency Contact', style: Theme.of(context).textTheme.titleMedium),
+              const Divider(height: 16),
+              if (member.emergencyContact == null)
+                const Text('Not provided', style: TextStyle(fontStyle: FontStyle.italic))
+              else ...[
+                _row('Name', member.emergencyContact!.name),
+                _row('Relation', member.emergencyContact!.relation),
+                _row('Phone', member.emergencyContact!.phone),
+                if (member.emergencyContact!.address != null && member.emergencyContact!.address!.isNotEmpty)
+                  _row('Address', member.emergencyContact!.address!),
+              ],
+              const SizedBox(height: 24),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  onPressed: widget.onClose,
+                  child: const Text('Close'),
+                ),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _row(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SizedBox(width: 140, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))),
+      Expanded(child: Text(value)),
+    ]),
+  );
+
+  Widget _paymentDateRow(MonthlySalaryRecord rec) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const SizedBox(width: 140, child: Text('Payment Date', style: TextStyle(fontWeight: FontWeight.w600))),
+        Expanded(
+          child: Row(children: [
+            Text(_formatDate(rec.paymentDate)),
+            if (rec.paid) ...[
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Edit Payment Date',
+                padding: EdgeInsets.zero,
+                icon: const Icon(Icons.edit_calendar, size: 18),
+                onPressed: () => _pickPaymentDate(rec),
+              )
+            ]
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildHistorySection() {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(.5)),
+        borderRadius: BorderRadius.circular(12),
+        color: Theme.of(context).colorScheme.surface,
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => setState(() => _historyExpanded = !_historyExpanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(children: [
+                const Icon(Icons.history, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text('Salary History', style: Theme.of(context).textTheme.titleMedium)),
+                if (widget.allHistory.isNotEmpty && _historyExpanded)
+                  _yearSelector(),
+                const SizedBox(width: 4),
+                Icon(_historyExpanded ? Icons.expand_less : Icons.expand_more)
+              ]),
+            ),
+          ),
+          if (_historyExpanded)
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: Padding(
+                key: ValueKey(_historyMode + _displayHistory.length.toString()),
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: widget.allHistory.isEmpty
+                    ? const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: Text('No salary history', style: TextStyle(fontStyle: FontStyle.italic)),
+                        ),
+                      )
+                    : Column(
+                        children: [
+                          Row(
+                            children: [
+                              Text(_historyMode == 'recent' ? 'Recent 12 Months' : 'Year $_historyMode', style: const TextStyle(fontWeight: FontWeight.w600)),
+                              const Spacer(),
+                              IconButton(
+                                tooltip: 'Print / Export View',
+                                icon: const Icon(Icons.print, size: 20),
+                                onPressed: _showPrintDialog,
+                              )
+                            ],
+                          ),
+                          const Divider(height: 12),
+                          ..._displayHistory.map((h) => _historyRow(h)).toList(),
+                        ],
+                      ),
+              ),
+            )
+        ],
+      ),
+    );
+  }
+
+  Widget _historyRow(MonthlySalaryRecord rec) {
+    final present = widget.provider.presentCount(widget.member.name, rec.year, rec.month);
+    final absent = widget.provider.absentCount(widget.member.name, rec.year, rec.month);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(children: [
+        SizedBox(width: 90, child: Text('${rec.month.toString().padLeft(2,'0')}/${rec.year}')),
+        Expanded(child: Text('₹${rec.totalSalary.toStringAsFixed(0)}${rec.paid ? ' • Paid' : ''}', style: TextStyle(color: rec.paid ? Colors.green.shade700 : null))),
+        SizedBox(width: 54, child: Text('P:$present', style: const TextStyle(fontSize: 12))),
+        SizedBox(width: 54, child: Text('A:$absent', style: const TextStyle(fontSize: 12))),
+        SizedBox(width: 90, child: Text(_formatDate(rec.paymentDate), style: const TextStyle(fontSize: 12))),
+      ]),
+    );
+  }
+
+  Widget _yearSelector() {
+    final years = _availableYears;
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: _historyMode == 'recent' ? 'recent' : _historyMode,
+        items: [
+          const DropdownMenuItem(value: 'recent', child: Text('Recent 12')),
+          ...years.map((y) => DropdownMenuItem(value: y.toString(), child: Text(y.toString()))),
+        ],
+        onChanged: (v) => setState(() => _historyMode = v ?? 'recent'),
+      ),
+    );
+  }
+}
+
