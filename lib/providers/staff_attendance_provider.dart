@@ -43,6 +43,32 @@ class StaffAttendanceProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update existing staff basic information by id. Name must remain unique.
+  void updateStaff(StaffMember updated) {
+    final idx = _staff.indexWhere((s) => s.id == updated.id);
+    if (idx == -1) return;
+    // If name changed ensure no collision
+    final newName = updated.name.trim();
+    if (newName.isEmpty) return;
+    if (_staff.any((s) => s.name == newName && s.id != updated.id)) return;
+    final oldName = _staff[idx].name;
+    _staff[idx] = updated;
+    // If name changed migrate attendance + salary records to new name key
+    if (oldName != newName) {
+      // Rebuild attendance entries with new name (since staffName is final)
+      for (int i = 0; i < _entries.length; i++) {
+        final e = _entries[i];
+        if (e.staffName == oldName) {
+          _entries[i] = StaffAttendanceEntry(id: e.id, staffName: newName, date: e.date, present: e.present);
+        }
+      }
+      if (_salaryRecords.containsKey(oldName)) {
+        _salaryRecords[newName] = _salaryRecords.remove(oldName)!;
+      }
+    }
+    notifyListeners();
+  }
+
   // Backwards compatible simple add by name
   void addStaff(String name) => addStaffDetailed(StaffMember(id: DateTime.now().millisecondsSinceEpoch.toString(), name: name.trim()));
 

@@ -15,6 +15,7 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
   String? _staff;
   final _monthlySalaryController = TextEditingController();
   bool _staffCollapsed = false;
+  String _staffSearch = '';
   // Inline add-staff form removed in favor of a dialog.
 
   @override
@@ -93,32 +94,105 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
               icon: const Icon(Icons.calendar_month, size: 20))
         ]
       ]),
+      if (!_staffCollapsed) ...[
+        const SizedBox(height: 8),
+        TextField(
+          decoration: const InputDecoration(
+            prefixIcon: Icon(Icons.search, size: 18),
+            hintText: 'Search staff by name or phone',
+            isDense: true,
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (v) => setState(() => _staffSearch = v.trim().toLowerCase()),
+        ),
+      ],
       if (!_staffCollapsed) const SizedBox(height: 8),
       if (!_staffCollapsed)
         Expanded(
           child: staffList.isEmpty
               ? const Center(child: Text('No staff'))
-              : ListView.builder(
-                  itemCount: staffList.length,
+              : ListView.separated(
+                  itemCount: staffList
+                      .where((s) => _staffSearch.isEmpty || s.toLowerCase().contains(_staffSearch) || _matchesPhone(provider, s, _staffSearch))
+                      .length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (c, i) {
-                    final name = staffList[i];
+                    final filtered = staffList
+                        .where((s) => _staffSearch.isEmpty || s.toLowerCase().contains(_staffSearch) || _matchesPhone(provider, s, _staffSearch))
+                        .toList()
+                      ..sort();
+                    final name = filtered[i];
+                    final member = provider.staffMembers.firstWhere((m) => m.name == name, orElse: () => StaffMember(id: '', name: name));
                     final selected = name == selectedStaff;
                     final p = provider.presentCount(name, _month.year, _month.month);
                     final a = provider.absentCount(name, _month.year, _month.month);
-                    return ListTile(
-                      dense: true,
-                      selected: selected,
-                      title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text('P:$p A:$a'),
+                    final primaryPhone = member.phoneNumbers.isNotEmpty ? member.phoneNumbers.first : '';
+                    return GestureDetector(
                       onTap: () => setState(() => _staff = name),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        tooltip: 'Remove',
-                        onPressed: () {
-                          provider.removeStaff(name);
-                          if (_staff == name) _staff = null;
-                          setState(() {});
-                        },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeInOut,
+                        decoration: BoxDecoration(
+                          color: selected ? Theme.of(context).colorScheme.primary.withOpacity(0.08) : Theme.of(context).colorScheme.surface,
+                          border: Border.all(
+                              color: selected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).dividerColor.withOpacity(.4)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        child: Row(children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Row(children: [
+                                  Flexible(
+                                      child: Text(member.name,
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: selected
+                                                  ? Theme.of(context).colorScheme.primary
+                                                  : Theme.of(context).textTheme.bodyMedium?.color))),
+                                  if (member.age != null) ...[
+                                    const SizedBox(width: 6),
+                                    Text('(${member.age})', style: const TextStyle(fontSize: 12, color: Colors.grey))
+                                  ]
+                                ]),
+                                const SizedBox(height: 2),
+                                Text('P:$p A:$a', style: const TextStyle(fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                          if (primaryPhone.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: Text(primaryPhone, style: const TextStyle(fontSize: 12)),
+                            ),
+                          Wrap(spacing: 4, children: [
+                            IconButton(
+                              tooltip: 'Edit',
+                              icon: const Icon(Icons.edit, size: 18),
+                              onPressed: () => _showEditStaffDialog(member),
+                            ),
+                            IconButton(
+                              tooltip: 'WhatsApp',
+                              icon: Icon(Icons.chat, size: 18, color: primaryPhone.isEmpty ? null : Colors.green),
+                              onPressed: primaryPhone.isEmpty ? null : () => _launchWhatsApp(primaryPhone),
+                            ),
+                            IconButton(
+                              tooltip: 'Call',
+                              icon: const Icon(Icons.call, size: 18),
+                              onPressed: primaryPhone.isEmpty ? null : () => _launchCall(primaryPhone),
+                            ),
+                            IconButton(
+                              tooltip: 'Remove',
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: () => _confirmDeleteStaff(provider, name),
+                            ),
+                          ])
+                        ]),
                       ),
                     );
                   },
@@ -168,9 +242,9 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                   child: GridView.builder(
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 7,
-                      mainAxisSpacing: 6,
-                      crossAxisSpacing: 6,
-                      childAspectRatio: 1,
+                      mainAxisSpacing: 4,
+                      crossAxisSpacing: 4,
+                      childAspectRatio: .9,
                     ),
                     itemCount: days.length,
                     itemBuilder: (c, i) {
@@ -184,12 +258,13 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                         child: Container(
                           decoration: BoxDecoration(
                             color: _cellColor(state),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(5),
                           ),
                           alignment: Alignment.center,
                           child: Text('${day.day}',
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
+                                fontSize: 12,
                                 color: state == false ? Colors.white : Colors.black87,
                               )),
                         ),
@@ -459,5 +534,216 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
         );
       },
     );
+  }
+
+  Future<void> _showEditStaffDialog(StaffMember member) async {
+    final provider = context.read<StaffAttendanceProvider>();
+    final formKey = GlobalKey<FormState>();
+    final nameCtrl = TextEditingController(text: member.name);
+    final ageCtrl = TextEditingController(text: member.age?.toString() ?? '');
+    final addressCtrl = TextEditingController(text: member.address ?? '');
+    final primaryPhoneCtrl = TextEditingController(text: member.phoneNumbers.isNotEmpty ? member.phoneNumbers.first : '');
+    final extraPhoneCtrl = TextEditingController(
+        text: member.phoneNumbers.length > 1 ? member.phoneNumbers[1] : '');
+  final monthlySalaryCtrl = TextEditingController();
+  final emgNameCtrl = TextEditingController(text: member.emergencyContact?.name ?? '');
+  final emgRelationCtrl = TextEditingController(text: member.emergencyContact?.relation ?? '');
+  final emgPhoneCtrl = TextEditingController(text: member.emergencyContact?.phone ?? '');
+  final emgAddressCtrl = TextEditingController(text: member.emergencyContact?.address ?? '');
+    final salaryRec = provider.getSalaryRecord(member.name, _month.year, _month.month);
+    if (salaryRec != null && salaryRec.totalSalary > 0) {
+      monthlySalaryCtrl.text = salaryRec.totalSalary.toStringAsFixed(0);
+    }
+    String? sex = member.sex;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600, maxHeight: 520),
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            appBar: AppBar(
+              automaticallyImplyLeading: false,
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              title: const Text('Edit Staff'),
+              actions: [
+                IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close))
+              ],
+            ),
+            body: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(children: [
+                    TextFormField(
+                      controller: nameCtrl,
+                      decoration: const InputDecoration(labelText: 'Name *'),
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: ageCtrl,
+                          decoration: const InputDecoration(labelText: 'Age'),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: sex,
+                          decoration: const InputDecoration(labelText: 'Sex'),
+                          items: const [
+                            DropdownMenuItem(value: 'M', child: Text('Male')),
+                            DropdownMenuItem(value: 'F', child: Text('Female')),
+                            DropdownMenuItem(value: 'O', child: Text('Other')),
+                          ],
+                          onChanged: (v) => sex = v,
+                        ),
+                      )
+                    ]),
+                    const SizedBox(height: 12),
+                    TextFormField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'Address')),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: primaryPhoneCtrl,
+                      decoration: const InputDecoration(labelText: 'Phone Number *'),
+                      keyboardType: TextInputType.phone,
+                      validator: (v) => v == null || v.trim().length < 7 ? 'Invalid' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: extraPhoneCtrl,
+                      decoration: const InputDecoration(labelText: 'Additional Phone'),
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      controller: monthlySalaryCtrl,
+                      decoration: const InputDecoration(labelText: 'Monthly Salary (This Month)'),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 20),
+                    Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Emergency Contact', style: Theme.of(context).textTheme.titleSmall)),
+                    const SizedBox(height: 8),
+                    TextFormField(controller: emgNameCtrl, decoration: const InputDecoration(labelText: 'Name')),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Expanded(child: TextFormField(controller: emgRelationCtrl, decoration: const InputDecoration(labelText: 'Relation'))),
+                      const SizedBox(width: 12),
+                      Expanded(child: TextFormField(controller: emgPhoneCtrl, decoration: const InputDecoration(labelText: 'Phone'), keyboardType: TextInputType.phone)),
+                    ]),
+                    const SizedBox(height: 12),
+                    TextFormField(controller: emgAddressCtrl, decoration: const InputDecoration(labelText: 'Address')),
+                    const SizedBox(height: 28),
+                    Row(children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.save),
+                          label: const Text('Save'),
+                          onPressed: () {
+                            if (!formKey.currentState!.validate()) return;
+                            final updated = StaffMember(
+                              id: member.id,
+                              name: nameCtrl.text.trim(),
+                              age: int.tryParse(ageCtrl.text),
+                              sex: sex,
+                              address: addressCtrl.text.trim().isEmpty ? null : addressCtrl.text.trim(),
+                              phoneNumbers: [
+                                primaryPhoneCtrl.text.trim(),
+                                if (extraPhoneCtrl.text.trim().isNotEmpty) extraPhoneCtrl.text.trim(),
+                              ],
+                              emergencyContact: emgNameCtrl.text.trim().isEmpty
+                                  ? null
+                                  : EmergencyContact(
+                                      name: emgNameCtrl.text.trim(),
+                                      relation: emgRelationCtrl.text.trim(),
+                                      phone: emgPhoneCtrl.text.trim(),
+                                      address: emgAddressCtrl.text.trim().isEmpty ? null : emgAddressCtrl.text.trim(),
+                                    ),
+                            );
+                            provider.updateStaff(updated);
+                            final salary = double.tryParse(monthlySalaryCtrl.text) ?? 0;
+                            if (salary > 0) {
+                              provider.setMonthlySalary(updated.name, _month.year, _month.month, salary);
+                            }
+                            if (member.name != updated.name) {
+                              setState(() => _staff = updated.name);
+                            }
+                            Navigator.pop(ctx);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.close),
+                          label: const Text('Cancel'),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      )
+                    ])
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _matchesPhone(StaffAttendanceProvider provider, String staffName, String query) {
+    if (query.isEmpty) return true;
+    final m = provider.staffMembers.firstWhere((s) => s.name == staffName, orElse: () => StaffMember(id: '', name: staffName));
+    return m.phoneNumbers.any((p) => p.replaceAll(' ', '').contains(query.replaceAll(' ', '')));
+  }
+
+  Future<void> _confirmDeleteStaff(StaffAttendanceProvider provider, String name) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Staff'),
+        content: Text('Are you sure you want to delete "$name"? This will remove attendance and salary records.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          )
+        ],
+      ),
+    );
+    if (result == true) {
+      provider.removeStaff(name);
+      if (_staff == name) setState(() => _staff = null);
+    }
+  }
+
+  Future<void> _launchWhatsApp(String phone) async {
+    final uri = Uri.parse('https://wa.me/$phone');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('WhatsApp not available')));
+      }
+    }
+  }
+
+  Future<void> _launchCall(String phone) async {
+    final uri = Uri.parse('tel:$phone');
+    if (!await canLaunchUrl(uri) || !await launchUrl(uri)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot start call')));
+      }
+    }
   }
 }
