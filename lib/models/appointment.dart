@@ -5,6 +5,7 @@ class Appointment {
   final String patientId;
   final DateTime dateTime;
   final String? reason;
+  final String? doctorId;
   final String? doctorName;
 
   Appointment({
@@ -12,6 +13,7 @@ class Appointment {
     required this.patientId,
     required this.dateTime,
     this.reason,
+    this.doctorId,
     this.doctorName,
   }) : id = id ?? const Uuid().v4();
 }

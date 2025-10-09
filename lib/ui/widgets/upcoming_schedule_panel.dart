@@ -3,13 +3,17 @@ import 'package:provider/provider.dart';
 import '../../models/patient.dart';
 import '../../models/treatment_session.dart';
 import '../../providers/patient_provider.dart';
+import '../../providers/doctor_provider.dart';
+import '../../providers/appointment_provider.dart';
+import '../../models/appointment.dart' as appt;
 
 /// Compact Upcoming Schedule panel for the dashboard Overview.
 /// Shows a selectable week strip and appointments (sessions or nextAppointments)
 /// for the selected day.
 class UpcomingSchedulePanel extends StatefulWidget {
   final EdgeInsetsGeometry padding;
-  const UpcomingSchedulePanel({super.key, this.padding = const EdgeInsets.all(0)});
+  final bool showDoctorFilter;
+  const UpcomingSchedulePanel({super.key, this.padding = const EdgeInsets.all(0), this.showDoctorFilter = false});
 
   @override
   State<UpcomingSchedulePanel> createState() => _UpcomingSchedulePanelState();
@@ -17,23 +21,34 @@ class UpcomingSchedulePanel extends StatefulWidget {
 
 class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
   DateTime _selectedDay = DateTime.now();
+  String? _doctorId;
 
   @override
   Widget build(BuildContext context) {
     final patientProvider = context.watch<PatientProvider>();
+    final doctorProvider = context.watch<DoctorProvider>();
+    final apptProvider = context.watch<AppointmentProvider>();
     final dayKey = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
     final entries = <_ApptEntry>[];
+    // Include scheduled Appointments for the day
+    for (final appt.Appointment a in apptProvider.forDay(dayKey)) {
+      if (_doctorId != null && a.doctorId != _doctorId) continue;
+      final p = patientProvider.byId(a.patientId);
+      if (p != null) {
+        entries.add(_ApptEntry(p, a.dateTime, a.reason, a.doctorName));
+      }
+    }
     for (final Patient p in patientProvider.patients) {
       for (final TreatmentSession s in p.sessions) {
         final sd = DateTime(s.date.year, s.date.month, s.date.day);
         if (sd == dayKey) {
-          entries.add(_ApptEntry(p, s.date, s.chiefComplaint?.complaints.isNotEmpty == true ? s.chiefComplaint!.complaints.first : null));
+          entries.add(_ApptEntry(p, s.date, s.chiefComplaint?.complaints.isNotEmpty == true ? s.chiefComplaint!.complaints.first : null, null));
         }
         if (s.nextAppointment != null) {
           final na = s.nextAppointment!;
           final nd = DateTime(na.year, na.month, na.day);
           if (nd == dayKey) {
-            entries.add(_ApptEntry(p, na, s.chiefComplaint?.complaints.isNotEmpty == true ? s.chiefComplaint!.complaints.first : null));
+            entries.add(_ApptEntry(p, na, s.chiefComplaint?.complaints.isNotEmpty == true ? s.chiefComplaint!.complaints.first : null, null));
           }
         }
       }
@@ -47,6 +62,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
         children: [
           _headerRow(),
           const SizedBox(height: 8),
+          _filterRow(doctorProvider),
           _weekStrip(),
           const SizedBox(height: 8),
           Expanded(
@@ -101,6 +117,28 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
         todayBtn,
       ]);
     });
+  }
+
+  Widget _filterRow(DoctorProvider doctorProvider) {
+    if (!widget.showDoctorFilter) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(children: [
+        const Text('Doctor:', style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 220,
+          child: DropdownButtonFormField<String?>(
+            value: _doctorId,
+            items: [
+              const DropdownMenuItem<String?>(value: null, child: Text('All')),
+              for (final d in doctorProvider.doctors) DropdownMenuItem<String?>(value: d.id, child: Text(d.name)),
+            ],
+            onChanged: (v) => setState(() => _doctorId = v),
+          ),
+        ),
+      ]),
+    );
   }
 
   Widget _weekStrip(){
@@ -185,7 +223,11 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
               if (e.complaint != null && e.complaint!.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 SizedBox(width: 70, child: Text(e.complaint!, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.grey)))
-              ]
+              ],
+              if (e.doctor != null) ...[
+                const SizedBox(height: 6),
+                SizedBox(width: 70, child: Text(e.doctor!, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.grey)))
+              ],
             ]),
           ),
           Expanded(
@@ -203,4 +245,4 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
   String _weekdayShort(int w){ const labels=['Mon','Tue','Wed','Thu','Fri','Sat','Sun']; return labels[(w-1)%7]; }
 }
 
-class _ApptEntry { _ApptEntry(this.patient, this.time, this.complaint); final Patient patient; final DateTime time; final String? complaint; }
+class _ApptEntry { _ApptEntry(this.patient, this.time, this.complaint, this.doctor); final Patient patient; final DateTime time; final String? complaint; final String? doctor; }
