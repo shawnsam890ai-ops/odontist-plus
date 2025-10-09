@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'login_page.dart';
 
 class SplashPage extends StatefulWidget {
@@ -28,15 +29,52 @@ class _SplashPageState extends State<SplashPage> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Loading Dental Clinic...'),
-          ],
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [cs.primary.withOpacity(.10), cs.secondary.withOpacity(.10), cs.surface],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 84,
+                height: 84,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(colors: [cs.primary, cs.tertiary]),
+                  boxShadow: [
+                    BoxShadow(color: cs.primary.withOpacity(.35), blurRadius: 24, spreadRadius: 2, offset: const Offset(0,8)),
+                  ],
+                ),
+                child: Icon(Icons.health_and_safety, color: cs.onPrimary, size: 42),
+              )
+                  .animate()
+                  .scale(duration: 500.ms, curve: Curves.easeOutBack)
+                  .then()
+                  .shake(duration: 500.ms, hz: 2, curve: Curves.easeOut),
+              const SizedBox(height: 18),
+              Text('Dental Clinic', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800))
+                  .animate()
+                  .fadeIn(duration: 600.ms)
+                  .move(begin: const Offset(0, 8), end: Offset.zero, curve: Curves.easeOutCubic),
+              const SizedBox(height: 12),
+              Text('Loading your workspace...', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant))
+                  .animate()
+                  .fadeIn(duration: 650.ms, delay: 150.ms),
+              const SizedBox(height: 22),
+              SizedBox(
+                width: 160,
+                child: LinearProgressIndicator(borderRadius: BorderRadius.circular(12), color: cs.primary),
+              ).animate().fadeIn(duration: 400.ms),
+            ],
+          ),
         ),
       ),
     );

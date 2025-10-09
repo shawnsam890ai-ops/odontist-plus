@@ -10,7 +10,9 @@ import 'providers/clinic_provider.dart';
 import 'providers/inventory_provider.dart';
 import 'providers/staff_attendance_provider.dart';
 import 'providers/doctor_attendance_provider.dart';
+import 'providers/doctor_provider.dart';
 import 'ui/pages/splash_page.dart';
+import 'core/app_theme.dart';
 
 void main() {
   runApp(const DentalClinicApp());
@@ -32,6 +34,7 @@ class DentalClinicApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => InventoryProvider()),
         ChangeNotifierProvider(create: (_) => StaffAttendanceProvider()),
         ChangeNotifierProvider(create: (_) => DoctorAttendanceProvider()),
+  ChangeNotifierProvider(create: (_) => DoctorProvider()),
       ],
       child: Builder(
         builder: (ctx) {
@@ -40,16 +43,16 @@ class DentalClinicApp extends StatelessWidget {
             final opt = ctx.read<OptionsProvider>();
             final pats = ctx.read<PatientProvider>();
             opt.registerPatientProvider(pats);
+            // Load persisted doctors and ledger
+            ctx.read<DoctorProvider>().load();
           });
           return MaterialApp(
-        title: 'Dental Clinic',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-          useMaterial3: true,
-          inputDecorationTheme: const InputDecorationTheme(border: OutlineInputBorder()),
-        ),
-        onGenerateRoute: AppRouter.generate,
-        initialRoute: SplashPage.routeName,
+            title: 'Dental Clinic',
+            theme: AppTheme.light(),
+            darkTheme: AppTheme.dark(),
+            themeMode: ThemeMode.system,
+            onGenerateRoute: AppRouter.generate,
+            initialRoute: SplashPage.routeName,
           );
         }
       ),

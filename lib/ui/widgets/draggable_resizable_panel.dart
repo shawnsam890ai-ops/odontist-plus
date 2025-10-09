@@ -107,10 +107,10 @@ class _DraggableResizablePanelState extends State<DraggableResizablePanel> {
   }
 
   Rect _clampRect(Rect r) {
-  final maxLeft = (widget.boundsSize.width - r.width).clamp(0, double.infinity) as double;
-  final maxTop = (widget.boundsSize.height - r.height).clamp(0, double.infinity) as double;
-  final left = r.left.clamp(0, maxLeft) as double;
-  final top = r.top.clamp(0, maxTop) as double;
+  final maxLeft = (widget.boundsSize.width - r.width).clamp(0.0, double.infinity);
+  final maxTop = (widget.boundsSize.height - r.height).clamp(0.0, double.infinity);
+  final left = r.left.clamp(0.0, maxLeft);
+  final top = r.top.clamp(0.0, maxTop);
   return Rect.fromLTWH(left, top, r.width, r.height);
   }
 

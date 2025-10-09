@@ -11,6 +11,7 @@ import '../../providers/staff_attendance_provider.dart';
 import '../widgets/cases_overview_chart.dart';
 import '../widgets/upcoming_schedule_panel.dart';
 import '../widgets/draggable_resizable_panel.dart';
+import 'doctors_payments_section.dart';
 
 /// Dashboard main page with side navigation and section placeholders.
 class DashboardPage extends StatefulWidget {
@@ -376,46 +377,56 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildMetricsGrid(double todaysRevenue, double monthlyRevenue, PatientProvider patientProvider, InventoryProvider inventoryProvider, RevenueProvider revenueProvider) {
+    final items = [
+      (
+        title: 'Total Profit',
+        value: _estimateProfit(revenueProvider.total, inventoryProvider.totalLabCost),
+        subtitle: 'After lab',
+        icon: Icons.trending_up
+      ),
+      (
+        title: 'Today',
+        value: todaysRevenue,
+        subtitle: 'Revenue',
+        icon: Icons.today
+      ),
+      (
+        title: 'Monthly',
+        value: monthlyRevenue,
+        subtitle: 'Revenue',
+        icon: Icons.calendar_month
+      ),
+      (
+        title: 'Patients',
+        value: patientProvider.patients.length.toDouble(),
+        subtitle: 'Total',
+        icon: Icons.people
+      ),
+      (
+        title: 'Inventory',
+        value: inventoryProvider.totalInventoryValue,
+        subtitle: 'Value',
+        icon: Icons.inventory_2
+      ),
+      (
+        title: 'Revenue',
+        value: revenueProvider.total,
+        subtitle: 'All Time',
+        icon: Icons.account_balance
+      ),
+    ];
     return Wrap(
       spacing: 16,
       runSpacing: 16,
       children: [
-        _DashMetricCard(
-          title: 'Total Profit',
-          value: '₹${_estimateProfit(revenueProvider.total, inventoryProvider.totalLabCost).toStringAsFixed(0)}',
-          subtitle: 'After lab',
-          icon: Icons.trending_up,
-        ),
-        _DashMetricCard(
-          title: 'Today',
-          value: '₹${todaysRevenue.toStringAsFixed(0)}',
-          subtitle: 'Revenue',
-          icon: Icons.today,
-        ),
-        _DashMetricCard(
-          title: 'Monthly',
-          value: '₹${monthlyRevenue.toStringAsFixed(0)}',
-          subtitle: 'Revenue',
-          icon: Icons.calendar_month,
-        ),
-        _DashMetricCard(
-          title: 'Patients',
-          value: patientProvider.patients.length.toString(),
-          subtitle: 'Total',
-          icon: Icons.people,
-        ),
-        _DashMetricCard(
-          title: 'Inventory',
-          value: '₹${inventoryProvider.totalInventoryValue.toStringAsFixed(0)}',
-          subtitle: 'Value',
-          icon: Icons.inventory_2,
-        ),
-        _DashMetricCard(
-          title: 'Revenue',
-          value: '₹${revenueProvider.total.toStringAsFixed(0)}',
-          subtitle: 'All Time',
-          icon: Icons.account_balance,
-        ),
+        for (int i = 0; i < items.length; i++)
+          _DashMetricCard(
+            title: items[i].title,
+            value: items[i].value,
+            subtitle: items[i].subtitle,
+            icon: items[i].icon,
+            appearDelayMs: 60 * i,
+          ),
       ],
     );
   }
@@ -489,7 +500,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 padding: const EdgeInsets.all(6),
                 child: _DashMetricCard(
                   title: 'Total Profit',
-                  value: '₹${_estimateProfit(revenueProvider.total, inventoryProvider.totalLabCost).toStringAsFixed(0)}',
+                  value: _estimateProfit(revenueProvider.total, inventoryProvider.totalLabCost),
                   subtitle: 'After lab',
                   icon: Icons.trending_up,
                   fixedSize: false,
@@ -512,7 +523,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 padding: const EdgeInsets.all(6),
                 child: _DashMetricCard(
                   title: 'Today',
-                  value: '₹${todaysRevenue.toStringAsFixed(0)}',
+                  value: todaysRevenue,
                   subtitle: 'Revenue',
                   icon: Icons.today,
                   fixedSize: false,
@@ -535,7 +546,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 padding: const EdgeInsets.all(6),
                 child: _DashMetricCard(
                   title: 'Monthly',
-                  value: '₹${monthlyRevenue.toStringAsFixed(0)}',
+                  value: monthlyRevenue,
                   subtitle: 'Revenue',
                   icon: Icons.calendar_month,
                   fixedSize: false,
@@ -558,7 +569,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 padding: const EdgeInsets.all(6),
                 child: _DashMetricCard(
                   title: 'Patients',
-                  value: patientProvider.patients.length.toString(),
+                  value: patientProvider.patients.length.toDouble(),
                   subtitle: 'Total',
                   icon: Icons.people,
                   fixedSize: false,
@@ -581,7 +592,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 padding: const EdgeInsets.all(6),
                 child: _DashMetricCard(
                   title: 'Inventory',
-                  value: '₹${inventoryProvider.totalInventoryValue.toStringAsFixed(0)}',
+                  value: inventoryProvider.totalInventoryValue,
                   subtitle: 'Value',
                   icon: Icons.inventory_2,
                   fixedSize: false,
@@ -604,7 +615,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 padding: const EdgeInsets.all(6),
                 child: _DashMetricCard(
                   title: 'Revenue',
-                  value: '₹${revenueProvider.total.toStringAsFixed(0)}',
+                  value: revenueProvider.total,
                   subtitle: 'All Time',
                   icon: Icons.account_balance,
                   fixedSize: false,
@@ -769,14 +780,8 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // ============== Doctors Attendance ==============
   Widget _doctorsAttendanceSection() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Doctors Attendance & Payments', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 16),
-        Expanded(child: Center(child: Text('Doctors attendance / payment tracker placeholder')))
-      ]),
-    );
+    // Use the new doctors payments section (includes list, rules, calculator)
+    return const DoctorsPaymentsSection();
   }
 
   // ============== Inventory ==============
@@ -1316,94 +1321,192 @@ class _DashCard extends StatelessWidget {
   }
 }
 
-class _DashMetricCard extends StatelessWidget {
+class _DashMetricCard extends StatefulWidget {
   final String title;
-  final String value;
+  final double value;
   final String? subtitle;
   final IconData icon;
   final bool fixedSize; // when false, fills parent and scales
-  const _DashMetricCard({Key? key, required this.title, required this.value, required this.icon, this.subtitle, this.fixedSize = true}) : super(key: key);
+  final int appearDelayMs;
+  const _DashMetricCard({Key? key, required this.title, required this.value, required this.icon, this.subtitle, this.fixedSize = true, this.appearDelayMs = 0}) : super(key: key);
+
+  @override
+  State<_DashMetricCard> createState() => _DashMetricCardState();
+}
+
+class _DashMetricCardState extends State<_DashMetricCard> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _countAnim;
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+    _countAnim = Tween<double>(begin: 0, end: widget.value).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    if (widget.appearDelayMs > 0) {
+      Future.delayed(Duration(milliseconds: widget.appearDelayMs), () {
+        if (mounted) _controller.forward();
+      });
+    } else {
+      _controller.forward();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _DashMetricCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) {
+      _countAnim = Tween<double>(begin: _countAnim.value, end: widget.value).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final surface = Theme.of(context).colorScheme.surface;
+    final cs = Theme.of(context).colorScheme;
     const accentColor = Color(0xFF2563EB);
-    Widget card = Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: surface, // Flat color instead of gradient
-          // Remove 3D shadow effects completely
-          border: Border.all(color: Colors.grey.withOpacity(.15), width: 0.5),
+    final surface = cs.surface;
+    final translate = _pressed ? Offset(0, 0) : (_hovered ? const Offset(0, -2) : Offset.zero);
+    final scale = _pressed ? 0.98 : (_hovered ? 1.02 : 1.0);
+    Widget card = AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
+      transform: Matrix4.identity()
+        ..translate(translate.dx, translate.dy)
+        ..scale(scale),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [surface, surface.withOpacity(.96)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        padding: const EdgeInsets.all(14),
-        child: LayoutBuilder(builder: (context, c) {
-          final s = (c.maxWidth < c.maxHeight ? c.maxWidth : c.maxHeight);
-            // scale factors based on available space (baseline 160)
-          final scale = (s / 160).clamp(.6, 2.2);
-          final iconSize = 22 * scale;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40 * scale,
-                height: 40 * scale,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(colors: [accentColor.withOpacity(.18), accentColor.withOpacity(.06)]),
-                  border: Border.all(color: accentColor.withOpacity(.25)),
-                ),
-                child: Icon(icon, color: accentColor, size: iconSize),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(_hovered ? .10 : .05), blurRadius: 14, offset: const Offset(0,8)),
+          BoxShadow(color: cs.primary.withOpacity(_hovered ? .08 : .03), blurRadius: 6, offset: const Offset(0,2)),
+        ],
+        border: Border.all(color: cs.outlineVariant.withOpacity(.25)),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: LayoutBuilder(builder: (context, c) {
+        final s = (c.maxWidth < c.maxHeight ? c.maxWidth : c.maxHeight);
+        final effScale = (s / 160).clamp(.6, 2.2);
+        final iconSize = 22 * effScale;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40 * effScale,
+              height: 40 * effScale,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(colors: [accentColor.withOpacity(.25), accentColor.withOpacity(.08)]),
+                border: Border.all(color: accentColor.withOpacity(.35)),
               ),
-              const Spacer(),
-              FittedBox(
-                alignment: Alignment.centerLeft,
-                child: Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: accentColor)),
-              ),
-              const SizedBox(height: 4),
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-              if (subtitle != null) ...[
-                const SizedBox(height: 2),
-                Text(subtitle!, style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
-              ]
-            ],
-          );
-        }),
-      );
-    if (fixedSize) {
+              child: Icon(widget.icon, color: accentColor, size: iconSize),
+            ),
+            const Spacer(),
+            AnimatedBuilder(
+              animation: _countAnim,
+              builder: (_, __) {
+                final v = _countAnim.value;
+                final isInt = widget.title == 'Patients';
+                final text = isInt ? v.toInt().toString() : '₹${v.toStringAsFixed(0)}';
+                return FittedBox(
+                  alignment: Alignment.centerLeft,
+                  child: Text(text, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: accentColor)),
+                );
+              },
+            ),
+            const SizedBox(height: 4),
+            Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            if (widget.subtitle != null) ...[
+              const SizedBox(height: 2),
+              Text(widget.subtitle!, style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+            ]
+          ],
+        );
+      }),
+    );
+    if (widget.fixedSize) {
       card = SizedBox(width: 160, height: 160, child: card);
     }
-    return card;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        child: card,
+      ),
+    );
   }
 }
 
-class _LargePanel extends StatelessWidget {
+class _LargePanel extends StatefulWidget {
   final String title;
   final Widget child;
   const _LargePanel({required this.title, required this.child});
 
   @override
+  State<_LargePanel> createState() => _LargePanelState();
+}
+
+class _LargePanelState extends State<_LargePanel> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    final surface = Theme.of(context).colorScheme.surface;
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(colors: [surface, surface.withOpacity(.94)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(.05), blurRadius: 12, offset: const Offset(0,6)),
-          BoxShadow(color: Colors.black.withOpacity(.03), blurRadius: 2, offset: const Offset(0,1)),
-        ],
-        border: Border.all(color: Colors.black.withOpacity(.05)),
+    final cs = Theme.of(context).colorScheme;
+    final surface = cs.surface;
+    final translateY = _pressed ? 0.0 : (_hovered ? -2.0 : 0.0);
+    final shadowOpacity = _pressed ? .02 : (_hovered ? .10 : .05);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() { _hovered = false; _pressed = false; }),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          transform: Matrix4.identity()..translate(0.0, translateY),
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              colors: [surface, surface.withOpacity(.96)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(shadowOpacity), blurRadius: 18, offset: const Offset(0,10)),
+              BoxShadow(color: cs.primary.withOpacity(_hovered ? .06 : .03), blurRadius: 6, offset: const Offset(0,2)),
+            ],
+            border: Border.all(color: cs.outlineVariant.withOpacity(.25)),
+          ),
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Text(widget.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+              const Spacer(),
+            ]),
+            const SizedBox(height: 12),
+            widget.child,
+          ]),
+        ),
       ),
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-          const Spacer(),
-        ]),
-        const SizedBox(height: 12),
-        child,
-      ]),
     );
   }
 }

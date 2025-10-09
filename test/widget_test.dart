@@ -10,9 +10,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dental_clinic_app/main.dart';
 
 void main() {
-  testWidgets('Splash screen shows loading text', (WidgetTester tester) async {
-    await tester.pumpWidget(const DentalClinicApp());
-    // Initial frame should contain loading text
-    expect(find.text('Loading Dental Clinic...'), findsOneWidget);
+  testWidgets('Splash screen shows modern splash content', (WidgetTester tester) async {
+  await tester.pumpWidget(const DentalClinicApp());
+  // Allow initial animations to start and settle one frame
+  await tester.pump(const Duration(milliseconds: 16));
+    // Should show app title and loading message
+    expect(find.text('Dental Clinic'), findsOneWidget);
+    expect(find.text('Loading your workspace...'), findsOneWidget);
   });
 }

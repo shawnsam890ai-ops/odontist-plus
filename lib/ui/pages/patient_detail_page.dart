@@ -5,6 +5,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
+import '../../providers/doctor_provider.dart';
+import '../../providers/doctor_attendance_provider.dart';
+import '../../models/procedures.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
@@ -197,12 +200,20 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                           if (_editingSessionId == null) {
                                             final session = _createSession();
                                             await context.read<PatientProvider>().addSession(patient.id, session);
+                                            final syncMsg = await _syncDoctorPaymentsFromSession(context, patient.name, session);
+                                            if (mounted && syncMsg != null) {
+                                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(syncMsg)));
+                                            }
                                             if (mounted) {
                                               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session saved.')));
                                             }
                                           } else {
                                             final updated = _createSession().copyWith(id: _editingSessionId);
                                             await context.read<PatientProvider>().updateSession(patient.id, updated);
+                                            final syncMsg2 = await _syncDoctorPaymentsFromSession(context, patient.name, updated);
+                                            if (mounted && syncMsg2 != null) {
+                                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(syncMsg2)));
+                                            }
                                             if (mounted) {
                                               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session updated.')));
                                             }
@@ -4886,6 +4897,73 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     _newLabProcedure.clear();
     _newLabPayment.clear();
     _linkedSessionId = null;
+  }
+
+  Future<String?> _syncDoctorPaymentsFromSession(BuildContext context, String patientName, TreatmentSession session) async {
+    final docProv = context.read<DoctorProvider>();
+    final attend = context.read<DoctorAttendanceProvider>();
+    // Build a list of (doctorName, procedureKey, amount, date, dedupeTag)
+    final entries = <({String doctorName, String procedure, double amount, DateTime date, String tag})>[];
+    switch (session.type) {
+      case TreatmentType.rootCanal:
+        final doctorName = session.rootCanalDoctorInCharge;
+        final total = session.rootCanalTotalAmount ?? 0;
+        if (doctorName != null && total > 0) {
+          for (final st in session.rootCanalSteps) {
+            final amt = st.payment ?? 0;
+            if (amt > 0) {
+              entries.add((doctorName: doctorName, procedure: Procedures.rct, amount: amt, date: st.date, tag: 'rx:${session.id}:${st.id}'));
+            }
+          }
+        }
+        break;
+      case TreatmentType.orthodontic:
+        final doctorName = session.orthoDoctorInCharge;
+        final total = session.orthoTotalAmount ?? 0;
+        if (doctorName != null && total > 0) {
+          for (final st in session.orthoSteps) {
+            final amt = st.payment ?? 0;
+            if (amt > 0) {
+              entries.add((doctorName: doctorName, procedure: Procedures.ortho, amount: amt, date: st.date, tag: 'rx:${session.id}:${st.id}'));
+            }
+          }
+        }
+        break;
+      case TreatmentType.prosthodontic:
+        final doctorName = session.prosthodonticDoctorInCharge;
+        final total = session.prosthodonticTotalAmount ?? 0;
+        if (doctorName != null && total > 0) {
+          for (final st in session.prosthodonticSteps) {
+            final amt = st.payment ?? 0;
+            if (amt > 0) {
+              entries.add((doctorName: doctorName, procedure: Procedures.prostho, amount: amt, date: st.date, tag: 'rx:${session.id}:${st.id}'));
+            }
+          }
+        }
+        break;
+      case TreatmentType.general:
+        // If you have general doctor and general total with payments, map here if needed.
+        break;
+      case TreatmentType.labWork:
+        break;
+    }
+    String? firstMessage;
+    for (final e in entries) {
+      final doc = docProv.byName(e.doctorName);
+      if (doc == null) continue;
+      final msg = docProv.recordPayment(
+        doctorId: doc.id,
+        procedureKey: e.procedure,
+        amountReceived: e.amount,
+        date: e.date,
+        patient: patientName,
+        dedupeTag: e.tag,
+        attendance: attend,
+      );
+      // Capture the first non-null message to display (e.g., attendance required)
+      firstMessage ??= msg;
+    }
+    return firstMessage;
   }
 
   void _startFollowUpFrom(TreatmentSession base) {
