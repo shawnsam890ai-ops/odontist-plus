@@ -124,6 +124,7 @@ class _CasesOverviewChartState extends State<CasesOverviewChart> with SingleTick
     final animatedValues = _currentValues();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       children: [
         // Title
         Padding(
@@ -133,13 +134,12 @@ class _CasesOverviewChartState extends State<CasesOverviewChart> with SingleTick
             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
         ),
-        // Chart
-        Expanded(
-          child: Center(
-            child: SizedBox(
-              height: widget.size,
-              width: widget.size,
-              child: MouseRegion(
+        // Chart (fixed-size box so it works in scroll/unbounded contexts)
+        Center(
+          child: SizedBox(
+            height: widget.size,
+            width: widget.size,
+            child: MouseRegion(
               onHover: _handleHover,
               onExit: _handleExit,
               child: GestureDetector(
@@ -210,7 +210,6 @@ class _CasesOverviewChartState extends State<CasesOverviewChart> with SingleTick
                 ),
               ),
             ),
-          ),
           ),
         ),
       ],
@@ -340,7 +339,7 @@ class _PointTooltip extends StatelessWidget {
               Row(children: [
                 Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
                 const SizedBox(width: 6),
-                Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)))
+                Flexible(fit: FlexFit.loose, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)))
               ]),
               const SizedBox(height: 2),
               Text('Value: $value'),

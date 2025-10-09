@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'login_page.dart';
 
@@ -9,13 +10,20 @@ class SplashPage extends StatefulWidget {
 }
 
 class _SplashPageState extends State<SplashPage> {
+  Timer? _navTimer;
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 2), () {
+    _navTimer = Timer(const Duration(seconds: 2), () {
       if (!mounted) return;
       Navigator.of(context).pushReplacementNamed(LoginPage.routeName);
     });
+  }
+
+  @override
+  void dispose() {
+    _navTimer?.cancel();
+    super.dispose();
   }
 
   @override
