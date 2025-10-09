@@ -4907,8 +4907,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     switch (session.type) {
       case TreatmentType.rootCanal:
         final doctorName = session.rootCanalDoctorInCharge;
-        final total = session.rootCanalTotalAmount ?? 0;
-        if (doctorName != null && total > 0) {
+        if (doctorName != null) {
           for (final st in session.rootCanalSteps) {
             final amt = st.payment ?? 0;
             if (amt > 0) {
@@ -4919,8 +4918,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         break;
       case TreatmentType.orthodontic:
         final doctorName = session.orthoDoctorInCharge;
-        final total = session.orthoTotalAmount ?? 0;
-        if (doctorName != null && total > 0) {
+        if (doctorName != null) {
           for (final st in session.orthoSteps) {
             final amt = st.payment ?? 0;
             if (amt > 0) {
@@ -4931,8 +4929,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         break;
       case TreatmentType.prosthodontic:
         final doctorName = session.prosthodonticDoctorInCharge;
-        final total = session.prosthodonticTotalAmount ?? 0;
-        if (doctorName != null && total > 0) {
+        if (doctorName != null) {
           for (final st in session.prosthodonticSteps) {
             final amt = st.payment ?? 0;
             if (amt > 0) {

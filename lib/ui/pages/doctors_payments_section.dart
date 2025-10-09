@@ -180,8 +180,6 @@ class _DoctorTile extends StatelessWidget {
               Wrap(spacing: 8, runSpacing: 8, children: [
                 for (final e in rules.entries) _RuleChip(doctorId: d.id, procedureKey: e.key, rule: e.value)
               ]),
-            const SizedBox(height: 16),
-            _AllocationQuickCalc(doctorId: d.id),
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
@@ -401,6 +399,11 @@ class _LedgerSection extends StatelessWidget {
               const Text('Payments Ledger', style: TextStyle(fontWeight: FontWeight.w600)),
               const Spacer(),
               OutlinedButton.icon(
+                onPressed: () => _showMakePayoutDialog(context),
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text('Make Payment'),
+              ),
+              OutlinedButton.icon(
                 onPressed: () {
                   final csv = provider.exportCsv(entries);
                   _showCsvDialog(context, csv);
@@ -477,7 +480,27 @@ class _LedgerSection extends StatelessWidget {
               final isPayout = e.type == EntryType.payout;
               return ListTile(
                 title: Text('${d?.name ?? e.doctorId} • ${isPayout ? 'PAYOUT' : e.procedureKey.toUpperCase()} • ${isPayout ? '₹${e.doctorShare.toStringAsFixed(0)}' : '₹${e.amountReceived.toStringAsFixed(0)}'}'),
-                subtitle: Text('${isPayout ? '' : 'Doctor: ₹${e.doctorShare.toStringAsFixed(0)}  |  Clinic: ₹${e.clinicShare.toStringAsFixed(0)}  •  '} $dateStr${e.patient != null ? '  •  ${e.patient}' : ''}${e.note != null ? '  •  ${e.note}' : ''}'),
+                subtitle: Text('${isPayout ? '' : 'Doctor: ₹${e.doctorShare.toStringAsFixed(0)}  |  Clinic: ₹${e.clinicShare.toStringAsFixed(0)}  •  '} $dateStr${e.mode != null ? '  •  ${e.mode}' : ''}${e.patient != null ? '  •  ${e.patient}' : ''}${e.note != null ? '  •  ${e.note}' : ''}'),
+                trailing: IconButton(
+                  tooltip: 'Delete entry',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: const Text('Delete entry?'),
+                        content: const Text('This will permanently remove the ledger entry.'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+                        ],
+                      ),
+                    );
+                    if (ok == true) {
+                      context.read<DoctorProvider>().deleteLedgerEntry(e.id);
+                    }
+                  },
+                ),
               );
             },
           ),
@@ -498,6 +521,93 @@ void _showCsvDialog(BuildContext context, String csv) {
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+      ],
+    ),
+  );
+}
+
+void _showMakePayoutDialog(BuildContext context) {
+  final provider = context.read<DoctorProvider>();
+  final allDocs = provider.doctors;
+  if (allDocs.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No doctors available')));
+    return;
+  }
+  String doctorId = allDocs.first.id;
+  final amountCtrl = TextEditingController(text: '0');
+  final noteCtrl = TextEditingController();
+  final modeCtrl = ValueNotifier<String>('Cash');
+  DateTime date = DateTime.now();
+  showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Make Payment to Doctor'),
+      content: SizedBox(
+        width: 420,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          DropdownButtonFormField<String>(
+            value: doctorId,
+            decoration: const InputDecoration(labelText: 'Doctor'),
+            items: [for (final d in allDocs) DropdownMenuItem(value: d.id, child: Text(d.name))],
+            onChanged: (v) => doctorId = v ?? doctorId,
+          ),
+          const SizedBox(height: 8),
+          TextField(controller: amountCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Amount')),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: modeCtrl.value,
+            decoration: const InputDecoration(labelText: 'Mode of transaction'),
+            items: const [
+              DropdownMenuItem(value: 'Cash', child: Text('Cash')),
+              DropdownMenuItem(value: 'UPI', child: Text('UPI')),
+              DropdownMenuItem(value: 'Card', child: Text('Card')),
+              DropdownMenuItem(value: 'Bank Transfer', child: Text('Bank Transfer')),
+            ],
+            onChanged: (v) => modeCtrl.value = v ?? 'Cash',
+          ),
+          const SizedBox(height: 8),
+          TextField(controller: noteCtrl, decoration: const InputDecoration(labelText: 'Note (optional)')),
+          const SizedBox(height: 8),
+          Row(children: [
+            const Text('Date:'),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: () async {
+                final now = DateTime.now();
+                final picked = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(now.year - 1), lastDate: DateTime(now.year + 1));
+                if (picked != null) {
+                  date = picked;
+                }
+              },
+              child: Text('${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'),
+            ),
+          ])
+        ]),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: () async {
+            final amt = double.tryParse(amountCtrl.text) ?? 0;
+            if (amt <= 0) return;
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: const Text('Confirm Payment'),
+                content: Text('Pay ₹${amt.toStringAsFixed(0)} to ${provider.byId(doctorId)?.name ?? 'doctor'}?'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
+                  ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes')),
+                ],
+              ),
+            );
+            if (confirm == true) {
+              provider.recordPayoutWithMode(doctorId: doctorId, amount: amt, date: date, note: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(), mode: modeCtrl.value);
+              Navigator.pop(context);
+            }
+          },
+          child: const Text('Done'),
+        )
       ],
     ),
   );

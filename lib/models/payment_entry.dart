@@ -10,6 +10,7 @@ class PaymentEntry {
   final double clinicShare;
   final String? patient;
   final String? note;
+  final String? mode; // e.g., Cash, UPI, Card, Bank Transfer
   final EntryType type;
 
   PaymentEntry({
@@ -22,6 +23,7 @@ class PaymentEntry {
     required this.clinicShare,
     this.patient,
     this.note,
+    this.mode,
     this.type = EntryType.payment,
   });
 
@@ -35,6 +37,7 @@ class PaymentEntry {
         'clinicShare': clinicShare,
         'patient': patient,
         'note': note,
+        'mode': mode,
     'type': type.name,
       };
 
@@ -48,6 +51,7 @@ class PaymentEntry {
         clinicShare: (j['clinicShare'] as num).toDouble(),
         patient: j['patient'] as String?,
         note: j['note'] as String?,
+        mode: j['mode'] as String?,
         type: _parseType(j['type'] as String?),
       );
 

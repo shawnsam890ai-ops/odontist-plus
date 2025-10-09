@@ -163,6 +163,40 @@ class DoctorProvider with ChangeNotifier {
     _persist();
   }
 
+  // Overload with payout mode
+  void recordPayoutWithMode({required String doctorId, required double amount, DateTime? date, String? note, String? mode}) {
+    final when = date ?? DateTime.now();
+    final entry = PaymentEntry(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      doctorId: doctorId,
+      date: when,
+      procedureKey: 'payout',
+      amountReceived: 0,
+      doctorShare: amount,
+      clinicShare: 0,
+      patient: null,
+      note: note,
+      mode: mode,
+      type: EntryType.payout,
+    );
+    _ledger.add(entry);
+    notifyListeners();
+    _persist();
+  }
+
+  // Delete a ledger entry by id
+  void deleteLedgerEntry(String entryId) {
+    final idx = _ledger.indexWhere((e) => e.id == entryId);
+    if (idx == -1) return;
+    final e = _ledger.removeAt(idx);
+    if (e.type == EntryType.payment) {
+      _totalDoctor -= e.doctorShare;
+      _totalClinic -= e.clinicShare;
+    }
+    notifyListeners();
+    _persist();
+  }
+
   // Ledger filters -----------------------------------------------------------
   List<PaymentEntry> filteredLedger({String? doctorId, String? procedureKey, DateTime? start, DateTime? end}) {
     return _ledger.where((e) {
