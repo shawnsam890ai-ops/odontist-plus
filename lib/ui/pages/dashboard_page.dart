@@ -14,6 +14,7 @@ import '../widgets/cases_overview_chart.dart';
 import '../widgets/upcoming_schedule_panel.dart';
 import '../widgets/draggable_resizable_panel.dart';
 import 'doctors_payments_section.dart';
+import '../../providers/lab_registry_provider.dart';
 import '../../providers/doctor_provider.dart';
 import 'patient_detail_page.dart';
 
@@ -34,6 +35,7 @@ enum DashboardSection {
   staffAttendance('Staff Attendance', Icons.badge_outlined),
   doctorsAttendance('Doctors Attendance', Icons.medical_services_outlined),
   inventory('Inventory', Icons.inventory_2_outlined),
+  labs('Labs', Icons.biotech_outlined),
   settings('Settings', Icons.settings_outlined);
 
   final String label;
@@ -171,6 +173,8 @@ class _DashboardPageState extends State<DashboardPage> {
         return _doctorsAttendanceSection();
       case DashboardSection.inventory:
         return _inventorySection();
+      case DashboardSection.labs:
+        return _labsSection();
       case DashboardSection.settings:
         return _settingsSection();
     }
@@ -794,86 +798,279 @@ class _DashboardPageState extends State<DashboardPage> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Clinic Inventory & Lab Costs', style: Theme.of(context).textTheme.headlineSmall),
+        Text('Clinic Inventory', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 12),
         Row(children: [
           ElevatedButton.icon(onPressed: () => _showAddInventoryDialog(), icon: const Icon(Icons.add), label: const Text('Add Item')),
           const SizedBox(width: 12),
-          ElevatedButton.icon(onPressed: () => _showAddLabCostDialog(), icon: const Icon(Icons.biotech), label: const Text('Add Lab Cost')),
-          Text('Total Inv: ₹${inventoryProvider.totalInventoryValue.toStringAsFixed(0)}  | Lab Cost: ₹${inventoryProvider.totalLabCost.toStringAsFixed(0)}')
+          Text('Total Inv: ₹${inventoryProvider.totalInventoryValue.toStringAsFixed(0)}')
         ]),
         const SizedBox(height: 16),
         Expanded(
-          child: Row(children: [
-            Expanded(
-              child: Card(
-                child: Column(
-                  children: [
-                    const ListTile(title: Text('Inventory Items')),
-                    const Divider(height: 1),
-                    Expanded(
-                      child: inventoryProvider.items.isEmpty
-                          ? const Center(child: Text('No items'))
-                          : ListView.builder(
-                              itemCount: inventoryProvider.items.length,
-                              itemBuilder: (c, i) {
-                                final item = inventoryProvider.items[i];
-                                return ListTile(
-                                  title: Text(item.name),
-                                  subtitle: Text('Qty: ${item.quantity}  Unit: ₹${item.unitCost.toStringAsFixed(0)}  Total: ₹${item.total.toStringAsFixed(0)}'),
-                                  trailing: PopupMenuButton<String>(
-                                    onSelected: (v) {
-                                      if (v == 'edit') _showEditInventoryDialog(item.id, item.name, item.quantity, item.unitCost);
-                                      if (v == 'delete') inventoryProvider.removeItem(item.id);
-                                    },
-                                    itemBuilder: (_) => [
-                                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                                      const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                    )
-                  ],
-                ),
-              ),
+          child: Card(
+            child: Column(
+              children: [
+                const ListTile(title: Text('Inventory Items')),
+                const Divider(height: 1),
+                Expanded(
+                  child: inventoryProvider.items.isEmpty
+                      ? const Center(child: Text('No items'))
+                      : ListView.builder(
+                          itemCount: inventoryProvider.items.length,
+                          itemBuilder: (c, i) {
+                            final item = inventoryProvider.items[i];
+                            return ListTile(
+                              title: Text(item.name),
+                              subtitle: Text('Qty: ${item.quantity}  Unit: ₹${item.unitCost.toStringAsFixed(0)}  Total: ₹${item.total.toStringAsFixed(0)}'),
+                              trailing: PopupMenuButton<String>(
+                                onSelected: (v) {
+                                  if (v == 'edit') _showEditInventoryDialog(item.id, item.name, item.quantity, item.unitCost);
+                                  if (v == 'delete') inventoryProvider.removeItem(item.id);
+                                },
+                                itemBuilder: (_) => [
+                                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                                  const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                )
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Card(
-                child: Column(children: [
-                  const ListTile(title: Text('Lab Work Costs')),
-                  const Divider(height: 1),
-                  Expanded(
-                      child: inventoryProvider.labCosts.isEmpty
-                          ? const Center(child: Text('No lab costs'))
-                          : ListView.builder(
-                              itemCount: inventoryProvider.labCosts.length,
-                              itemBuilder: (c, i) {
-                                final cost = inventoryProvider.labCosts[i];
-                                return ListTile(
-                                  title: Text(cost.description),
-                                  subtitle: Text('₹${cost.cost.toStringAsFixed(0)}'),
-                                  trailing: PopupMenuButton<String>(
-                                    onSelected: (v) {
-                                      if (v == 'edit') _showEditLabCostDialog(cost.id, cost.description, cost.cost);
-                                      if (v == 'delete') inventoryProvider.removeLabCost(cost.id);
-                                    },
-                                    itemBuilder: (_) => const [
-                                      PopupMenuItem(value: 'edit', child: Text('Edit')),
-                                      PopupMenuItem(value: 'delete', child: Text('Delete')),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ))
-                ]),
-              ),
-            )
-          ]),
+          ),
         )
       ]),
+    );
+  }
+
+  // ============== Labs (Registry) ==============
+  Widget _labsSection() {
+    final labsProvider = context.watch<LabRegistryProvider>();
+    final labs = labsProvider.labs;
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Labs', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 12),
+        Row(children: [
+          ElevatedButton.icon(onPressed: _showAddLabDialog, icon: const Icon(Icons.add_business), label: const Text('Add Lab')),
+          const SizedBox(width: 12),
+          Text('Registered: ${labs.length}')
+        ]),
+        const SizedBox(height: 16),
+        Expanded(
+          child: Card(
+            child: labs.isEmpty
+                ? const Center(child: Text('No labs registered'))
+                : ListView.separated(
+                    itemCount: labs.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, i) {
+                      final lab = labs[i];
+                      return ExpansionTile(
+                        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                        title: Text(lab.name),
+                        subtitle: lab.address.isNotEmpty ? Text(lab.address) : null,
+                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                          IconButton(
+                            icon: const Icon(Icons.add),
+                            tooltip: 'Add product',
+                            onPressed: () => _showAddLabProductDialog(lab.id),
+                          ),
+                          PopupMenuButton<String>(
+                            onSelected: (v) async {
+                              if (v == 'edit') {
+                                _showEditLabDialog(lab.id, lab.name, lab.address);
+                              } else if (v == 'delete') {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (_) => AlertDialog(
+                                    title: const Text('Delete Lab?'),
+                                    content: Text('Delete "${lab.name}" and all its products?'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                                      FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+                                    ],
+                                  ),
+                                );
+                                if (confirm == true) {
+                                  await context.read<LabRegistryProvider>().deleteLab(lab.id);
+                                }
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(value: 'edit', child: Text('Edit Lab')),
+                              PopupMenuItem(value: 'delete', child: Text('Delete Lab')),
+                            ],
+                          ),
+                        ]),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              if (lab.products.isEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: Text('No products'),
+                                )
+                              else
+                                ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: lab.products.length,
+                                  itemBuilder: (_, j) {
+                                    final p = lab.products[j];
+                                    return ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: Text(p.name),
+                                      subtitle: Text('₹${p.rate.toStringAsFixed(0)}'),
+                                      trailing: PopupMenuButton<String>(
+                                        onSelected: (v) {
+                                          if (v == 'edit') _showEditLabProductDialog(lab.id, p.id, p.name, p.rate);
+                                          if (v == 'delete') context.read<LabRegistryProvider>().deleteProduct(lab.id, p.id);
+                                        },
+                                        itemBuilder: (_) => const [
+                                          PopupMenuItem(value: 'edit', child: Text('Edit')),
+                                          PopupMenuItem(value: 'delete', child: Text('Delete')),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              const SizedBox(height: 8),
+                            ]),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  // ========= Labs Dialogs =========
+  void _showAddLabDialog() {
+    final nameCtrl = TextEditingController();
+    final addrCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Register Lab'),
+        content: SizedBox(
+          width: 360,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Lab name')),
+            const SizedBox(height: 8),
+            TextField(controller: addrCtrl, decoration: const InputDecoration(labelText: 'Lab address')),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              await context.read<LabRegistryProvider>().addLab(name, addrCtrl.text.trim());
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Register'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditLabDialog(String id, String name, String address) {
+    final nameCtrl = TextEditingController(text: name);
+    final addrCtrl = TextEditingController(text: address);
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Edit Lab'),
+        content: SizedBox(
+          width: 360,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Lab name')),
+            const SizedBox(height: 8),
+            TextField(controller: addrCtrl, decoration: const InputDecoration(labelText: 'Lab address')),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              await context.read<LabRegistryProvider>().updateLab(id, name: nameCtrl.text.trim(), address: addrCtrl.text.trim());
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddLabProductDialog(String labId) {
+    final nameCtrl = TextEditingController();
+    final rateCtrl = TextEditingController(text: '0');
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Add Lab Product'),
+        content: SizedBox(
+          width: 360,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Product name (e.g., PFM Crown)')),
+            const SizedBox(height: 8),
+            TextField(controller: rateCtrl, decoration: const InputDecoration(labelText: 'Rate'), keyboardType: TextInputType.number),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              final rate = double.tryParse(rateCtrl.text) ?? 0;
+              if (name.isEmpty || rate <= 0) return;
+              await context.read<LabRegistryProvider>().addProduct(labId, name, rate);
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditLabProductDialog(String labId, String productId, String name, double rate) {
+    final nameCtrl = TextEditingController(text: name);
+    final rateCtrl = TextEditingController(text: rate.toStringAsFixed(0));
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Edit Lab Product'),
+        content: SizedBox(
+          width: 360,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Product name')),
+            const SizedBox(height: 8),
+            TextField(controller: rateCtrl, decoration: const InputDecoration(labelText: 'Rate'), keyboardType: TextInputType.number),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final newRate = double.tryParse(rateCtrl.text) ?? rate;
+              await context.read<LabRegistryProvider>().updateProduct(labId, productId, name: nameCtrl.text.trim(), rate: newRate);
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -963,67 +1160,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  void _showAddLabCostDialog() {
-    final descCtrl = TextEditingController();
-    final costCtrl = TextEditingController(text: '0');
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Add Lab Cost'),
-        content: SizedBox(
-          width: 320,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Description')),
-            TextField(controller: costCtrl, decoration: const InputDecoration(labelText: 'Cost'), keyboardType: TextInputType.number),
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              final d = descCtrl.text.trim();
-              if (d.isEmpty) return;
-              final cVal = double.tryParse(costCtrl.text) ?? 0;
-              context.read<InventoryProvider>().addLabCost(LabCostItem(id: DateTime.now().microsecondsSinceEpoch.toString(), description: d, cost: cVal));
-              Navigator.pop(context);
-            },
-            child: const Text('Add'),
-          )
-        ],
-      ),
-    );
-  }
-
-  void _showEditLabCostDialog(String id, String description, double cost) {
-    final descCtrl = TextEditingController(text: description);
-    final costCtrl = TextEditingController(text: cost.toString());
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Edit Lab Cost'),
-        content: SizedBox(
-          width: 320,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Description')),
-            TextField(controller: costCtrl, decoration: const InputDecoration(labelText: 'Cost'), keyboardType: TextInputType.number),
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              final d = descCtrl.text.trim();
-              if (d.isEmpty) return;
-              final cVal = double.tryParse(costCtrl.text) ?? cost;
-              context.read<InventoryProvider>().updateLabCost(id, description: d, cost: cVal);
-              Navigator.pop(context);
-            },
-            child: const Text('Save'),
-          )
-        ],
-      ),
-    );
-  }
+  // removed legacy Lab Cost dialogs (moved to Labs registry UI)
 
   // ========= Reusable Dashboard Widgets =========
   void _showAddAppointmentDialog(BuildContext context) {

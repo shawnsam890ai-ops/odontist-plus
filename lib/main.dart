@@ -11,6 +11,7 @@ import 'providers/inventory_provider.dart';
 import 'providers/staff_attendance_provider.dart';
 import 'providers/doctor_attendance_provider.dart';
 import 'providers/doctor_provider.dart';
+import 'providers/lab_registry_provider.dart';
 import 'ui/pages/splash_page.dart';
 import 'core/app_theme.dart';
 
@@ -35,6 +36,7 @@ class DentalClinicApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => StaffAttendanceProvider()),
         ChangeNotifierProvider(create: (_) => DoctorAttendanceProvider()),
   ChangeNotifierProvider(create: (_) => DoctorProvider()),
+    ChangeNotifierProvider(create: (_) => LabRegistryProvider()),
       ],
       child: Builder(
         builder: (ctx) {
@@ -45,6 +47,8 @@ class DentalClinicApp extends StatelessWidget {
             opt.registerPatientProvider(pats);
             // Load persisted doctors and ledger
             ctx.read<DoctorProvider>().load();
+            // Load lab registry
+            ctx.read<LabRegistryProvider>().ensureLoaded();
           });
           return MaterialApp(
             title: 'Dental Clinic',
