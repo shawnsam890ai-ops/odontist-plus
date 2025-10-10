@@ -7,6 +7,7 @@ import '../ui/pages/add_patient_page.dart';
 import '../ui/pages/patient_detail_page.dart';
 import '../ui/pages/patient_lab_work_page.dart';
 import '../ui/pages/edit_patient_page.dart';
+import '../ui/pages/manage_patients_modern.dart';
 
 class AppRouter {
   static Route<dynamic> generate(RouteSettings settings) {
@@ -36,6 +37,8 @@ class AppRouter {
           return MaterialPageRoute(builder: (_) => const Scaffold(body: Center(child: Text('Missing patient id'))));
         }
         return MaterialPageRoute(builder: (_) => EditPatientPage(patientId: patientId));
+      case ManagePatientsModern.routeName:
+        return MaterialPageRoute(builder: (_) => const ManagePatientsModern());
       default:
         return MaterialPageRoute(
             builder: (_) => Scaffold(
