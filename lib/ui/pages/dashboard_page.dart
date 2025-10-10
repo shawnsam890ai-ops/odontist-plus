@@ -6,9 +6,10 @@ import '../../providers/inventory_provider.dart';
 import '../../models/inventory_item.dart';
 import 'attendance_view.dart';
 import '../../providers/staff_attendance_provider.dart';
+import '../../providers/doctor_attendance_provider.dart';
+import '../../providers/doctor_provider.dart';
 import '../widgets/cases_overview_chart.dart';
 import '../widgets/upcoming_schedule_panel.dart';
-import '../widgets/draggable_resizable_panel.dart';
 import 'doctors_payments_section.dart';
 import '../../providers/lab_registry_provider.dart';
 import 'manage_patients_modern.dart';
@@ -42,51 +43,6 @@ class _DashboardPageState extends State<DashboardPage> {
   DashboardSection _section = DashboardSection.overview;
   bool _menuCollapsed = false;
   bool _customizeMode = false; // when true, panels become draggable/resizable
-
-  // Column / panel split state (standard mode) ----------------------------------
-  // Fraction of total width allocated to metrics area (0.3 - 0.75 range)
-  double _topSplitFrac = 0.62;
-  // Fraction width for attendance panel vs cases panel (when both visible and wide) 0.25 - 0.7
-  double _bottomSplitFrac = 0.46;
-  // Height of the top region (metrics + schedule) before lower panels (min 260)
-  double _topRegionHeight = 380;
-
-  // Persistent (in-memory) layout rects for customizable panels (logical px within overview canvas)
-  // NOTE: These are not yet persisted. To persist across launches you can:
-  // 1. Convert them to a Map<String, dynamic> and store via SharedPreferences.
-  // 2. Save to a local database / file and reload in initState.
-  // 3. Sync to cloud (e.g., Firestore) keyed by user/clinic.
-  // After loading stored values, setState to update these rects before building the overview.
-  // Individual metric card rects (start in a grid)
-  Rect _rMetricProfit   = const Rect.fromLTWH(0,   0, 180, 170);
-  Rect _rMetricToday    = const Rect.fromLTWH(196, 0, 180, 170);
-  Rect _rMetricMonthly  = const Rect.fromLTWH(392, 0, 180, 170);
-  Rect _rMetricPatients = const Rect.fromLTWH(588, 0, 180, 170);
-  Rect _rMetricInventory= const Rect.fromLTWH(0, 182, 180, 170);
-  Rect _rMetricRevenue  = const Rect.fromLTWH(196,182, 180, 170);
-  Rect _rSchedule = const Rect.fromLTWH(780, 0, 380, 360);
-  Rect _rAttendance = const Rect.fromLTWH(0, 360, 320, 300);
-  Rect _rCases = const Rect.fromLTWH(340, 360, 360, 300);
-
-  // Detect whether user has diverged from initial default panel rects.
-  bool get _hasCustomPanelLayout {
-    return !(
-      _rMetricProfit   == const Rect.fromLTWH(0,   0, 180, 170) &&
-      _rMetricToday    == const Rect.fromLTWH(196, 0, 180, 170) &&
-      _rMetricMonthly  == const Rect.fromLTWH(392, 0, 180, 170) &&
-      _rMetricPatients == const Rect.fromLTWH(588, 0, 180, 170) &&
-      _rMetricInventory== const Rect.fromLTWH(0, 182, 180, 170) &&
-      _rMetricRevenue  == const Rect.fromLTWH(196,182, 180, 170) &&
-      _rSchedule       == const Rect.fromLTWH(780, 0, 380, 360) &&
-      _rAttendance     == const Rect.fromLTWH(0, 360, 320, 300) &&
-      _rCases          == const Rect.fromLTWH(340, 360, 360, 300)
-    );
-  }
-
-  double _estimateProfit(double totalRevenue, double labCosts) {
-    // Placeholder profit logic: revenue - lab costs (inventory purchase costs not subtracted yet)
-    return totalRevenue - labCosts;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -190,214 +146,119 @@ class _DashboardPageState extends State<DashboardPage> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          LayoutBuilder(builder: (context, c) {
+            final narrow = c.maxWidth < 420;
+            if (!narrow) {
+              return Row(children: [
                 Text('Overview', style: Theme.of(context).textTheme.headlineSmall),
                 const Spacer(),
-                Tooltip(
-                  message: _customizeMode ? 'Exit Layout Mode' : 'Customize Layout',
-                  child: FilledButton.tonal(
-                    onPressed: () => setState(() {
-                      _customizeMode = !_customizeMode;
-                      if (_customizeMode) {
-                        // Clamp schedule rect inside current available width to avoid it being off-canvas (user reported missing)
-                        // We can't know width here; lazy adjust in first frame using addPostFrameCallback.
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (!mounted) return;
-                          final ctx = context;
-                          final renderBox = ctx.findRenderObject() as RenderBox?;
-                          if (renderBox != null) {
-                            final w = renderBox.size.width - 32; // subtract padding margin heuristic
-                            if (_rSchedule.left + _rSchedule.width > w) {
-                              setState(() {
-                                final newLeft = (w - _rSchedule.width).clamp(0, double.infinity) as double;
-                                _rSchedule = Rect.fromLTWH(newLeft, _rSchedule.top, _rSchedule.width, _rSchedule.height);
-                              });
-                            }
-                          }
-                        });
-                      }
-                    }),
-                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
-                    child: Row(children: [Icon(_customizeMode ? Icons.check : Icons.edit,size:16), const SizedBox(width:6), Text(_customizeMode ? 'Done' : 'Customize')]),
-                  ),
-                )
-              ],
-            ),
-            const SizedBox(height: 16),
-            // Decide top region rendering
-            (_customizeMode)
-                ? _buildCustomizableCanvas(
-                    todaysRevenue: todaysRevenue,
-                    monthlyRevenue: monthlyRevenue,
-                    patientProvider: patientProvider,
-                    inventoryProvider: inventoryProvider,
-                    revenueProvider: revenueProvider,
-                    interactive: true,
-                  )
-                : _hasCustomPanelLayout
-                    ? _buildCustomizableCanvas(
-                        todaysRevenue: todaysRevenue,
-                        monthlyRevenue: monthlyRevenue,
-                        patientProvider: patientProvider,
-                        inventoryProvider: inventoryProvider,
-                        revenueProvider: revenueProvider,
-                        interactive: false,
-                      )
-                    : _buildStandardTopRow(todaysRevenue, monthlyRevenue, patientProvider, inventoryProvider, revenueProvider),
-            // Show default bottom Attendance / Cases only when using standard layout.
-            if (!_customizeMode && !_hasCustomPanelLayout) ...[
-              const SizedBox(height: 28),
-              LayoutBuilder(
-                builder: (context, c) {
-                  final width = c.maxWidth;
-                  // Stack panels on narrow screens
-                  if (width < 900) {
-                    return Column(
-                      children: [
-                        _LargePanel(
-                          title: 'Staff Attendance (Overview)',
-                          child: _AttendanceOverviewWidget(),
-                        ),
-                        const SizedBox(height: 20),
-                        _LargePanel(
-                          title: 'Cases Overview',
-                          child: const CasesOverviewChart(
-                            data: {
-                              'Root Canal': 18,
-                              'Orthodontic': 12,
-                              'Prosthodontic': 9,
-                              'Filling': 30,
-                            },
-                          ),
-                        ),
-                      ],
-                    );
-                  }
-                  _bottomSplitFrac = _bottomSplitFrac.clamp(.25, .7);
-                  final leftW = width * _bottomSplitFrac - 8; // account for splitter spacing
-                  final rightW = width - leftW - 16; // left + splitter (12) + padding
-                  return SizedBox(
-                    height: 360,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(
-                          width: leftW,
-                          child: _LargePanel(
-                            title: 'Staff Attendance (Overview)',
-                            child: _AttendanceOverviewWidget(),
-                          ),
-                        ),
-                        _VerticalSplitter(
-                          onDrag: (dx) {
-                            setState(() {
-                              _bottomSplitFrac = (_bottomSplitFrac + dx / width).clamp(.25, .7);
-                            });
-                          },
-                        ),
-                        SizedBox(
-                          width: rightW,
-                          child: _LargePanel(
-                            title: 'Cases Overview',
-                            child: const CasesOverviewChart(
-                              data: {
-                                'Root Canal': 18,
-                                'Orthodontic': 12,
-                                'Prosthodontic': 9,
-                                'Filling': 30,
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                FilledButton.tonal(
+                  onPressed: () => setState(() => _customizeMode = !_customizeMode),
+                  child: Row(children: [Icon(_customizeMode ? Icons.check : Icons.edit, size: 16), const SizedBox(width: 6), Text(_customizeMode ? 'Done' : 'Customize')]),
+                ),
+              ]);
+            }
+            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Overview', style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.tonal(
+                  onPressed: () => setState(() => _customizeMode = !_customizeMode),
+                  child: Row(children: [Icon(_customizeMode ? Icons.check : Icons.edit, size: 16), const SizedBox(width: 6), Text(_customizeMode ? 'Done' : 'Customize')]),
+                ),
               ),
-            ],
-          ],
-        ),
+            ]);
+          }),
+          const SizedBox(height: 16),
+          // Top metric tiles
+          _buildMetricsGrid(todaysRevenue, monthlyRevenue, patientProvider, inventoryProvider, revenueProvider),
+          const SizedBox(height: 16),
+          // Compact responsive panels: Upcoming Schedule, Cases, Attendance, Doctors on Duty
+          LayoutBuilder(builder: (context, c) {
+            final narrow = c.maxWidth < 1000;
+            final schedulePanel = _LargePanel(
+              title: 'Upcoming Schedule',
+              child: SizedBox(
+                height: narrow ? 220 : 260,
+                child: const UpcomingSchedulePanel(
+                  padding: EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  showDoctorFilter: false,
+                  showTitle: false,
+                ),
+              ),
+            );
+            final casesPanel = _LargePanel(
+              title: 'Cases Overview',
+              child: SizedBox(
+                height: narrow ? 220 : 260,
+                child: const Padding(
+                  padding: EdgeInsets.only(bottom: 6),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.topCenter,
+                    child: CasesOverviewChart(
+                      data: {
+                        'Root Canal': 18,
+                        'Orthodontic': 12,
+                        'Prosthodontic': 9,
+                        'Filling': 30,
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            );
+            final attendancePanel = _LargePanel(
+              title: 'Staff Attendance (Overview)',
+              child: SizedBox(height: narrow ? 220 : 260, child: _AttendanceOverviewWidget()),
+            );
+            final doctorsDutyPanel = _LargePanel(
+              title: 'Doctors on Duty',
+              child: SizedBox(height: narrow ? 220 : 260, child: const _DoctorsOnDutyPanel()),
+            );
+
+            if (narrow) {
+              return Column(children: [
+                _StaggeredAppear(delayMs: 0, child: schedulePanel),
+                const SizedBox(height: 16),
+                _StaggeredAppear(delayMs: 60, child: casesPanel),
+                const SizedBox(height: 16),
+                _StaggeredAppear(delayMs: 120, child: attendancePanel),
+                const SizedBox(height: 16),
+                _StaggeredAppear(delayMs: 180, child: doctorsDutyPanel),
+              ]);
+            }
+            // 2x2 grid on wide screens
+            return Column(children: [
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: _StaggeredAppear(delayMs: 0, child: schedulePanel)),
+                const SizedBox(width: 16),
+                Expanded(child: _StaggeredAppear(delayMs: 60, child: casesPanel)),
+              ]),
+              const SizedBox(height: 16),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: _StaggeredAppear(delayMs: 120, child: attendancePanel)),
+                const SizedBox(width: 16),
+                Expanded(child: _StaggeredAppear(delayMs: 180, child: doctorsDutyPanel)),
+              ]),
+            ]);
+          }),
+        ]),
       ),
     );
   }
 
-  Widget _buildStandardTopRow(double todaysRevenue, double monthlyRevenue, PatientProvider patientProvider, InventoryProvider inventoryProvider, RevenueProvider revenueProvider) {
-    return LayoutBuilder(builder: (context, c) {
-      final width = c.maxWidth;
-      final isStack = width < 900; // below this width we stack
-      if (isStack) {
-        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _buildMetricsGrid(todaysRevenue, monthlyRevenue, patientProvider, inventoryProvider, revenueProvider),
-          const SizedBox(height: 24),
-          _LargePanel(
-            title: 'Upcoming Schedule',
-            child: const SizedBox(height: 340, child: UpcomingSchedulePanel()),
-          ),
-        ]);
-      }
-      // Clamp split fraction
-      _topSplitFrac = _topSplitFrac.clamp(.3, .75);
-      final metricsWidth = width * _topSplitFrac - 12; // subtract half of gap
-      final scheduleWidth = width - metricsWidth - 24; // include spacer
-      return SizedBox(
-        height: _topRegionHeight.clamp(260, 700),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              width: metricsWidth,
-              child: SingleChildScrollView(
-                child: _buildMetricsGrid(todaysRevenue, monthlyRevenue, patientProvider, inventoryProvider, revenueProvider),
-              ),
-            ),
-            _VerticalSplitter(
-              onDrag: (dx) {
-                setState(() {
-                  _topSplitFrac = (_topSplitFrac + dx / width).clamp(.3, .75);
-                });
-              },
-              onDragVertical: (dy) {
-                setState(() {
-                  _topRegionHeight = (_topRegionHeight + dy).clamp(260, 700);
-                });
-              },
-            ),
-            SizedBox(
-              width: scheduleWidth,
-              child: _LargePanel(
-                title: 'Upcoming Schedule',
-                child: const SizedBox(height: 340, child: UpcomingSchedulePanel()),
-              ),
-            ),
-          ],
-        ),
-      );
-    });
-  }
+  // Removed legacy standard top row with adjustable split; simplified overview is used instead.
 
   Widget _buildMetricsGrid(double todaysRevenue, double monthlyRevenue, PatientProvider patientProvider, InventoryProvider inventoryProvider, RevenueProvider revenueProvider) {
     final items = [
-      (
-        title: 'Total Profit',
-        value: _estimateProfit(revenueProvider.total, inventoryProvider.totalLabCost),
-        subtitle: 'After lab',
-        icon: Icons.trending_up
-      ),
       (
         title: 'Today',
         value: todaysRevenue,
         subtitle: 'Revenue',
         icon: Icons.today
-      ),
-      (
-        title: 'Monthly',
-        value: monthlyRevenue,
-        subtitle: 'Revenue',
-        icon: Icons.calendar_month
       ),
       (
         title: 'Patients',
@@ -411,280 +272,36 @@ class _DashboardPageState extends State<DashboardPage> {
         subtitle: 'Value',
         icon: Icons.inventory_2
       ),
-      (
-        title: 'Revenue',
-        value: revenueProvider.total,
-        subtitle: 'All Time',
-        icon: Icons.account_balance
-      ),
     ];
-    return Wrap(
-      spacing: 16,
-      runSpacing: 16,
-      children: [
-        for (int i = 0; i < items.length; i++)
-          _DashMetricCard(
-            title: items[i].title,
-            value: items[i].value,
-            subtitle: items[i].subtitle,
-            icon: items[i].icon,
-            appearDelayMs: 60 * i,
-          ),
-      ],
-    );
-  }
-
-  Widget _buildCustomizableCanvas({
-    required double todaysRevenue,
-    required double monthlyRevenue,
-    required PatientProvider patientProvider,
-    required InventoryProvider inventoryProvider,
-    required RevenueProvider revenueProvider,
-    bool interactive = true,
-  }) {
     return LayoutBuilder(builder: (context, c) {
-      // Infinite (growing) vertical canvas: compute needed height from panels + padding.
-      final panels = <Rect>[
-        _rMetricProfit,
-        _rMetricToday,
-        _rMetricMonthly,
-        _rMetricPatients,
-        _rMetricInventory,
-        _rMetricRevenue,
-        _rSchedule,
-        _rAttendance,
-        _rCases,
-      ];
-      double requiredHeight = 0;
-      for (final r in panels) {
-        requiredHeight = requiredHeight < (r.bottom) ? r.bottom : requiredHeight;
-      }
-      requiredHeight += 40; // bottom padding margin
-      final canvasHeight = requiredHeight.clamp(600, 4000); // safety clamp
-      final size = Size(c.maxWidth, canvasHeight.toDouble());
-      return Container(
-        height: size.height,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.withOpacity(.25)),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: IgnorePointer(
-                ignoring: false,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Colors.white, Colors.grey.shade50],
-                    ),
-                  ),
-                ),
+      // Dynamically compute tile width to fit 3..1 columns without overflow
+      final w = c.maxWidth;
+      double tileW;
+      if (w >= 1200) tileW = (w - 16 * 2) / 3; // 3 columns
+      else if (w >= 800) tileW = (w - 16) / 2; // 2 columns
+      else tileW = w; // single column
+      tileW = tileW.clamp(160.0, 420.0);
+      return Wrap(
+        spacing: 16,
+        runSpacing: 16,
+        children: [
+          for (int i = 0; i < items.length; i++)
+            SizedBox(
+              width: tileW,
+              child: _DashMetricCard(
+                title: items[i].title,
+                value: items[i].value,
+                subtitle: items[i].subtitle,
+                icon: items[i].icon,
+                appearDelayMs: 60 * i,
               ),
             ),
-            // Each metric card as its own draggable panel (flexible sizing)
-            // Each panel now uses ghost (deferred) resize and center-only drag
-            DraggableResizablePanel(
-              key: const ValueKey('metric_profit'),
-              rect: _rMetricProfit,
-              boundsSize: size,
-              minWidth: 140,
-              minHeight: 140,
-              liveResize: false,
-              centerDragOnly: true,
-              interactive: interactive,
-              active: interactive,
-              label: null, // Remove top label
-              onUpdate: (r) => setState(() => _rMetricProfit = r),
-              child: Padding(
-                padding: const EdgeInsets.all(6),
-                child: _DashMetricCard(
-                  title: 'Total Profit',
-                  value: _estimateProfit(revenueProvider.total, inventoryProvider.totalLabCost),
-                  subtitle: 'After lab',
-                  icon: Icons.trending_up,
-                  fixedSize: false,
-                ),
-              ),
-            ),
-            DraggableResizablePanel(
-              key: const ValueKey('metric_today'),
-              rect: _rMetricToday,
-              boundsSize: size,
-              minWidth: 140,
-              minHeight: 140,
-              liveResize: false,
-              centerDragOnly: true,
-              interactive: interactive,
-              active: interactive,
-              label: null, // Remove top label
-              onUpdate: (r) => setState(() => _rMetricToday = r),
-              child: Padding(
-                padding: const EdgeInsets.all(6),
-                child: _DashMetricCard(
-                  title: 'Today',
-                  value: todaysRevenue,
-                  subtitle: 'Revenue',
-                  icon: Icons.today,
-                  fixedSize: false,
-                ),
-              ),
-            ),
-            DraggableResizablePanel(
-              key: const ValueKey('metric_monthly'),
-              rect: _rMetricMonthly,
-              boundsSize: size,
-              minWidth: 140,
-              minHeight: 140,
-              liveResize: false,
-              centerDragOnly: true,
-              interactive: interactive,
-              active: interactive,
-              label: null, // Remove top label
-              onUpdate: (r) => setState(() => _rMetricMonthly = r),
-              child: Padding(
-                padding: const EdgeInsets.all(6),
-                child: _DashMetricCard(
-                  title: 'Monthly',
-                  value: monthlyRevenue,
-                  subtitle: 'Revenue',
-                  icon: Icons.calendar_month,
-                  fixedSize: false,
-                ),
-              ),
-            ),
-            DraggableResizablePanel(
-              key: const ValueKey('metric_patients'),
-              rect: _rMetricPatients,
-              boundsSize: size,
-              minWidth: 140,
-              minHeight: 140,
-              liveResize: false,
-              centerDragOnly: true,
-              interactive: interactive,
-              active: interactive,
-              label: null, // Remove top label
-              onUpdate: (r) => setState(() => _rMetricPatients = r),
-              child: Padding(
-                padding: const EdgeInsets.all(6),
-                child: _DashMetricCard(
-                  title: 'Patients',
-                  value: patientProvider.patients.length.toDouble(),
-                  subtitle: 'Total',
-                  icon: Icons.people,
-                  fixedSize: false,
-                ),
-              ),
-            ),
-            DraggableResizablePanel(
-              key: const ValueKey('metric_inventory'),
-              rect: _rMetricInventory,
-              boundsSize: size,
-              minWidth: 140,
-              minHeight: 140,
-              liveResize: false,
-              centerDragOnly: true,
-              interactive: interactive,
-              active: interactive,
-              label: null, // Remove top label
-              onUpdate: (r) => setState(() => _rMetricInventory = r),
-              child: Padding(
-                padding: const EdgeInsets.all(6),
-                child: _DashMetricCard(
-                  title: 'Inventory',
-                  value: inventoryProvider.totalInventoryValue,
-                  subtitle: 'Value',
-                  icon: Icons.inventory_2,
-                  fixedSize: false,
-                ),
-              ),
-            ),
-            DraggableResizablePanel(
-              key: const ValueKey('metric_revenue'),
-              rect: _rMetricRevenue,
-              boundsSize: size,
-              minWidth: 140,
-              minHeight: 140,
-              liveResize: false,
-              centerDragOnly: true,
-              interactive: interactive,
-              active: interactive,
-              label: null, // Remove top label
-              onUpdate: (r) => setState(() => _rMetricRevenue = r),
-              child: Padding(
-                padding: const EdgeInsets.all(6),
-                child: _DashMetricCard(
-                  title: 'Revenue',
-                  value: revenueProvider.total,
-                  subtitle: 'All Time',
-                  icon: Icons.account_balance,
-                  fixedSize: false,
-                ),
-              ),
-            ),
-            DraggableResizablePanel(
-              key: const ValueKey('schedule'),
-              rect: _rSchedule,
-              boundsSize: size,
-              minWidth: 300,
-              minHeight: 260,
-              liveResize: false,
-              centerDragOnly: true,
-              interactive: interactive,
-              active: interactive,
-              label: null, // Remove duplicate label at top
-              onUpdate: (r) => setState(() => _rSchedule = r),
-              child: const Padding(padding: EdgeInsets.all(8), child: UpcomingSchedulePanel()),
-            ),
-            DraggableResizablePanel(
-              key: const ValueKey('attendance'),
-              rect: _rAttendance,
-              boundsSize: size,
-              minWidth: 240,
-              minHeight: 240,
-              liveResize: false,
-              centerDragOnly: true,
-              interactive: interactive,
-              active: interactive,
-              label: null, // Remove duplicate label at top
-              onUpdate: (r) => setState(() => _rAttendance = r),
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: _AttendanceOverviewWidget(),
-              ),
-            ),
-            DraggableResizablePanel(
-              key: const ValueKey('cases'),
-              rect: _rCases,
-              boundsSize: size,
-              minWidth: 260,
-              minHeight: 260,
-              liveResize: false,
-              centerDragOnly: true,
-              interactive: interactive,
-              active: interactive,
-              label: null, // Remove duplicate label at top
-              onUpdate: (r) => setState(() => _rCases = r),
-              child: const Padding(
-                padding: EdgeInsets.all(8),
-                child: CasesOverviewChart(
-                  data: {
-                    'Root Canal': 18,
-                    'Orthodontic': 12,
-                    'Prosthodontic': 9,
-                    'Filling': 30,
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
+        ],
       );
     });
   }
+
+  // Removed legacy customizable canvas implementation.
   
 
   // ============== Manage Patients ==============
@@ -1427,9 +1044,8 @@ class _DashMetricCard extends StatefulWidget {
   final double value;
   final String? subtitle;
   final IconData icon;
-  final bool fixedSize; // when false, fills parent and scales
   final int appearDelayMs;
-  const _DashMetricCard({Key? key, required this.title, required this.value, required this.icon, this.subtitle, this.fixedSize = true, this.appearDelayMs = 0}) : super(key: key);
+  const _DashMetricCard({Key? key, required this.title, required this.value, required this.icon, this.subtitle, this.appearDelayMs = 0}) : super(key: key);
 
   @override
   State<_DashMetricCard> createState() => _DashMetricCardState();
@@ -1473,7 +1089,7 @@ class _DashMetricCardState extends State<_DashMetricCard> with SingleTickerProvi
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    const accentColor = Color(0xFF2563EB);
+    final accentColor = cs.primary;
     final surface = cs.surface;
     final translate = _pressed ? Offset(0, 0) : (_hovered ? const Offset(0, -2) : Offset.zero);
     final scale = _pressed ? 0.98 : (_hovered ? 1.02 : 1.0);
@@ -1537,9 +1153,8 @@ class _DashMetricCardState extends State<_DashMetricCard> with SingleTickerProvi
         );
       }),
     );
-    if (widget.fixedSize) {
-      card = SizedBox(width: 160, height: 160, child: card);
-    }
+    // Use fixed sized metric tiles for consistency.
+    card = SizedBox(width: 160, height: 160, child: card);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -1597,61 +1212,111 @@ class _LargePanelState extends State<_LargePanel> {
             ],
             border: Border.all(color: cs.outlineVariant.withOpacity(.25)),
           ),
-          padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Text(widget.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-              const Spacer(),
-            ]),
-            const SizedBox(height: 12),
-            widget.child,
-          ]),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          child: LayoutBuilder(builder: (context, c) {
+            final header = Row(children: [
+              Expanded(child: Text(widget.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis)),
+            ]);
+            // If child might overflow, wrap in SingleChildScrollView to be safe.
+            final body = ClipRect(child: widget.child);
+            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              header,
+              const SizedBox(height: 8),
+              Expanded(flex: 0, child: body),
+            ]);
+          }),
         ),
       ),
+    );
+  }
+}
+
+// Simple appear animation wrapper
+class _StaggeredAppear extends StatefulWidget {
+  final Widget child;
+  final int delayMs;
+  const _StaggeredAppear({required this.child, this.delayMs = 0});
+
+  @override
+  State<_StaggeredAppear> createState() => _StaggeredAppearState();
+}
+
+class _StaggeredAppearState extends State<_StaggeredAppear> with SingleTickerProviderStateMixin {
+  late AnimationController _c;
+  late Animation<double> _opacity;
+  late Animation<Offset> _offset;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+    _opacity = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
+    _offset = Tween<Offset>(begin: const Offset(0, .04), end: Offset.zero).animate(_c);
+    if (widget.delayMs > 0) {
+      Future.delayed(Duration(milliseconds: widget.delayMs), () {
+        if (mounted) _c.forward();
+      });
+    } else {
+      _c.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(position: _offset, child: widget.child),
+    );
+  }
+}
+
+// Doctors on Duty compact panel
+class _DoctorsOnDutyPanel extends StatelessWidget {
+  const _DoctorsOnDutyPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final doctors = context.watch<DoctorProvider>().doctors;
+    final attendance = context.watch<DoctorAttendanceProvider>();
+    final today = DateTime.now();
+    final key = DateTime(today.year, today.month, today.day);
+
+    final rows = <Widget>[];
+    for (final d in doctors) {
+      final map = attendance.attendance[d.name] ?? const {};
+      final present = map[key] == true;
+      rows.add(ListTile(
+        dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+        leading: CircleAvatar(radius: 14, backgroundColor: cs.primary.withOpacity(.12), child: Icon(Icons.person, color: cs.primary, size: 16)),
+        title: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: present ? Colors.green.withOpacity(.12) : Colors.red.withOpacity(.12),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: (present ? Colors.green : Colors.red).withOpacity(.35)),
+          ),
+          child: Text(present ? 'Present' : 'Absent', style: TextStyle(color: present ? Colors.green.shade700 : Colors.red.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
+        ),
+      ));
+    }
+
+    if (rows.isEmpty) {
+      return const Center(child: Text('No doctors added'));
+    }
+    return ListView(
+      children: rows,
     );
   }
 }
 
 // Splitter used for adjustable column widths (and optional vertical drag)
-class _VerticalSplitter extends StatelessWidget {
-  final ValueChanged<double> onDrag; // horizontal delta
-  final ValueChanged<double>? onDragVertical; // vertical delta (optional)
-  const _VerticalSplitter({required this.onDrag, this.onDragVertical});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onPanUpdate: (details) {
-        final dx = details.delta.dx;
-        final dy = details.delta.dy;
-        if (dx.abs() >= dy.abs()) {
-          onDrag(dx);
-        } else if (onDragVertical != null) {
-          onDragVertical!(dy);
-        }
-      },
-      child: MouseRegion(
-        cursor: SystemMouseCursors.resizeLeftRight,
-        child: Container(
-          width: 12,
-          margin: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: Colors.grey.withOpacity(.18),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Center(
-            child: Container(
-              width: 3,
-              height: 64,
-              decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(.55),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// Removed legacy splitter widget used by the old adjustable layout.

@@ -20,24 +20,47 @@ class DoctorsPaymentsSection extends StatelessWidget {
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: constraints.maxHeight),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Text('Doctors Attendance & Payments', style: Theme.of(context).textTheme.headlineSmall),
-              const Spacer(),
-              Row(children: [
-                const Text('Require attendance', style: TextStyle(fontSize: 12)),
-                const SizedBox(width: 8),
-                Switch(
-                  value: provider.requireAttendance,
-                  onChanged: provider.setRequireAttendance,
-                ),
-                const SizedBox(width: 12),
-              ]),
-              FilledButton.icon(
-                onPressed: () => _showAddDoctorDialog(context),
-                icon: const Icon(Icons.add),
-                label: const Text('Add Doctor'),
-              ),
-            ]),
+            LayoutBuilder(builder: (context, c) {
+              final narrow = c.maxWidth < 700;
+              if (!narrow) {
+                return Row(children: [
+                  Text('Doctors Attendance & Payments', style: Theme.of(context).textTheme.headlineSmall),
+                  const Spacer(),
+                  Row(children: [
+                    const Text('Require attendance', style: TextStyle(fontSize: 12)),
+                    const SizedBox(width: 8),
+                    Switch(
+                      value: provider.requireAttendance,
+                      onChanged: provider.setRequireAttendance,
+                    ),
+                    const SizedBox(width: 12),
+                  ]),
+                  FilledButton.icon(
+                    onPressed: () => _showAddDoctorDialog(context),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Doctor'),
+                  ),
+                ]);
+              }
+              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Doctors Attendance & Payments', style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 8),
+                Row(children: [
+                  const Text('Require attendance', style: TextStyle(fontSize: 12)),
+                  const SizedBox(width: 8),
+                  Switch(
+                    value: provider.requireAttendance,
+                    onChanged: provider.setRequireAttendance,
+                  ),
+                  const Spacer(),
+                  FilledButton.icon(
+                    onPressed: () => _showAddDoctorDialog(context),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Doctor'),
+                  ),
+                ]),
+              ]);
+            }),
             const SizedBox(height: 16),
             if (doctors.isEmpty)
               const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('No doctors added yet')))

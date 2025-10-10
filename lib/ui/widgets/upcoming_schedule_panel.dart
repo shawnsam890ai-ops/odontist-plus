@@ -13,7 +13,8 @@ import '../../models/appointment.dart' as appt;
 class UpcomingSchedulePanel extends StatefulWidget {
   final EdgeInsetsGeometry padding;
   final bool showDoctorFilter;
-  const UpcomingSchedulePanel({super.key, this.padding = const EdgeInsets.all(0), this.showDoctorFilter = false});
+  final bool showTitle;
+  const UpcomingSchedulePanel({super.key, this.padding = const EdgeInsets.all(0), this.showDoctorFilter = false, this.showTitle = true});
 
   @override
   State<UpcomingSchedulePanel> createState() => _UpcomingSchedulePanelState();
@@ -90,12 +91,14 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
     final monthLabel = '${months[m.month-1]} ${m.year}';
     return LayoutBuilder(builder: (context, c) {
       final tight = c.maxWidth < 300;
-      final title = Flexible(
-        child: Text('Upcoming Schedule',
-            maxLines: 1,
-            overflow: TextOverflow.visible, // Show full title
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-      );
+      final title = widget.showTitle
+          ? Flexible(
+              child: Text('Upcoming Schedule',
+                  maxLines: 1,
+                  overflow: TextOverflow.visible,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+            )
+          : const SizedBox.shrink();
       final monthText = Text(monthLabel,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey));
@@ -110,7 +113,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
         );
       }
       return Row(children: [
-        title,
+        if (widget.showTitle) title else const SizedBox(),
         const Spacer(),
         monthText,
         const SizedBox(width: 6),

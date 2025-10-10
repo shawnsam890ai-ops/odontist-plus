@@ -89,14 +89,31 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
           _buildStatsCard(context, patients.length, patients.where((p) => p.sessions.isNotEmpty).length),
           const SizedBox(height: 16),
           Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(flex: 3, child: _buildPatientDirectory(filteredPatients)),
-                const SizedBox(width: 16),
-                Expanded(flex: 2, child: _buildScheduleSection(context, doctorProvider, todays, dayLabel)),
-              ],
-            ),
+            child: LayoutBuilder(builder: (context, c) {
+              final narrow = c.maxWidth < 900;
+              if (!narrow) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(flex: 3, child: _buildPatientDirectory(filteredPatients)),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 2, child: _buildScheduleSection(context, doctorProvider, todays, dayLabel)),
+                  ],
+                );
+              }
+              // Stack vertically on narrow widths and make content scrollable
+              return SingleChildScrollView(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildPatientDirectory(filteredPatients, stacked: true),
+                    const SizedBox(height: 16),
+                    _buildScheduleSection(context, doctorProvider, todays, dayLabel, stacked: true),
+                  ],
+                ),
+              );
+            }),
           )
         ],
       ),
@@ -160,7 +177,7 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
   }
 
   // Left column ----------------------------------------------
-  Widget _buildPatientDirectory(List<Patient> patients) {
+  Widget _buildPatientDirectory(List<Patient> patients, {bool stacked = false}) {
     return Card(
       color: Colors.white,
       surfaceTintColor: Colors.white,
@@ -213,15 +230,26 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
           ]),
           const SizedBox(height: 12),
           // List
-          Expanded(
-            child: patients.isEmpty
-                ? const Center(child: Text('No patients'))
+          if (!stacked)
+            Expanded(
+              child: patients.isEmpty
+                  ? const Center(child: Text('No patients'))
+                  : ListView.separated(
+                      itemCount: patients.length,
+                      separatorBuilder: (_, __) => Divider(height: 1, color: _border),
+                      itemBuilder: (_, i) => _buildPatientCard(patients[i]),
+                    ),
+            )
+          else
+            (patients.isEmpty
+                ? const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: Text('No patients')))
                 : ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
                     itemCount: patients.length,
                     separatorBuilder: (_, __) => Divider(height: 1, color: _border),
                     itemBuilder: (_, i) => _buildPatientCard(patients[i]),
-                  ),
-          ),
+                  )),
         ]),
       ),
     );
@@ -250,7 +278,7 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
   }
 
   // Right column ---------------------------------------------
-  Widget _buildScheduleSection(BuildContext context, DoctorProvider doctorProvider, List<Appointment> todays, String dayLabel) {
+  Widget _buildScheduleSection(BuildContext context, DoctorProvider doctorProvider, List<Appointment> todays, String dayLabel, {bool stacked = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -285,38 +313,120 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
           ),
         ),
         const SizedBox(height: 12),
-        // Calendar
-        Card(
-          color: Colors.white,
-          surfaceTintColor: Colors.white,
-          shadowColor: Colors.black.withOpacity(0.05),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 3,
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              TableCalendar(
-                firstDay: DateTime.utc(2020,1,1),
-                lastDay: DateTime.utc(2035,12,31),
-                focusedDay: _focusedDay,
-                calendarFormat: _calFormat,
-                selectedDayPredicate: (d) => _selectedDay != null && isSameDay(d, _selectedDay),
-                onDaySelected: (selected, focused) => setState(() { _selectedDay = selected; _focusedDay = focused; }),
-                onFormatChanged: (fmt) => setState(() => _calFormat = fmt),
-                headerStyle: HeaderStyle(formatButtonVisible: true, titleCentered: true, titleTextStyle: TextStyle(color: _text)),
-                calendarStyle: CalendarStyle(
-                  todayDecoration: BoxDecoration(color: _primary.withOpacity(.15), shape: BoxShape.circle),
-                  selectedDecoration: BoxDecoration(color: _primary, shape: BoxShape.circle),
-                ),
+        // Calendar (flexible in wide; fixed height in stacked mode)
+        if (!stacked)
+          Flexible(
+            fit: FlexFit.loose,
+            child: Card(
+              color: Colors.white,
+              surfaceTintColor: Colors.white,
+              shadowColor: Colors.black.withOpacity(0.05),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: LayoutBuilder(builder: (context, c) {
+                  // Choose a compact row height based on available height
+                  final available = c.maxHeight.isFinite ? c.maxHeight : 260.0;
+                  final rowH = (available / 7).clamp(24.0, 40.0);
+                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    TableCalendar(
+                      firstDay: DateTime.utc(2020,1,1),
+                      lastDay: DateTime.utc(2035,12,31),
+                      focusedDay: _focusedDay,
+                      calendarFormat: _calFormat,
+                      selectedDayPredicate: (d) => _selectedDay != null && isSameDay(d, _selectedDay),
+                      onDaySelected: (selected, focused) => setState(() { _selectedDay = selected; _focusedDay = focused; }),
+                      onFormatChanged: (fmt) => setState(() => _calFormat = fmt),
+                      headerStyle: HeaderStyle(formatButtonVisible: true, titleCentered: true, titleTextStyle: TextStyle(color: _text)),
+                      calendarStyle: CalendarStyle(
+                        todayDecoration: BoxDecoration(color: _primary.withOpacity(.15), shape: BoxShape.circle),
+                        selectedDecoration: BoxDecoration(color: _primary, shape: BoxShape.circle),
+                      ),
+                      rowHeight: rowH,
+                    ),
+                    const SizedBox(height: 6),
+                    Align(alignment: Alignment.centerRight, child: Text('Today', style: TextStyle(color: _primary, fontWeight: FontWeight.w600))),
+                  ]);
+                }),
               ),
-              const SizedBox(height: 8),
-              Align(alignment: Alignment.centerRight, child: Text('Today', style: TextStyle(color: _primary, fontWeight: FontWeight.w600))),
-            ]),
+            ),
+          )
+        else
+          SizedBox(
+            height: 280,
+            child: Card(
+              color: Colors.white,
+              surfaceTintColor: Colors.white,
+              shadowColor: Colors.black.withOpacity(0.05),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: LayoutBuilder(builder: (context, c) {
+                  final available = c.maxHeight.isFinite ? c.maxHeight : 260.0;
+                  final rowH = (available / 7).clamp(24.0, 40.0);
+                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    TableCalendar(
+                      firstDay: DateTime.utc(2020,1,1),
+                      lastDay: DateTime.utc(2035,12,31),
+                      focusedDay: _focusedDay,
+                      calendarFormat: _calFormat,
+                      selectedDayPredicate: (d) => _selectedDay != null && isSameDay(d, _selectedDay),
+                      onDaySelected: (selected, focused) => setState(() { _selectedDay = selected; _focusedDay = focused; }),
+                      onFormatChanged: (fmt) => setState(() => _calFormat = fmt),
+                      headerStyle: HeaderStyle(formatButtonVisible: true, titleCentered: true, titleTextStyle: TextStyle(color: _text)),
+                      calendarStyle: CalendarStyle(
+                        todayDecoration: BoxDecoration(color: _primary.withOpacity(.15), shape: BoxShape.circle),
+                        selectedDecoration: BoxDecoration(color: _primary, shape: BoxShape.circle),
+                      ),
+                      rowHeight: rowH,
+                    ),
+                    const SizedBox(height: 6),
+                    Align(alignment: Alignment.centerRight, child: Text('Today', style: TextStyle(color: _primary, fontWeight: FontWeight.w600))),
+                  ]);
+                }),
+              ),
+            ),
           ),
-        ),
         const SizedBox(height: 12),
-        Expanded(
-          child: Card(
+        if (!stacked)
+          Expanded(
+            child: Card(
+              color: Colors.white,
+              surfaceTintColor: Colors.white,
+              shadowColor: Colors.black.withOpacity(0.05),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Expanded(child: Text('Appointments for $dayLabel', style: TextStyle(fontWeight: FontWeight.w700, color: _text))),
+                    ElevatedButton.icon(
+                      onPressed: () => _showAddAppointmentDialog(context),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Appointment'),
+                      style: ElevatedButton.styleFrom(backgroundColor: _primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), textStyle: const TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: todays.isEmpty
+                        ? const Center(child: Text('No appointments'))
+                        : ListView.separated(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            itemCount: todays.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (_, i) => _buildAppointmentCard(context, todays[i]),
+                          ),
+                  ),
+                ]),
+              ),
+            ),
+          )
+        else
+          Card(
             color: Colors.white,
             surfaceTintColor: Colors.white,
             shadowColor: Colors.black.withOpacity(0.05),
@@ -325,22 +435,142 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
             child: Padding(
               padding: const EdgeInsets.all(12.0),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Appointments for $dayLabel', style: TextStyle(fontWeight: FontWeight.w700, color: _text)),
+                Row(children: [
+                  Expanded(child: Text('Appointments for $dayLabel', style: TextStyle(fontWeight: FontWeight.w700, color: _text))),
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddAppointmentDialog(context),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Appointment'),
+                    style: ElevatedButton.styleFrom(backgroundColor: _primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), textStyle: const TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ]),
                 const SizedBox(height: 8),
-                Expanded(
-                  child: todays.isEmpty
-                      ? const Center(child: Text('No appointments'))
-                      : ListView.separated(
-                          itemCount: todays.length,
-                          separatorBuilder: (_, __) => SizedBox(height: 8),
-                          itemBuilder: (_, i) => _buildAppointmentCard(context, todays[i]),
-                        ),
-                )
+                if (todays.isEmpty)
+                  const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: Text('No appointments')))
+                else
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: const EdgeInsets.only(bottom: 8),
+                    itemCount: todays.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) => _buildAppointmentCard(context, todays[i]),
+                  ),
               ]),
             ),
           ),
-        )
       ],
+    );
+  }
+
+  // -------- Add Appointment Dialog --------
+  void _showAddAppointmentDialog(BuildContext context) {
+    final patientProvider = context.read<PatientProvider>();
+    final apptProvider = context.read<AppointmentProvider>();
+    final doctorProvider = context.read<DoctorProvider>();
+    final patients = patientProvider.patients;
+    bool existing = true;
+    String search = '';
+    String? selectedPatientId;
+    DateTime? date = _selectedDay ?? DateTime.now();
+    TimeOfDay? time = TimeOfDay.now();
+    final noteCtrl = TextEditingController();
+    String? doctorId = _doctorId;
+
+    Future<void> openPicker() async {
+      final now = DateTime.now();
+      final first = DateTime(now.year - 1, now.month, now.day);
+      final last = DateTime(now.year + 2, now.month, now.day);
+      final pickedDate = await showDatePicker(context: context, initialDate: date ?? now, firstDate: first, lastDate: last);
+      if (pickedDate == null) return;
+      final pickedTime = await showTimePicker(context: context, initialTime: time ?? TimeOfDay.now());
+      if (pickedTime == null) return;
+      date = pickedDate;
+      time = pickedTime;
+    }
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(builder: (context, setSt) {
+        final filtered = search.trim().isEmpty
+            ? patients
+            : patients.where((p) => p.name.toLowerCase().contains(search.toLowerCase()) || p.displayNumber.toString() == search).toList();
+        return AlertDialog(
+          title: const Text('Add Appointment'),
+          content: SizedBox(
+            width: 520,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Row(children: [
+                ChoiceChip(label: const Text('Existing patient'), selected: existing, onSelected: (v) => setSt(() => existing = true)),
+                const SizedBox(width: 8),
+                ChoiceChip(label: const Text('New patient'), selected: !existing, onSelected: (v) => setSt(() => existing = false)),
+              ]),
+              const SizedBox(height: 12),
+              if (existing) ...[
+                TextField(
+                  decoration: const InputDecoration(prefixIcon: Icon(Icons.search), labelText: 'Search by name or ID'),
+                  onChanged: (v) => setSt(() => search = v.trim()),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: selectedPatientId,
+                  decoration: const InputDecoration(labelText: 'Select patient'),
+                  items: filtered.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.displayNumber}. ${p.name}'))).toList(),
+                  onChanged: (v) => setSt(() => selectedPatientId = v),
+                ),
+                const SizedBox(height: 12),
+              ] else ...[
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await Navigator.of(context).pushNamed(AddPatientPage.routeName);
+                    WidgetsBinding.instance.addPostFrameCallback((_) => _showAddAppointmentDialog(context));
+                  },
+                  icon: const Icon(Icons.person_add),
+                  label: const Text('Open Add Patient form'),
+                ),
+                const SizedBox(height: 12),
+              ],
+              DropdownButtonFormField<String?>(
+                value: doctorId,
+                decoration: const InputDecoration(labelText: 'Doctor (optional)'),
+                items: [
+                  const DropdownMenuItem<String?>(value: null, child: Text('Any doctor')),
+                  for (final d in doctorProvider.doctors) DropdownMenuItem<String?>(value: d.id, child: Text(d.name)),
+                ],
+                onChanged: (v) => setSt(() => doctorId = v),
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async { await openPicker(); setSt(() {}); },
+                    icon: const Icon(Icons.event),
+                    label: Text(date == null || time == null ? 'Pick date & time' : '${date!.year}-${date!.month.toString().padLeft(2,'0')}-${date!.day.toString().padLeft(2,'0')}  ${time!.format(context)}'),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 8),
+              TextField(controller: noteCtrl, decoration: const InputDecoration(labelText: 'Purpose of visit (note)')),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                if (existing && (selectedPatientId == null || date == null || time == null)) return;
+                if (!existing) return;
+                final dt = DateTime(date!.year, date!.month, date!.day, time!.hour, time!.minute);
+                final doctorName = doctorId == null ? null : doctorProvider.byId(doctorId!)?.name;
+                apptProvider.add(Appointment(patientId: selectedPatientId!, dateTime: dt, reason: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(), doctorId: doctorId, doctorName: doctorName));
+                Navigator.pop(context);
+                setState(() {});
+              },
+              child: const Text('Save'),
+            )
+          ],
+        );
+      }),
     );
   }
 
