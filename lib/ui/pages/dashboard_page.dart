@@ -8,6 +8,7 @@ import 'attendance_view.dart';
 import '../../providers/staff_attendance_provider.dart';
 import '../../providers/doctor_attendance_provider.dart';
 import '../../providers/doctor_provider.dart';
+import '../../providers/medicine_provider.dart';
 import '../widgets/cases_overview_chart.dart';
 import '../widgets/upcoming_schedule_panel.dart';
 import 'doctors_payments_section.dart';
@@ -32,6 +33,7 @@ enum DashboardSection {
   doctorsAttendance('Doctors Attendance', Icons.medical_services_outlined),
   inventory('Inventory', Icons.inventory_2_outlined),
   labs('Labs', Icons.biotech_outlined),
+  medicines('Medicines', Icons.medication_outlined),
   settings('Settings', Icons.settings_outlined);
 
   final String label;
@@ -126,6 +128,8 @@ class _DashboardPageState extends State<DashboardPage> {
         return _inventorySection();
       case DashboardSection.labs:
         return _labsSection();
+      case DashboardSection.medicines:
+        return _medicinesSection();
       case DashboardSection.settings:
         return _settingsSection();
     }
@@ -525,6 +529,104 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
       ]),
+    );
+  }
+
+  // ============== Medicines ==============
+  Widget _medicinesSection() {
+    final medProv = context.watch<MedicineProvider>();
+    final meds = medProv.medicines;
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Medicines', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 12),
+        Row(children: [
+          ElevatedButton.icon(onPressed: _showAddMedicineDialog, icon: const Icon(Icons.add), label: const Text('Add Medicine')),
+          const SizedBox(width: 12),
+          Text('Total: ${meds.length}')
+        ]),
+        const SizedBox(height: 16),
+        Expanded(
+          child: Card(
+            child: meds.isEmpty
+                ? const Center(child: Text('No medicines added'))
+                : ListView.separated(
+                    itemCount: meds.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, i) {
+                      final m = meds[i];
+                      final profit = m.mrp - m.storeAmount;
+                      return ListTile(
+                        title: Text(m.name),
+                        subtitle: Text('Store: ₹${m.storeAmount.toStringAsFixed(0)}   •   MRP: ₹${m.mrp.toStringAsFixed(0)}   •   Profit/strip: ₹${profit.toStringAsFixed(0)}   •   Strips: ${m.stripsAvailable}'),
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (v) async {
+                            if (v == 'delete') {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  title: const Text('Delete Medicine?'),
+                                  content: Text('Delete "${m.name}"? This cannot be undone.'),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                                    FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) await context.read<MedicineProvider>().deleteMedicine(m.id);
+                            }
+                          },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(value: 'delete', child: Text('Delete')),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  void _showAddMedicineDialog() {
+    final nameCtrl = TextEditingController();
+    final storeCtrl = TextEditingController(text: '0');
+    final mrpCtrl = TextEditingController(text: '0');
+    final stripsCtrl = TextEditingController(text: '0');
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Add Medicine'),
+        content: SizedBox(
+          width: 420,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Medicine name')),
+            const SizedBox(height: 8),
+            TextField(controller: storeCtrl, decoration: const InputDecoration(labelText: 'Store amount (cost per strip)'), keyboardType: TextInputType.number),
+            const SizedBox(height: 8),
+            TextField(controller: mrpCtrl, decoration: const InputDecoration(labelText: 'MRP (selling price per strip)'), keyboardType: TextInputType.number),
+            const SizedBox(height: 8),
+            TextField(controller: stripsCtrl, decoration: const InputDecoration(labelText: 'No. of strips available'), keyboardType: TextInputType.number),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              final store = double.tryParse(storeCtrl.text.trim()) ?? 0;
+              final mrp = double.tryParse(mrpCtrl.text.trim()) ?? 0;
+              final strips = int.tryParse(stripsCtrl.text.trim()) ?? 0;
+              if (name.isEmpty) return;
+              await context.read<MedicineProvider>().addMedicine(name: name, storeAmount: store, mrp: mrp, strips: strips);
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
     );
   }
 

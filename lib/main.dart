@@ -12,6 +12,7 @@ import 'providers/staff_attendance_provider.dart';
 import 'providers/doctor_attendance_provider.dart';
 import 'providers/doctor_provider.dart';
 import 'providers/lab_registry_provider.dart';
+import 'providers/medicine_provider.dart';
 import 'ui/pages/splash_page.dart';
 import 'core/app_theme.dart';
 
@@ -37,6 +38,7 @@ class DentalClinicApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => DoctorAttendanceProvider()),
   ChangeNotifierProvider(create: (_) => DoctorProvider()),
     ChangeNotifierProvider(create: (_) => LabRegistryProvider()),
+    ChangeNotifierProvider(create: (_) => MedicineProvider()),
       ],
       child: Builder(
         builder: (ctx) {
@@ -51,6 +53,8 @@ class DentalClinicApp extends StatelessWidget {
             ctx.read<LabRegistryProvider>().ensureLoaded();
             // Load revenue so dashboard shows persisted totals
             ctx.read<RevenueProvider>().ensureLoaded();
+            // Load medicines
+            ctx.read<MedicineProvider>().ensureLoaded();
           });
           return MaterialApp(
             title: 'Dental Clinic',
