@@ -9,6 +9,7 @@ import '../../providers/staff_attendance_provider.dart';
 import '../../providers/doctor_attendance_provider.dart';
 import '../../providers/doctor_provider.dart';
 import '../../providers/medicine_provider.dart';
+import '../../providers/options_provider.dart';
 import '../widgets/cases_overview_chart.dart';
 import '../widgets/upcoming_schedule_panel.dart';
 import 'doctors_payments_section.dart';
@@ -620,7 +621,10 @@ class _DashboardPageState extends State<DashboardPage> {
               final mrp = double.tryParse(mrpCtrl.text.trim()) ?? 0;
               final strips = int.tryParse(stripsCtrl.text.trim()) ?? 0;
               if (name.isEmpty) return;
+              // Save in inventory
               await context.read<MedicineProvider>().addMedicine(name: name, storeAmount: store, mrp: mrp, strips: strips);
+              // Also add to selectable medicine options (avoids picker not showing new meds)
+              await context.read<OptionsProvider>().addValue('medicines', name);
               if (context.mounted) Navigator.pop(context);
             },
             child: const Text('Add'),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart'; // keep Flutter material
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../providers/medicine_provider.dart';
 import 'package:provider/provider.dart';
 import '../../providers/doctor_provider.dart';
 import '../../providers/doctor_attendance_provider.dart';
@@ -72,6 +73,12 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   final TextEditingController _rxTiming = TextEditingController();
   final TextEditingController _rxTablets = TextEditingController();
   final TextEditingController _rxDays = TextEditingController();
+  // Inline edit state for prescription items
+  int? _editingRxIndex;
+  String? _editRxSelectedMedicine;
+  final TextEditingController _editRxTiming = TextEditingController();
+  final TextEditingController _editRxTablets = TextEditingController();
+  final TextEditingController _editRxDays = TextEditingController();
 
   // General Payment
   final List<PaymentEntry> _generalPayments = [];
@@ -141,6 +148,13 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   final List<ProcedureStep> _labSteps = [];
   bool _addingLabProcedure = false;
   String? _linkedSessionId; // For linking lab work to existing General/Root Canal session
+  // Root canal prescription UI toggle
+  bool _showRcPrescription = false;
+  String? _editingRcStepId; // inline edit mode for RC step
+  final TextEditingController _editRcDesc = TextEditingController();
+  final TextEditingController _editRcPay = TextEditingController();
+  final TextEditingController _editRcNote = TextEditingController();
+  DateTime? _editRcDate;
   DateTime _newLabProcedureDate = DateTime.now();
   final TextEditingController _newLabProcedure = TextEditingController();
   final TextEditingController _newLabPayment = TextEditingController();
@@ -1551,6 +1565,32 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           keyboardType: TextInputType.number,
                         ),
                         const SizedBox(height: 8),
+                        // Add Prescription toggle (same UI as General Rx)
+                        OutlinedButton.icon(
+                          onPressed: () => setState(() => _showRcPrescription = !_showRcPrescription),
+                          icon: Icon(_showRcPrescription ? Icons.close : Icons.medication_outlined),
+                          label: Text(_showRcPrescription ? 'Close Prescription' : 'Add Prescription'),
+                        ),
+                        if (_showRcPrescription) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: .25),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _prescriptionBuilder(),
+                                const SizedBox(height: 8),
+                                _editablePrescriptionList(),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
                         Row(children:[
                           ElevatedButton(
                             onPressed: () {
@@ -1561,6 +1601,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                               setState(() {
                                 _rcSteps.add(step);
                                 _addingRcSession = false;
+                                _showRcPrescription = false;
                                 _newRcTreatment.clear();
                                 _newRcPayment.clear();
                                 _newRcSessionDate = DateTime.now();
@@ -1569,7 +1610,15 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                             child: const Text('Save'),
                           ),
                           const SizedBox(width: 12),
-                          TextButton(onPressed: () { setState(()=> _addingRcSession = false); }, child: const Text('Cancel')),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _addingRcSession = false;
+                                _showRcPrescription = false;
+                              });
+                            },
+                            child: const Text('Cancel'),
+                          ),
                         ])
                       ],
                     ),
@@ -1580,13 +1629,136 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                   const Text('No treatment sessions recorded.')
                 else
                   Column(
-                    children: _rcSteps.map((s) => ListTile(
-                      dense: true,
-                      title: Text('${s.date.toLocal().toString().split(' ').first} • ${s.description}'),
-                      subtitle: s.payment==null? null : Text('Paid: ${s.payment}'),
-                      trailing: IconButton(icon: const Icon(Icons.delete, size: 18), onPressed: () => setState(() => _rcSteps.remove(s))),
-                    )).toList(),
+                    children: _rcSteps.map((s) {
+                      final isEditing = _editingRcStepId == s.id;
+                      if (!isEditing) {
+                        return ListTile(
+                          dense: true,
+                          title: Text('${s.date.toLocal().toString().split(' ').first} • ${s.description}'),
+                          subtitle: s.payment==null? null : Text('Paid: ${s.payment}'),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Edit',
+                                icon: const Icon(Icons.edit, size: 18),
+                                onPressed: () {
+                                  setState(() {
+                                    _editingRcStepId = s.id;
+                                    _editRcDesc.text = s.description;
+                                    _editRcPay.text = s.payment?.toString() ?? '';
+                                    _editRcNote.text = s.note ?? '';
+                                    _editRcDate = s.date;
+                                  });
+                                },
+                              ),
+                              IconButton(
+                                tooltip: 'Delete',
+                                icon: const Icon(Icons.delete, size: 18),
+                                onPressed: () => setState(() => _rcSteps.remove(s)),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      // Inline editor for this step
+                      return Container(
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: .35),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text('Date: ${(_editRcDate ?? s.date).toLocal().toString().split(' ').first}', style: const TextStyle(fontSize: 13)),
+                                ),
+                                TextButton(
+                                  onPressed: () async {
+                                    final now = DateTime.now();
+                                    final picked = await showDatePicker(
+                                      context: context,
+                                      firstDate: DateTime(now.year - 2),
+                                      lastDate: DateTime(now.year + 2),
+                                      initialDate: _editRcDate ?? s.date,
+                                    );
+                                    if (picked != null) setState(() => _editRcDate = picked);
+                                  },
+                                  child: const Text('Change Date'),
+                                )
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            TextField(controller: _editRcDesc, decoration: const InputDecoration(labelText: 'Description *')),
+                            Row(children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _editRcPay,
+                                  decoration: const InputDecoration(labelText: 'Payment (optional)'),
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextField(
+                                  controller: _editRcNote,
+                                  decoration: const InputDecoration(labelText: 'Note (optional)'),
+                                ),
+                              ),
+                            ]),
+                            const SizedBox(height: 8),
+                            Row(children: [
+                              ElevatedButton(
+                                onPressed: () {
+                                  if (_editRcDesc.text.trim().isEmpty) return;
+                                  final updated = ProcedureStep(
+                                    id: s.id,
+                                    date: _editRcDate ?? s.date,
+                                    description: _editRcDesc.text.trim(),
+                                    payment: double.tryParse(_editRcPay.text.trim()),
+                                    note: _editRcNote.text.trim().isEmpty ? null : _editRcNote.text.trim(),
+                                  );
+                                  setState(() {
+                                    final idx = _rcSteps.indexWhere((e) => e.id == s.id);
+                                    if (idx != -1) _rcSteps[idx] = updated;
+                                    _editingRcStepId = null;
+                                    _editRcDesc.clear();
+                                    _editRcPay.clear();
+                                    _editRcNote.clear();
+                                    _editRcDate = null;
+                                  });
+                                },
+                                child: const Text('Save'),
+                              ),
+                              const SizedBox(width: 12),
+                              TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _editingRcStepId = null;
+                                    _editRcDesc.clear();
+                                    _editRcPay.clear();
+                                    _editRcNote.clear();
+                                    _editRcDate = null;
+                                  });
+                                },
+                                child: const Text('Cancel'),
+                              ),
+                            ])
+                          ],
+                        ),
+                      );
+                    }).toList(),
                   ),
+                if (_prescription.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text('Prescription', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  _editablePrescriptionList(maxHeight: 200),
+                ],
                 if (_rcTotal.text.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Text(_rootCanalBalanceSummary(), style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
@@ -2273,6 +2445,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           rootCanalSteps: List.from(_rcSteps),
           rootCanalPlans: List.from(_rcPlans),
           rootCanalDoctorInCharge: _selectedRcDoctor,
+          // Allow prescription captured from RCT form as well
+          prescription: List.from(_prescription),
         );
       case TreatmentType.prosthodontic:
         return TreatmentSession(
@@ -2370,7 +2544,11 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     return showDialog<String>(
       context: context,
       builder: (ctx) => StatefulBuilder(builder: (ctx, setSB) {
-        final filtered = opt.medicineOptions.where((m) => m.toLowerCase().contains(query.toLowerCase())).toList();
+        // Merge names from inventory and options, then filter and sort
+        final inv = ctx.read<MedicineProvider>().medicines.map((m) => m.name).toList();
+        final merged = <String>{...inv, ...opt.medicineOptions}.toList()
+          ..sort((a,b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        final filtered = merged.where((m) => m.toLowerCase().contains(query.toLowerCase())).toList();
         return AlertDialog(
           title: const Text('Select Medicine'),
           content: SizedBox(
@@ -2419,6 +2597,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                     itemCount: filtered.length,
                     itemBuilder: (c, i) {
                       final med = filtered[i];
+                      final isFromOptions = opt.medicineOptions.any((e) => e.toLowerCase() == med.toLowerCase());
                       return ListTile(
                         leading: Radio<String>(
                           value: med,
@@ -2426,20 +2605,22 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           onChanged: (v)=> setSB(()=> localSelected = v),
                         ),
                         title: Text(med),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () async {
-                            final ok = await opt.removeValue('medicines', med);
-                            if (!ok) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: medicine in use.')));
-                              }
-                            } else {
-                              if (localSelected == med) localSelected = null;
-                              setSB(() {});
-                            }
-                          },
-                        ),
+                        trailing: isFromOptions
+                            ? IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () async {
+                                  final ok = await opt.removeValue('medicines', med);
+                                  if (!ok) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: medicine in use.')));
+                                    }
+                                  } else {
+                                    if (localSelected == med) localSelected = null;
+                                    setSB(() {});
+                                  }
+                                },
+                              )
+                            : null,
                         onTap: () => setSB(()=> localSelected = med),
                       );
                     },
@@ -2784,7 +2965,14 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   }
 
   void _addPrescriptionItem() {
-    if (_rxSelectedMedicine == null || _rxTiming.text.trim().isEmpty) return;
+    if (_rxSelectedMedicine == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select a medicine first')));
+      return;
+    }
+    if (_rxTiming.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter timing (e.g. 1-0-1)')));
+      return;
+    }
     final serial = _prescription.length + 1;
     setState(() {
       _prescription.add(PrescriptionItem(
@@ -2797,6 +2985,146 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       _rxTablets.clear();
       _rxDays.clear();
     });
+  }
+
+  Widget _editablePrescriptionList({double? maxHeight}) {
+    if (_prescription.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 4),
+        child: Text('No prescriptions added yet.'),
+      );
+    }
+    final listView = ListView.builder(
+      shrinkWrap: maxHeight == null,
+      itemCount: _prescription.length,
+      itemBuilder: (ctx, i) {
+        final p = _prescription[i];
+        final isEditing = _editingRxIndex == i;
+        if (!isEditing) {
+          return ListTile(
+            dense: true,
+            title: Text('#Rx-${p.serial.toString().padLeft(3, '0')}  ${p.medicine}  ${p.timing}'),
+            subtitle: Text('${p.tablets} tabs/ml x ${p.days} days'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Edit',
+                  icon: const Icon(Icons.edit, size: 18),
+                  onPressed: () {
+                    setState(() {
+                      _editingRxIndex = i;
+                      _editRxSelectedMedicine = p.medicine;
+                      _editRxTiming.text = p.timing;
+                      _editRxTablets.text = p.tablets.toString();
+                      _editRxDays.text = p.days.toString();
+                    });
+                  },
+                ),
+                IconButton(
+                  tooltip: 'Delete',
+                  icon: const Icon(Icons.delete, size: 18),
+                  onPressed: () => setState(() => _prescription.removeAt(i)),
+                ),
+              ],
+            ),
+          );
+        }
+        // Inline editor row
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Builder(builder: (ctx) {
+                final opt = ctx.watch<OptionsProvider>();
+                return Row(children: [
+                  Expanded(
+                    flex: 3,
+                    child: InkWell(
+                      onTap: () async {
+                        final selected = await _openMedicinePicker(opt);
+                        if (selected != null) setState(() => _editRxSelectedMedicine = selected);
+                      },
+                      child: InputDecorator(
+                        decoration: const InputDecoration(labelText: 'Medicine'),
+                        child: Text(_editRxSelectedMedicine ?? p.medicine,
+                            style: TextStyle(color: (_editRxSelectedMedicine ?? p.medicine).isEmpty ? Colors.grey : null)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      controller: _editRxTiming,
+                      decoration: const InputDecoration(labelText: 'Timing (e.g. 1-0-1)'),
+                    ),
+                  ),
+                ]);
+              }),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(
+                  child: TextField(
+                    controller: _editRxTablets,
+                    decoration: const InputDecoration(labelText: 'Qty (Tabs/ml)'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _editRxDays,
+                    decoration: const InputDecoration(labelText: 'Days'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    final med = _editRxSelectedMedicine ?? p.medicine;
+                    final timing = _editRxTiming.text.trim().isEmpty ? p.timing : _editRxTiming.text.trim();
+                    final tabs = int.tryParse(_editRxTablets.text.trim());
+                    final days = int.tryParse(_editRxDays.text.trim());
+                    setState(() {
+                      _prescription[i] = PrescriptionItem(
+                        serial: p.serial,
+                        medicine: med,
+                        timing: timing,
+                        tablets: tabs ?? p.tablets,
+                        days: days ?? p.days,
+                      );
+                      _editingRxIndex = null;
+                      _editRxSelectedMedicine = null;
+                      _editRxTiming.clear();
+                      _editRxTablets.clear();
+                      _editRxDays.clear();
+                    });
+                  },
+                  child: const Text('Save'),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _editingRxIndex = null;
+                      _editRxSelectedMedicine = null;
+                      _editRxTiming.clear();
+                      _editRxTablets.clear();
+                      _editRxDays.clear();
+                    });
+                  },
+                  child: const Text('Cancel'),
+                )
+              ]),
+            ],
+          ),
+        );
+      },
+    );
+    if (maxHeight == null) return listView;
+    return SizedBox(height: maxHeight, child: Scrollbar(thumbVisibility: true, child: listView));
   }
 
   // Removed unused _addProcedureStep (replaced by direct step creation flows elsewhere)
@@ -4749,6 +5077,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             ..clear()
             ..addAll(s.rootCanalPlans);
           _selectedRcDoctor = s.rootCanalDoctorInCharge;
+          _prescription
+            ..clear()
+            ..addAll(s.prescription);
           break;
         case TreatmentType.prosthodontic:
           _prosthoFindings
@@ -4814,6 +5145,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   _rcPlans.clear();
   _selectedRcDoctor = null;
   _addingRcSession = false;
+  _showRcPrescription = false;
   _newRcTreatment.clear();
   _newRcPayment.clear();
     // Prosthodontic
