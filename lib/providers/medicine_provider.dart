@@ -15,13 +15,13 @@ class MedicineProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addMedicine({required String name, required double storeAmount, required double mrp, required int strips}) async {
-    await _repo.add(name: name, storeAmount: storeAmount, mrp: mrp, strips: strips);
+  Future<void> addMedicine({required String name, required double storeAmount, required double mrp, required int strips, int unitsPerStrip = 10}) async {
+    await _repo.add(name: name, storeAmount: storeAmount, mrp: mrp, strips: strips, unitsPerStrip: unitsPerStrip);
     notifyListeners();
   }
 
-  Future<void> updateMedicine(String id, {String? name, double? storeAmount, double? mrp, int? strips}) async {
-    await _repo.update(id, name: name, storeAmount: storeAmount, mrp: mrp, strips: strips);
+  Future<void> updateMedicine(String id, {String? name, double? storeAmount, double? mrp, int? strips, int? unitsPerStrip}) async {
+    await _repo.update(id, name: name, storeAmount: storeAmount, mrp: mrp, strips: strips, unitsPerStrip: unitsPerStrip);
     notifyListeners();
   }
 

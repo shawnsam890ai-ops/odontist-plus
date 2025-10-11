@@ -4,7 +4,6 @@ import 'package:flutter/material.dart'; // keep Flutter material
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
-import '../../providers/medicine_provider.dart';
 import 'package:provider/provider.dart';
 import '../../providers/doctor_provider.dart';
 import '../../providers/doctor_attendance_provider.dart';
@@ -18,6 +17,8 @@ import '../../providers/patient_provider.dart';
 import '../../providers/options_provider.dart';
 import '../../providers/lab_registry_provider.dart';
 import '../../providers/revenue_provider.dart';
+import '../../providers/medicine_provider.dart';
+import '../../models/medicine.dart';
 import '../../models/lab_vendor.dart';
 import '../../core/enums.dart';
 import '../../core/constants.dart';
@@ -244,6 +245,24 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                                 }
                                               } catch (_) {
                                                 // Safe-guard: ignore revenue add errors to not block session save
+                                              }
+                                            }
+                                            // If it's General or Root Canal, record medicine profit to Revenue
+                                            if (session.type == TreatmentType.general || session.type == TreatmentType.rootCanal) {
+                                              try {
+                                                final meds = context.read<MedicineProvider>().medicines;
+                                                final medProfit = _computeMedicineProfit(session.prescription, meds);
+                                                if (medProfit > 0.0) {
+                                                  await context.read<RevenueProvider>().addRevenue(
+                                                    patientId: patient.id,
+                                                    description: session.type == TreatmentType.general
+                                                        ? 'Medicine profit: General Rx'
+                                                        : 'Medicine profit: Root Canal Rx',
+                                                    amount: medProfit,
+                                                  );
+                                                }
+                                              } catch (_) {
+                                                // ignore to avoid blocking save
                                               }
                                             }
                                             final syncMsg = await _syncDoctorPaymentsFromSession(context, patient.name, session);
@@ -2839,6 +2858,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     return reg.hasMatch(value.trim());
   }
 
+  
+
   void _addInlineOralFinding() {
     if (_selectedOralFindingOptions.isEmpty) {
       // Fallback: if user typed manual finding text in old field (still present logically)
@@ -3217,6 +3238,33 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     final paid = _prosthoSteps.fold<double>(0, (p, e) => p + (e.payment ?? 0));
     final bal = total - paid;
     return 'Paid: $paid / Total: $total  Balance: $bal';
+  }
+
+  double _computeMedicineProfit(List<PrescriptionItem> rxList, List<Medicine> inventory) {
+    if (rxList.isEmpty || inventory.isEmpty) return 0.0;
+    const int defaultUnitsPerStrip = 10;
+    double totalProfit = 0.0;
+    for (final rx in rxList) {
+      // Find matching medicine in inventory (case-insensitive)
+      final matches = inventory.where((m) => m.name.toLowerCase() == rx.medicine.toLowerCase());
+      if (matches.isEmpty) continue; // not in inventory, skip
+      final med = matches.first;
+      // Estimate number of strips consumed for this prescription
+      // tabs per day approximated from timing string (sum of digits in patterns like 1-0-1). Fallback to tablets value if timing parsing fails.
+      int perDayFromTiming = 0;
+      for (final m in RegExp(r'[0-9]').allMatches(rx.timing)) {
+        perDayFromTiming += int.parse(m.group(0)!);
+      }
+      final perDay = perDayFromTiming > 0 ? perDayFromTiming : (rx.tablets > 0 ? rx.tablets ~/ (rx.days == 0 ? 1 : rx.days) : 0);
+      final totalUnits = (perDay * (rx.days > 0 ? rx.days : 1)).clamp(0, 1000000);
+  final unitsPerStrip = (med.unitsPerStrip > 0) ? med.unitsPerStrip : defaultUnitsPerStrip;
+  final strips = (totalUnits / unitsPerStrip).ceil();
+      final profitPerStrip = (med.mrp - med.storeAmount);
+      if (profitPerStrip > 0) {
+        totalProfit += strips * profitPerStrip;
+      }
+    }
+    return totalProfit;
   }
 
   Future<void> _exportOrthodonticSummaryPdf(Patient patient) async {

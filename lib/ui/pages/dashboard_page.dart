@@ -10,6 +10,7 @@ import '../../providers/doctor_attendance_provider.dart';
 import '../../providers/doctor_provider.dart';
 import '../../providers/medicine_provider.dart';
 import '../../providers/options_provider.dart';
+import '../../models/medicine.dart';
 import '../widgets/cases_overview_chart.dart';
 import '../widgets/upcoming_schedule_panel.dart';
 import 'doctors_payments_section.dart';
@@ -560,10 +561,12 @@ class _DashboardPageState extends State<DashboardPage> {
                       final profit = m.mrp - m.storeAmount;
                       return ListTile(
                         title: Text(m.name),
-                        subtitle: Text('Store: ₹${m.storeAmount.toStringAsFixed(0)}   •   MRP: ₹${m.mrp.toStringAsFixed(0)}   •   Profit/strip: ₹${profit.toStringAsFixed(0)}   •   Strips: ${m.stripsAvailable}'),
+                        subtitle: Text('Store: ₹${m.storeAmount.toStringAsFixed(0)}   •   MRP: ₹${m.mrp.toStringAsFixed(0)}   •   Profit/strip: ₹${profit.toStringAsFixed(0)}   •   Units/strip: ${m.unitsPerStrip}   •   Strips: ${m.stripsAvailable}'),
                         trailing: PopupMenuButton<String>(
                           onSelected: (v) async {
-                            if (v == 'delete') {
+                            if (v == 'edit') {
+                              await _showEditMedicineDialog(m);
+                            } else if (v == 'delete') {
                               final confirm = await showDialog<bool>(
                                 context: context,
                                 builder: (_) => AlertDialog(
@@ -579,6 +582,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             }
                           },
                           itemBuilder: (_) => const [
+                            PopupMenuItem(value: 'edit', child: Text('Edit')),
                             PopupMenuItem(value: 'delete', child: Text('Delete')),
                           ],
                         ),
@@ -595,7 +599,8 @@ class _DashboardPageState extends State<DashboardPage> {
     final nameCtrl = TextEditingController();
     final storeCtrl = TextEditingController(text: '0');
     final mrpCtrl = TextEditingController(text: '0');
-    final stripsCtrl = TextEditingController(text: '0');
+  final stripsCtrl = TextEditingController(text: '0');
+  final unitsCtrl = TextEditingController(text: '10');
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -610,6 +615,8 @@ class _DashboardPageState extends State<DashboardPage> {
             TextField(controller: mrpCtrl, decoration: const InputDecoration(labelText: 'MRP (selling price per strip)'), keyboardType: TextInputType.number),
             const SizedBox(height: 8),
             TextField(controller: stripsCtrl, decoration: const InputDecoration(labelText: 'No. of strips available'), keyboardType: TextInputType.number),
+            const SizedBox(height: 8),
+            TextField(controller: unitsCtrl, decoration: const InputDecoration(labelText: 'Units per strip (tabs/ml)'), keyboardType: TextInputType.number),
           ]),
         ),
         actions: [
@@ -622,12 +629,68 @@ class _DashboardPageState extends State<DashboardPage> {
               final strips = int.tryParse(stripsCtrl.text.trim()) ?? 0;
               if (name.isEmpty) return;
               // Save in inventory
-              await context.read<MedicineProvider>().addMedicine(name: name, storeAmount: store, mrp: mrp, strips: strips);
+              final ups = int.tryParse(unitsCtrl.text.trim()) ?? 10;
+              await context.read<MedicineProvider>().addMedicine(name: name, storeAmount: store, mrp: mrp, strips: strips, unitsPerStrip: ups);
               // Also add to selectable medicine options (avoids picker not showing new meds)
               await context.read<OptionsProvider>().addValue('medicines', name);
               if (context.mounted) Navigator.pop(context);
             },
             child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showEditMedicineDialog(Medicine m) async {
+    final nameCtrl = TextEditingController(text: m.name);
+    final storeCtrl = TextEditingController(text: m.storeAmount.toStringAsFixed(0));
+    final mrpCtrl = TextEditingController(text: m.mrp.toStringAsFixed(0));
+    final stripsCtrl = TextEditingController(text: m.stripsAvailable.toString());
+    final unitsCtrl = TextEditingController(text: m.unitsPerStrip.toString());
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Edit Medicine'),
+        content: SizedBox(
+          width: 420,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Medicine name')),
+            const SizedBox(height: 8),
+            TextField(controller: storeCtrl, decoration: const InputDecoration(labelText: 'Store amount (cost per strip)'), keyboardType: TextInputType.number),
+            const SizedBox(height: 8),
+            TextField(controller: mrpCtrl, decoration: const InputDecoration(labelText: 'MRP (selling price per strip)'), keyboardType: TextInputType.number),
+            const SizedBox(height: 8),
+            TextField(controller: stripsCtrl, decoration: const InputDecoration(labelText: 'No. of strips available'), keyboardType: TextInputType.number),
+            const SizedBox(height: 8),
+            TextField(controller: unitsCtrl, decoration: const InputDecoration(labelText: 'Units per strip (tabs/ml)'), keyboardType: TextInputType.number),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              final store = double.tryParse(storeCtrl.text.trim()) ?? m.storeAmount;
+              final mrp = double.tryParse(mrpCtrl.text.trim()) ?? m.mrp;
+              final strips = int.tryParse(stripsCtrl.text.trim()) ?? m.stripsAvailable;
+              final ups = int.tryParse(unitsCtrl.text.trim()) ?? m.unitsPerStrip;
+              await context.read<MedicineProvider>().updateMedicine(
+                    m.id,
+                    name: name,
+                    storeAmount: store,
+                    mrp: mrp,
+                    strips: strips,
+                    unitsPerStrip: ups,
+                  );
+              // Ensure pickers include renamed medicine if name changed
+              if (name != m.name) {
+                await context.read<OptionsProvider>().addValue('medicines', name);
+              }
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Save'),
           ),
         ],
       ),

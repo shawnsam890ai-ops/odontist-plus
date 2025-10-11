@@ -24,20 +24,21 @@ class MedicineRepository {
     await prefs.setString(_key, jsonEncode(_items.map((e) => e.toJson()).toList()));
   }
 
-  Future<Medicine> add({required String name, required double storeAmount, required double mrp, required int strips}) async {
+  Future<Medicine> add({required String name, required double storeAmount, required double mrp, required int strips, int unitsPerStrip = 10}) async {
     final m = Medicine(
       id: _uuid.v4(),
       name: name,
       storeAmount: storeAmount,
       mrp: mrp,
       stripsAvailable: strips,
+      unitsPerStrip: unitsPerStrip,
     );
     _items.add(m);
     await _persist();
     return m;
   }
 
-  Future<void> update(String id, {String? name, double? storeAmount, double? mrp, int? strips}) async {
+  Future<void> update(String id, {String? name, double? storeAmount, double? mrp, int? strips, int? unitsPerStrip}) async {
     final i = _items.indexWhere((e) => e.id == id);
     if (i == -1) return;
     final cur = _items[i];
@@ -47,6 +48,7 @@ class MedicineRepository {
       storeAmount: storeAmount ?? cur.storeAmount,
       mrp: mrp ?? cur.mrp,
       stripsAvailable: strips ?? cur.stripsAvailable,
+      unitsPerStrip: unitsPerStrip ?? cur.unitsPerStrip,
     );
     await _persist();
   }

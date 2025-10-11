@@ -57,13 +57,13 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(backgroundColor: primaryGreen, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
       ),
-      chipTheme: ChipThemeData(
+      chipTheme: const ChipThemeData(
         backgroundColor: Colors.white,
         selectedColor: primaryGreen,
         secondarySelectedColor: primaryGreen,
-        labelStyle: const TextStyle(color: textSecondary),
-        secondaryLabelStyle: const TextStyle(color: Colors.white),
-        side: const BorderSide(color: dividerColor),
+        labelStyle: TextStyle(color: textSecondary),
+        secondaryLabelStyle: TextStyle(color: Colors.white),
+        side: BorderSide(color: dividerColor),
       ),
       iconTheme: const IconThemeData(color: textSecondary),
       listTileTheme: const ListTileThemeData(iconColor: textSecondary, textColor: textPrimary),
