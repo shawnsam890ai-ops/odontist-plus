@@ -7,6 +7,7 @@ enum DoctorRole {
   oralMaxillofacialSurgeon,
   prosthodontist,
   periodontist,
+  owner,
 }
 
 class Doctor {

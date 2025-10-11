@@ -129,6 +129,8 @@ class DoctorsPaymentsSection extends StatelessWidget {
         return 'Prosthodontist';
       case DoctorRole.periodontist:
         return 'Periodontist';
+      case DoctorRole.owner:
+        return 'Owner';
     }
   }
 }

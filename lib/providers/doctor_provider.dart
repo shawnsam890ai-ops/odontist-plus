@@ -71,6 +71,8 @@ class DoctorProvider with ChangeNotifier {
   (double doctor, double clinic) allocate(String doctorId, String procedureKey, double chargeAmount) {
     final d = _doctors[doctorId];
     if (d == null) return (0, chargeAmount);
+    // Owner gets routed to clinic entirely
+    if (d.role == DoctorRole.owner) return (0, chargeAmount);
     final rule = d.rules[procedureKey];
     if (rule == null) return (0, chargeAmount);
     return rule.split(chargeAmount);
