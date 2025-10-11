@@ -15,6 +15,9 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import '../../providers/patient_provider.dart';
 import '../../providers/options_provider.dart';
+import '../../providers/lab_registry_provider.dart';
+import '../../providers/revenue_provider.dart';
+import '../../models/lab_vendor.dart';
 import '../../core/enums.dart';
 import '../../core/constants.dart';
 import '../../models/treatment_session.dart';
@@ -200,6 +203,35 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                           if (_editingSessionId == null) {
                                             final session = _createSession();
                                             await context.read<PatientProvider>().addSession(patient.id, session);
+                                            // If it's a Lab Work session, record clinic profit to Revenue
+                                            if (session.type == TreatmentType.labWork) {
+                                              try {
+                                                final labs = context.read<LabRegistryProvider>().labs;
+                                                final total = session.labTotalAmount ?? 0;
+                                                double labRate = 0;
+                                                if (session.labName != null && session.natureOfWork != null) {
+                                                  final lab = labs.firstWhere(
+                                                    (l) => l.name.toLowerCase() == session.labName!.toLowerCase(),
+                                                    orElse: () => LabVendor(name: session.labName!, address: ''),
+                                                  );
+                                                  final prod = lab.products.firstWhere(
+                                                    (p) => p.name.toLowerCase() == session.natureOfWork!.toLowerCase(),
+                                                    orElse: () => LabProduct(name: session.natureOfWork!, rate: 0),
+                                                  );
+                                                  labRate = prod.rate;
+                                                }
+                                                final profit = total - labRate;
+                                                if (profit > 0.0) {
+                                                  await context.read<RevenueProvider>().addRevenue(
+                                                    patientId: patient.id,
+                                                    description: 'Lab profit: ${session.labName ?? 'Lab'} - ${session.natureOfWork ?? 'Work'}',
+                                                    amount: profit,
+                                                  );
+                                                }
+                                              } catch (_) {
+                                                // Safe-guard: ignore revenue add errors to not block session save
+                                              }
+                                            }
                                             final syncMsg = await _syncDoctorPaymentsFromSession(context, patient.name, session);
                                             if (mounted && syncMsg != null) {
                                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(syncMsg)));
@@ -1854,162 +1886,68 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 Text('Lab Details', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 12),
                 
-                // Lab Name dropdown with add/delete options
+                // Lab Name from Lab Registry and Product by lab
                 Builder(builder: (ctx) {
-                  final opt = ctx.watch<OptionsProvider>();
-                  final labNames = opt.labNames;
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  final labProv = ctx.watch<LabRegistryProvider>();
+                  final labs = labProv.labs;
+                  // Resolve selected LabVendor and products
+                  LabVendor? selectedLab;
+                  if (_selectedLabName != null) {
+                    selectedLab = labs.firstWhere(
+                      (l) => l.name.toLowerCase() == _selectedLabName!.toLowerCase(),
+                      orElse: () => labs.isNotEmpty ? labs.first : LabVendor(name: _selectedLabName!, address: ''),
+                    );
+                  }
+                  final products = selectedLab?.products ?? [];
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedLabName,
-                          decoration: const InputDecoration(labelText: 'Lab Name'),
-                          items: labNames.map((name) => DropdownMenuItem(value: name, child: Text(name))).toList(),
-                          onChanged: (v) => setState(() => _selectedLabName = v),
-                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedLabName,
+                              decoration: const InputDecoration(labelText: 'Lab Name'),
+                              items: labs.map((l) => DropdownMenuItem(value: l.name, child: Text(l.name))).toList(),
+                              onChanged: (v) {
+                                setState(() {
+                                  _selectedLabName = v;
+                                  // Reset nature of work when lab changes
+                                  _selectedNatureOfWork = null;
+                                });
+                              },
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: 'Add Lab Name',
-                        icon: const Icon(Icons.add),
-                        onPressed: () async {
-                          final controller = TextEditingController();
-                          final val = await showDialog<String>(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              title: const Text('Add Lab Name'),
-                              content: TextField(
-                                controller: controller,
-                                decoration: const InputDecoration(labelText: 'Lab Name'),
-                                autofocus: true,
-                              ),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                                ElevatedButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Add')),
-                              ],
-                            )
-                          );
-                          if (val != null && val.isNotEmpty) {
-                            await opt.addValue('labNames', val);
-                            if (mounted) {
-                              setState(() => _selectedLabName = val);
-                              // Force a rebuild to refresh the dropdown options
-                              Future.delayed(const Duration(milliseconds: 100), () {
-                                if (mounted) setState(() {});
-                              });
-                            }
-                          }
-                        },
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedNatureOfWork,
+                              decoration: const InputDecoration(labelText: 'Nature of Work'),
+                              items: products.map((p) => DropdownMenuItem(value: p.name, child: Text(p.name))).toList(),
+                              onChanged: (v) => setState(() => _selectedNatureOfWork = v),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (selectedLab != null)
+                            Tooltip(
+                              message: 'Add product to ${selectedLab.name} from Labs dashboard',
+                              child: const Icon(Icons.info_outline, size: 18),
+                            ),
+                        ],
                       ),
-                      IconButton(
-                        tooltip: 'Delete Selected Lab Name',
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: _selectedLabName == null ? null : () async {
-                          final target = _selectedLabName!;
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              title: const Text('Delete Lab Name'),
-                              content: Text('Delete "$target"? This cannot be undone.'),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                                ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-                              ],
-                            )
-                          );
-                          if (confirm == true) {
-                            final ok = await opt.removeValue('labNames', target);
-                            if (!ok && mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: lab name referenced in a session.')));
-                            } else if (ok && mounted) {
-                              setState(() => _selectedLabName = null);
-                            }
-                          }
-                        },
-                      ),
+                      // Intentionally no visible lab charge/profit shown in UI
                     ],
                   );
                 }),
                 const SizedBox(height: 12),
 
-                // Nature of Work dropdown with add/delete options  
-                Builder(builder: (ctx) {
-                  final opt = ctx.watch<OptionsProvider>();
-                  final natureOptions = opt.natureOfWorkOptions;
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedNatureOfWork,
-                          decoration: const InputDecoration(labelText: 'Nature of Work'),
-                          items: natureOptions.map((work) => DropdownMenuItem(value: work, child: Text(work))).toList(),
-                          onChanged: (v) => setState(() => _selectedNatureOfWork = v),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: 'Add Nature of Work',
-                        icon: const Icon(Icons.add),
-                        onPressed: () async {
-                          final controller = TextEditingController();
-                          final val = await showDialog<String>(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              title: const Text('Add Nature of Work'),
-                              content: TextField(
-                                controller: controller,
-                                decoration: const InputDecoration(labelText: 'Nature of Work (e.g., PFM crown, zirconia crown, sunflex RPD)'),
-                                autofocus: true,
-                              ),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                                ElevatedButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Add')),
-                              ],
-                            )
-                          );
-                          if (val != null && val.isNotEmpty) {
-                            await opt.addValue('natureOfWork', val);
-                            if (mounted) {
-                              setState(() => _selectedNatureOfWork = val);
-                              // Force a rebuild to refresh the dropdown options
-                              Future.delayed(const Duration(milliseconds: 100), () {
-                                if (mounted) setState(() {});
-                              });
-                            }
-                          }
-                        },
-                      ),
-                      IconButton(
-                        tooltip: 'Delete Selected Nature of Work',
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: _selectedNatureOfWork == null ? null : () async {
-                          final target = _selectedNatureOfWork!;
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              title: const Text('Delete Nature of Work'),
-                              content: Text('Delete "$target"? This cannot be undone.'),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                                ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-                              ],
-                            )
-                          );
-                          if (confirm == true) {
-                            final ok = await opt.removeValue('natureOfWork', target);
-                            if (!ok && mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: nature of work referenced in a session.')));
-                            } else if (ok && mounted) {
-                              setState(() => _selectedNatureOfWork = null);
-                            }
-                          }
-                        },
-                      ),
-                    ],
-                  );
-                }),
                 const SizedBox(height: 12),
 
                 // Submission Date picker
@@ -2144,7 +2082,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                   controller: _labTotal,
                   decoration: const InputDecoration(labelText: 'Total Amount'),
                   keyboardType: TextInputType.number,
+                  onChanged: (_) => setState(() {}),
                 ),
+                // Profit not shown to user; still computed on save for revenue posting
               ],
             ),
           ),

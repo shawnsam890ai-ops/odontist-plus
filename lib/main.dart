@@ -49,6 +49,8 @@ class DentalClinicApp extends StatelessWidget {
             ctx.read<DoctorProvider>().load();
             // Load lab registry
             ctx.read<LabRegistryProvider>().ensureLoaded();
+            // Load revenue so dashboard shows persisted totals
+            ctx.read<RevenueProvider>().ensureLoaded();
           });
           return MaterialApp(
             title: 'Dental Clinic',

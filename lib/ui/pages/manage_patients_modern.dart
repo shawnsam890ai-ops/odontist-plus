@@ -62,6 +62,18 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
     super.dispose();
   }
 
+  // Compute a safe rowHeight for TableCalendar given available height and current format
+  double _calendarRowHeight(double available) {
+    // Reserve header + days-of-week heights (approximate) and padding
+    const headerH = 52.0; // header (month + buttons)
+    const daysRowH = 22.0; // Sun..Sat labels
+    const padding = 16.0; // internal paddings/margins
+    final weeks = _calFormat == CalendarFormat.twoWeeks ? 2 : 6; // TableCalendar uses 6 rows for month view
+    final usable = (available - headerH - daysRowH - padding).clamp(80.0, 800.0);
+    final perRow = (usable / weeks).clamp(20.0, 44.0);
+    return perRow;
+  }
+
   @override
   Widget build(BuildContext context) {
     final patients = context.watch<PatientProvider>().patients;
@@ -326,9 +338,9 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: LayoutBuilder(builder: (context, c) {
-                  // Choose a compact row height based on available height
-                  final available = c.maxHeight.isFinite ? c.maxHeight : 260.0;
-                  final rowH = (available / 7).clamp(24.0, 40.0);
+                  // Choose row height based on weeks shown to avoid overflow
+                  final available = c.maxHeight.isFinite ? c.maxHeight : 280.0;
+                  final rowH = _calendarRowHeight(available);
                   return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     TableCalendar(
                       firstDay: DateTime.utc(2020,1,1),
@@ -354,7 +366,7 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
           )
         else
           SizedBox(
-            height: 280,
+            height: 300,
             child: Card(
               color: Colors.white,
               surfaceTintColor: Colors.white,
@@ -364,8 +376,8 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: LayoutBuilder(builder: (context, c) {
-                  final available = c.maxHeight.isFinite ? c.maxHeight : 260.0;
-                  final rowH = (available / 7).clamp(24.0, 40.0);
+                  final available = c.maxHeight.isFinite ? c.maxHeight : 300.0;
+                  final rowH = _calendarRowHeight(available);
                   return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     TableCalendar(
                       firstDay: DateTime.utc(2020,1,1),
