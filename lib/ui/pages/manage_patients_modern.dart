@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 import '../../providers/patient_provider.dart';
@@ -275,11 +277,92 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
       title: Text(p.name, style: TextStyle(fontWeight: FontWeight.w700, color: _text)),
       subtitle: Text('MRN: ${p.displayNumber.toString().padLeft(4, '0')} • Next Appt: ${_nextApptLabel(p)}', style: TextStyle(color: _secondary)),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        // WhatsApp
+        IconButton(
+          tooltip: 'WhatsApp',
+          iconSize: 22,
+          padding: const EdgeInsets.all(6),
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          onPressed: (p.phone.trim().isEmpty) ? null : () => _openWhatsApp(p.phone),
+          icon: SvgPicture.asset('assets/images/whatsapp.svg', width: 22, height: 22),
+        ),
+        // Call
+        IconButton(
+          tooltip: 'Call',
+          iconSize: 22,
+          padding: const EdgeInsets.all(6),
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          onPressed: (p.phone.trim().isEmpty) ? null : () => _callPhone(p.phone),
+          icon: const Icon(Icons.phone, color: Color(0xFF20C4C4)),
+        ),
+        const SizedBox(width: 4),
         Container(width: 10, height: 10, decoration: BoxDecoration(color: active ? Colors.green : Colors.grey, shape: BoxShape.circle)),
-        IconButton(icon: Icon(Icons.more_vert, color: _secondary), onPressed: () {}),
+        const SizedBox(width: 4),
+        PopupMenuButton<String>(
+          tooltip: 'More',
+          icon: Icon(Icons.more_vert, color: _secondary),
+          onSelected: (v) async {
+            if (v == 'delete') {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Delete Patient?'),
+                  content: Text('This will permanently delete "${p.name}" and all related sessions. This action cannot be undone.'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                    FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                await context.read<PatientProvider>().deletePatient(p.id);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Deleted ${p.name}')));
+                }
+              }
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'delete', child: Text('Delete Patient')),
+          ],
+        ),
       ]),
       onTap: () => Navigator.of(context).pushNamed(PatientDetailPage.routeName, arguments: {'patientId': p.id}),
     );
+  }
+
+  // Communication helpers
+  Future<void> _callPhone(String? phone) async {
+    try {
+      if (phone == null || phone.trim().isEmpty) return;
+      final digits = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+      final uri = Uri(scheme: 'tel', path: digits);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Call not supported on this device')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Call failed: $e')));
+    }
+  }
+
+  Future<void> _openWhatsApp(String? phone) async {
+    try {
+      if (phone == null || phone.trim().isEmpty) return;
+      final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+      final waUriNative = Uri.parse('whatsapp://send?phone=$digits');
+      final waUriWeb = Uri.parse('https://wa.me/$digits');
+      if (await canLaunchUrl(waUriNative)) {
+        await launchUrl(waUriNative);
+      } else if (await canLaunchUrl(waUriWeb)) {
+        await launchUrl(waUriWeb, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('WhatsApp not available')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('WhatsApp open failed: $e')));
+    }
   }
 
   String _nextApptLabel(Patient p) {
