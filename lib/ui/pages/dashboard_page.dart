@@ -12,6 +12,8 @@ import '../../providers/medicine_provider.dart';
 import '../../providers/options_provider.dart';
 import '../../models/medicine.dart';
 import '../../providers/utility_provider.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/widgets.dart' as pw;
 import '../widgets/cases_overview_chart.dart';
 import '../widgets/upcoming_schedule_panel.dart';
 import 'doctors_payments_section.dart';
@@ -491,7 +493,15 @@ class _DashboardPageState extends State<DashboardPage> {
                     },
                   ),
           ),
-        )
+        ),
+        const SizedBox(height: 16),
+        // Payments history panel (scrollable, filterable, exportable)
+        Expanded(
+          child: Card(
+            clipBehavior: Clip.antiAlias,
+            child: _UtilityPaymentsHistoryPanel(),
+          ),
+        ),
       ]),
     );
   }
@@ -1771,3 +1781,110 @@ class _DoctorsOnDutyPanel extends StatelessWidget {
 
 // Splitter used for adjustable column widths (and optional vertical drag)
 // Removed legacy splitter widget used by the old adjustable layout.
+
+// ================= Utility payments history panel =================
+class _UtilityPaymentsHistoryPanel extends StatefulWidget {
+  @override
+  State<_UtilityPaymentsHistoryPanel> createState() => _UtilityPaymentsHistoryPanelState();
+}
+
+class _UtilityPaymentsHistoryPanelState extends State<_UtilityPaymentsHistoryPanel> {
+  String _mode = 'recent'; // recent or YYYY
+
+  List<int> _availableYears(List payments) {
+    final years = <int>{};
+    for (final p in payments) {
+      years.add(p.date.year as int);
+    }
+    final list = years.toList();
+    list.sort((a, b) => b.compareTo(a));
+    return list;
+  }
+
+  Future<void> _exportPdf(List entries, Map<String, String> serviceNames) async {
+    final doc = pw.Document();
+    final rows = <pw.TableRow>[];
+    rows.add(pw.TableRow(children: [
+      _pdfHeader('Date'), _pdfHeader('Service'), _pdfHeader('Amount'), _pdfHeader('Mode'), _pdfHeader('Paid')
+    ]));
+    for (final e in entries) {
+      final dateStr = '${e.date.year}-${e.date.month.toString().padLeft(2, '0')}-${e.date.day.toString().padLeft(2, '0')}';
+      rows.add(pw.TableRow(children: [
+        _pdfCell(dateStr),
+        _pdfCell(serviceNames[e.serviceId] ?? e.serviceId),
+        _pdfCell('₹${e.amount.toStringAsFixed(0)}'),
+        _pdfCell(e.mode ?? '—'),
+        _pdfCell(e.paid ? 'Yes' : 'No'),
+      ]));
+    }
+    doc.addPage(pw.MultiPage(build: (_) => [
+      pw.Text('Utility Payments', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+      pw.SizedBox(height: 8),
+      pw.Table(border: pw.TableBorder.all(width: .5), children: rows)
+    ]));
+    await Printing.layoutPdf(onLayout: (format) async => doc.save());
+  }
+
+  pw.Widget _pdfHeader(String t) => pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(t, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)));
+  pw.Widget _pdfCell(String t) => pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(t));
+
+  @override
+  Widget build(BuildContext context) {
+    final util = context.watch<UtilityProvider>();
+    final services = {for (final s in util.services) s.id: s.name};
+    var entries = util.payments.toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final years = _availableYears(entries);
+    if (_mode != 'recent') {
+      final y = int.tryParse(_mode);
+      if (y != null) {
+        entries = entries.where((e) => e.date.year == y).toList();
+      }
+    } else {
+      entries = entries.take(12).toList(); // recent 12
+    }
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+        child: Row(children: [
+          const Text('Payments History', style: TextStyle(fontWeight: FontWeight.w600)),
+          const Spacer(),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _mode,
+              items: [
+                const DropdownMenuItem(value: 'recent', child: Text('Recent 12 months')),
+                ...years.map((y) => DropdownMenuItem(value: y.toString(), child: Text(y.toString())))
+              ],
+              onChanged: (v) => setState(() => _mode = v ?? 'recent'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Export PDF',
+            icon: const Icon(Icons.picture_as_pdf),
+            onPressed: entries.isEmpty ? null : () => _exportPdf(entries, services),
+          )
+        ]),
+      ),
+      const Divider(height: 1),
+      Expanded(
+        child: entries.isEmpty
+            ? const Center(child: Text('No payments'))
+            : ListView.separated(
+                itemCount: entries.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, i) {
+                  final e = entries[i];
+                  final dateStr = '${e.date.year}-${e.date.month.toString().padLeft(2, '0')}-${e.date.day.toString().padLeft(2, '0')}';
+                  return ListTile(
+                    dense: true,
+                    title: Text('${services[e.serviceId] ?? e.serviceId} • ₹${e.amount.toStringAsFixed(0)}'),
+                    subtitle: Text('Date: $dateStr • Mode: ${e.mode ?? '—'} • Paid: ${e.paid ? 'Yes' : 'No'}'),
+                  );
+                },
+              ),
+      )
+    ]);
+  }
+}
