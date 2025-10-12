@@ -16,6 +16,8 @@ import 'providers/medicine_provider.dart';
 import 'providers/utility_provider.dart';
 import 'ui/pages/splash_page.dart';
 import 'core/app_theme.dart';
+import 'providers/auth_provider.dart';
+// Firebase initialization will be added after FlutterFire configure.
 
 void main() {
   runApp(const DentalClinicApp());
@@ -27,7 +29,10 @@ class DentalClinicApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [
+    providers: [
+  // To enable Firebase auth, replace the line below with:
+  // ChangeNotifierProvider(create: (_) => AuthProvider(backend: FirebaseAuthBackend())),
+  ChangeNotifierProvider(create: (_) => AuthProvider()),
   ChangeNotifierProvider(create: (_) => PatientProvider()),
   ChangeNotifierProvider(create: (_) => RevenueProvider()),
         ChangeNotifierProvider(create: (_) => LabProvider()),
@@ -50,6 +55,8 @@ class DentalClinicApp extends StatelessWidget {
         builder: (ctx) {
           // Register cross-provider reference once tree is built
           WidgetsBinding.instance.addPostFrameCallback((_) {
+            // Auth first
+            ctx.read<AuthProvider>().ensureLoaded();
             final opt = ctx.read<OptionsProvider>();
             final pats = ctx.read<PatientProvider>();
             opt.registerPatientProvider(pats);

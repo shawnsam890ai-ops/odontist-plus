@@ -14,6 +14,7 @@ import '../../models/medicine.dart';
 import '../../providers/utility_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
+import '../../providers/auth_provider.dart';
 import '../widgets/cases_overview_chart.dart';
 import '../widgets/upcoming_schedule_panel.dart';
 import 'doctors_payments_section.dart';
@@ -1049,10 +1050,34 @@ class _DashboardPageState extends State<DashboardPage> {
         const SizedBox(height: 16),
         const Text('General configuration placeholders will appear here.'),
         const SizedBox(height: 24),
-        Wrap(spacing: 12, runSpacing: 12, children: const [
-          Chip(label: Text('Theme: Light/Dark')),
-          Chip(label: Text('Backup: Not Configured')),
+        Wrap(spacing: 12, runSpacing: 12, children: [
+          const Chip(label: Text('Theme: Light/Dark')),
+          const Chip(label: Text('Backup: Not Configured')),
+          if (context.watch<AuthProvider>().isAdmin)
+            FilledButton.tonal(
+              onPressed: () => Navigator.of(context).pushNamed('/admin-users'),
+              child: const Text('Manage Users (Admin)'),
+            ),
         ])
+        ,
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            const Icon(Icons.person_outline),
+            const SizedBox(width: 8),
+            Expanded(child: Text(context.watch<AuthProvider>().user?.email ?? '')),
+            TextButton.icon(
+              onPressed: () async {
+                await context.read<AuthProvider>().signOut();
+                if (mounted) {
+                  Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+                }
+              },
+              icon: const Icon(Icons.logout),
+              label: const Text('Sign out'),
+            )
+          ],
+        )
       ]),
     );
   }

@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "747834012269",
+    "project_id": "dr-shawn-clinic-app",
+    "storage_bucket": "dr-shawn-clinic-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:747834012269:android:1e7ac6a2d3ee1654bb8564",
+        "android_client_info": {
+          "package_name": "com.example.dental_clinic_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB4FsQRc7_3vmqtKcIk9grJ-TDrW4Gxb-8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:747834012269:android:11a635c2ec291205bb8564",
+        "android_client_info": {
+          "package_name": "com.shawns.dentalclinic"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB4FsQRc7_3vmqtKcIk9grJ-TDrW4Gxb-8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

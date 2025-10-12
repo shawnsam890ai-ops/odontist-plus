@@ -8,6 +8,8 @@ import '../ui/pages/patient_detail_page.dart';
 import '../ui/pages/patient_lab_work_page.dart';
 import '../ui/pages/edit_patient_page.dart';
 import '../ui/pages/manage_patients_modern.dart';
+import '../ui/pages/pending_approval_page.dart';
+import '../ui/pages/admin_users_page.dart';
 
 class AppRouter {
   static Route<dynamic> generate(RouteSettings settings) {
@@ -18,6 +20,10 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const LoginPage());
       case DashboardPage.routeName:
         return MaterialPageRoute(builder: (_) => const DashboardPage());
+      case PendingApprovalPage.routeName:
+        return MaterialPageRoute(builder: (_) => const PendingApprovalPage());
+      case AdminUsersPage.routeName:
+        return MaterialPageRoute(builder: (_) => const AdminUsersPage());
       case PatientListPage.routeName:
         return MaterialPageRoute(builder: (_) => const PatientListPage());
       case AddPatientPage.routeName:

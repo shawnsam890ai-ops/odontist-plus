@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
 import 'login_page.dart';
+import 'dashboard_page.dart';
+import 'pending_approval_page.dart';
 
 class SplashPage extends StatefulWidget {
   static const routeName = '/';
@@ -15,9 +19,18 @@ class _SplashPageState extends State<SplashPage> {
   @override
   void initState() {
     super.initState();
-    _navTimer = Timer(const Duration(seconds: 2), () {
+    _navTimer = Timer(const Duration(seconds: 2), () async {
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(LoginPage.routeName);
+      final auth = context.read<AuthProvider>();
+      await auth.ensureLoaded();
+      if (!mounted) return;
+      if (!auth.isLoggedIn) {
+        Navigator.of(context).pushReplacementNamed(LoginPage.routeName);
+      } else if (!auth.isApproved) {
+        Navigator.of(context).pushReplacementNamed(PendingApprovalPage.routeName);
+      } else {
+        Navigator.of(context).pushReplacementNamed(DashboardPage.routeName);
+      }
     });
   }
 
