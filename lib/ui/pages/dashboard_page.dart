@@ -299,6 +299,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 value: items[i].value,
                 subtitle: items[i].subtitle,
                 icon: items[i].icon,
+                valueColor: i == 0 ? (items[i].value >= 0 ? Colors.green : Colors.red) : null,
                 appearDelayMs: 60 * i,
               ),
             ),
@@ -334,15 +335,20 @@ class _DashboardPageState extends State<DashboardPage> {
         Text('Revenue', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 16),
         Wrap(spacing: 16, runSpacing: 16, children: [
-          _DashCard(title: "Today's Revenue", value: '₹${todaysRevenue.toStringAsFixed(0)}', icon: Icons.today, width: 200),
-          _DashCard(title: 'Monthly Revenue', value: '₹${monthlyRevenue.toStringAsFixed(0)}', icon: Icons.calendar_month, width: 200),
-          _DashCard(title: 'Total Revenue', value: '₹${revenueProvider.total.toStringAsFixed(0)}', icon: Icons.account_balance_wallet, width: 220),
+         _DashCard(title: "Today's Revenue", value: '₹${todaysRevenue.toStringAsFixed(0)}', icon: Icons.today, width: 200, valueColor: todaysRevenue >= 0 ? Colors.green : Colors.red),
+         _DashCard(title: 'Monthly Revenue', value: '₹${monthlyRevenue.toStringAsFixed(0)}', icon: Icons.calendar_month, width: 200, valueColor: monthlyRevenue >= 0 ? Colors.green : Colors.red),
+         _DashCard(title: 'Total Revenue', value: '₹${revenueProvider.total.toStringAsFixed(0)}', icon: Icons.account_balance_wallet, width: 220, valueColor: revenueProvider.total >= 0 ? Colors.green : Colors.red),
         ]),
         const SizedBox(height: 24),
         ElevatedButton.icon(
             onPressed: () {}, icon: const Icon(Icons.receipt_long), label: const Text('Detailed Revenue Report (placeholder)')),
         const SizedBox(height: 24),
-        Expanded(child: Center(child: Text('Revenue chart / table placeholder')))
+        Expanded(
+          child: Card(
+            clipBehavior: Clip.antiAlias,
+            child: _RevenueListPanel(),
+          ),
+        )
       ]),
     );
   }
@@ -911,6 +917,76 @@ class _DashboardPageState extends State<DashboardPage> {
   // ========= Reusable Dashboard Widgets =========
 }
 
+// ================= Revenue & Expenses Panel =================
+class _RevenueListPanel extends StatefulWidget {
+  @override
+  State<_RevenueListPanel> createState() => _RevenueListPanelState();
+}
+
+class _RevenueListPanelState extends State<_RevenueListPanel> {
+  String _filter = 'all'; // all | income | expense
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<RevenueProvider>();
+    var list = provider.entries.toList();
+    list.sort((a, b) => b.date.compareTo(a.date));
+    if (_filter == 'income') {
+      list = list.where((e) => e.amount > 0).toList();
+    } else if (_filter == 'expense') {
+      list = list.where((e) => e.amount < 0).toList();
+    }
+    final total = list.fold<double>(0, (p, e) => p + e.amount);
+    final color = total >= 0 ? Colors.green : Colors.red;
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+        child: Row(children: [
+          const Text('Revenue & Expenses', style: TextStyle(fontWeight: FontWeight.w600)),
+          const Spacer(),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _filter,
+              items: const [
+                DropdownMenuItem(value: 'all', child: Text('All')),
+                DropdownMenuItem(value: 'income', child: Text('Income')),
+                DropdownMenuItem(value: 'expense', child: Text('Expenses')),
+              ],
+              onChanged: (v) => setState(() => _filter = v ?? 'all'),
+            ),
+          ),
+        ]),
+      ),
+      const Divider(height: 1),
+      Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text('Filtered total: ₹${total.toStringAsFixed(0)}', style: TextStyle(fontWeight: FontWeight.w600, color: color)),
+      ),
+      const Divider(height: 1),
+      Expanded(
+        child: list.isEmpty
+            ? const Center(child: Text('No entries'))
+            : ListView.separated(
+                itemCount: list.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, i) {
+                  final e = list[i];
+                  final dateStr = '${e.date.year}-${e.date.month.toString().padLeft(2, '0')}-${e.date.day.toString().padLeft(2, '0')}';
+                  final amtColor = e.amount >= 0 ? Colors.green : Colors.red;
+                  return ListTile(
+                    dense: true,
+                    title: Text(e.description, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(dateStr + (e.patientId.isNotEmpty ? '  •  ${e.patientId}' : '')),
+                    trailing: Text((e.amount >= 0 ? '+' : '') + '₹${e.amount.toStringAsFixed(0)}', style: TextStyle(color: amtColor, fontWeight: FontWeight.w700)),
+                  );
+                },
+              ),
+      ),
+    ]);
+  }
+}
+
 // Attendance overview widget (read-only calendar) used in overview section
 class _AttendanceOverviewWidget extends StatefulWidget {
   @override
@@ -1187,7 +1263,8 @@ class _DashCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final double width;
-  const _DashCard({required this.title, required this.value, required this.icon, this.width = 180});
+  final Color? valueColor;
+  const _DashCard({required this.title, required this.value, required this.icon, this.width = 180, this.valueColor});
 
   @override
   Widget build(BuildContext context) {
@@ -1200,7 +1277,7 @@ class _DashCard extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [Icon(icon, size: 20), const SizedBox(width: 6), Expanded(child: Text(title, style: const TextStyle(fontSize: 12)))]),
             const SizedBox(height: 8),
-            Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: valueColor)),
           ]),
         ),
       ),
@@ -1214,7 +1291,8 @@ class _DashMetricCard extends StatefulWidget {
   final String? subtitle;
   final IconData icon;
   final int appearDelayMs;
-  const _DashMetricCard({Key? key, required this.title, required this.value, required this.icon, this.subtitle, this.appearDelayMs = 0}) : super(key: key);
+  final Color? valueColor;
+  const _DashMetricCard({Key? key, required this.title, required this.value, required this.icon, this.subtitle, this.appearDelayMs = 0, this.valueColor}) : super(key: key);
 
   @override
   State<_DashMetricCard> createState() => _DashMetricCardState();
@@ -1308,7 +1386,7 @@ class _DashMetricCardState extends State<_DashMetricCard> with SingleTickerProvi
                 final text = isInt ? v.toInt().toString() : '₹${v.toStringAsFixed(0)}';
                 return FittedBox(
                   alignment: Alignment.centerLeft,
-                  child: Text(text, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: accentColor)),
+                  child: Text(text, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: widget.valueColor ?? accentColor)),
                 );
               },
             ),

@@ -21,4 +21,9 @@ class RevenueProvider extends ChangeNotifier {
     await _repo.addEntry(patientId: patientId, description: description, amount: amount);
     notifyListeners();
   }
+
+  Future<void> removeByDescription(String description) async {
+    await _repo.removeByDescription(description);
+    notifyListeners();
+  }
 }

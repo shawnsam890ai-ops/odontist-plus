@@ -37,5 +37,14 @@ class RevenueRepository {
     return entry;
   }
 
+  Future<int> removeByDescription(String description) async {
+    final before = _entries.length;
+    _entries.removeWhere((e) => e.description == description);
+    if (before != _entries.length) {
+      await _persist();
+    }
+    return before - _entries.length;
+  }
+
   double totalRevenue() => _entries.fold(0, (p, e) => p + e.amount);
 }
