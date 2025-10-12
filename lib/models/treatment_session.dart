@@ -147,6 +147,7 @@ class TreatmentSession {
 
   // General
   final ChiefComplaintEntry? chiefComplaint;
+  final String? generalDoctorInCharge;
   final List<OralExamFinding> oralExamFindings;
   final List<InvestigationType> investigations;
   final List<InvestigationFinding> investigationFindings;
@@ -205,6 +206,7 @@ class TreatmentSession {
     required this.date,
     this.parentSessionId,
     this.chiefComplaint,
+    this.generalDoctorInCharge,
     List<OralExamFinding>? oralExamFindings,
     List<InvestigationType>? investigations,
     List<InvestigationFinding>? investigationFindings,
@@ -273,6 +275,7 @@ class TreatmentSession {
     DateTime? date,
     String? parentSessionId,
     ChiefComplaintEntry? chiefComplaint,
+    String? generalDoctorInCharge,
     List<OralExamFinding>? oralExamFindings,
     List<InvestigationType>? investigations,
     List<InvestigationFinding>? investigationFindings,
@@ -317,7 +320,8 @@ class TreatmentSession {
         type: type ?? this.type,
         date: date ?? this.date,
         parentSessionId: parentSessionId ?? this.parentSessionId,
-        chiefComplaint: chiefComplaint ?? this.chiefComplaint,
+  chiefComplaint: chiefComplaint ?? this.chiefComplaint,
+  generalDoctorInCharge: generalDoctorInCharge ?? this.generalDoctorInCharge,
         oralExamFindings: oralExamFindings ?? List.from(this.oralExamFindings),
         investigations: investigations ?? List.from(this.investigations),
         investigationFindings: investigationFindings ?? List.from(this.investigationFindings),
@@ -365,6 +369,7 @@ class TreatmentSession {
         'date': date.toIso8601String(),
         'parentSessionId': parentSessionId,
         'chiefComplaint': chiefComplaint?.toJson(),
+    'generalDoctorInCharge': generalDoctorInCharge,
         'oralExamFindings': oralExamFindings.map((e) => e.toJson()).toList(),
         'investigations': investigations.map((e) => e.index).toList(),
         'investigationFindings': investigationFindings.map((e) => e.toJson()).toList(),
@@ -411,7 +416,8 @@ class TreatmentSession {
         type: TreatmentType.values[json['type'] as int],
         date: DateTime.parse(json['date'] as String),
         parentSessionId: json['parentSessionId'] as String?,
-        chiefComplaint: json['chiefComplaint'] == null ? null : ChiefComplaintEntry.fromJson(json['chiefComplaint'] as Map<String, dynamic>),
+    chiefComplaint: json['chiefComplaint'] == null ? null : ChiefComplaintEntry.fromJson(json['chiefComplaint'] as Map<String, dynamic>),
+    generalDoctorInCharge: json['generalDoctorInCharge'] as String?,
         oralExamFindings: (json['oralExamFindings'] as List<dynamic>).map((e) => OralExamFinding.fromJson(e as Map<String, dynamic>)).toList(),
         investigations: (json['investigations'] as List<dynamic>).map((e) => InvestigationType.values[e as int]).toList(),
         investigationFindings: (json['investigationFindings'] as List<dynamic>).map((e) => InvestigationFinding.fromJson(e as Map<String, dynamic>)).toList(),

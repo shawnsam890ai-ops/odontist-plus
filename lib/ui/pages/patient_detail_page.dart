@@ -47,6 +47,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   bool _savingSession = false; // shows progress when persisting a session
 
   // General form state
+  String? _selectedGeneralDoctor;
   List<String> _selectedComplaints = [];
   List<String> _selectedQuadrants = [];
   final List<OralExamFinding> _oralFindings = [];
@@ -265,7 +266,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                                 // ignore to avoid blocking save
                                               }
                                             }
-                                            final syncMsg = await _syncDoctorPaymentsFromSession(context, patient.name, session);
+                                            final syncMsg = await _syncDoctorPaymentsFromSession(context, patient.id, patient.name, session);
                                             if (mounted && syncMsg != null) {
                                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(syncMsg)));
                                             }
@@ -275,7 +276,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                           } else {
                                             final updated = _createSession().copyWith(id: _editingSessionId);
                                             await context.read<PatientProvider>().updateSession(patient.id, updated);
-                                            final syncMsg2 = await _syncDoctorPaymentsFromSession(context, patient.name, updated);
+                                            final syncMsg2 = await _syncDoctorPaymentsFromSession(context, patient.id, patient.name, updated);
                                             if (mounted && syncMsg2 != null) {
                                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(syncMsg2)));
                                             }
@@ -544,6 +545,24 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Doctor in Charge for General
+        if (_followUpParentId == null)
+          Card(
+            margin: const EdgeInsets.only(bottom: 16),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Builder(builder: (ctx) {
+                final docs = ctx.watch<DoctorProvider>().doctors;
+                final names = docs.map((d) => d.name).toList();
+                return DropdownButtonFormField<String>(
+                  value: _selectedGeneralDoctor,
+                  decoration: const InputDecoration(labelText: 'Doctor in Charge'),
+                  items: names.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(),
+                  onChanged: (v) => setState(() => _selectedGeneralDoctor = v),
+                );
+              }),
+            ),
+          ),
         // 1. Chief Complaint & Quadrants
         if (_followUpParentId == null) ...[
           Card(
@@ -2427,6 +2446,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             complaints: List.from(_selectedComplaints),
             quadrants: List.from(_selectedQuadrants),
           ),
+          generalDoctorInCharge: _selectedGeneralDoctor,
           oralExamFindings: List.from(_oralFindings),
           investigations: List.from(_investigations),
           investigationFindings: List.from(_investigationFindings),
@@ -5092,6 +5112,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         case TreatmentType.general:
           _selectedComplaints = List.from(s.chiefComplaint?.complaints ?? []);
           _selectedQuadrants = List.from(s.chiefComplaint?.quadrants ?? []);
+          _selectedGeneralDoctor = s.generalDoctorInCharge;
           _oralFindings.addAll(s.oralExamFindings);
           _investigations.addAll(s.investigations);
           _investigationFindings.addAll(s.investigationFindings);
@@ -5162,6 +5183,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   void _resetFormState() {
     _selectedType = TreatmentType.general;
     _followUpParentId = null;
+    _selectedGeneralDoctor = null;
     _selectedComplaints.clear();
     _selectedQuadrants.clear();
     _oralFindings.clear();
@@ -5219,9 +5241,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     _linkedSessionId = null;
   }
 
-  Future<String?> _syncDoctorPaymentsFromSession(BuildContext context, String patientName, TreatmentSession session) async {
+  Future<String?> _syncDoctorPaymentsFromSession(BuildContext context, String patientId, String patientName, TreatmentSession session) async {
     final docProv = context.read<DoctorProvider>();
     final attend = context.read<DoctorAttendanceProvider>();
+    final revProv = context.read<RevenueProvider>();
     // Build a list of (doctorName, procedureKey, amount, date, dedupeTag)
     final entries = <({String doctorName, String procedure, double amount, DateTime date, String tag})>[];
     switch (session.type) {
@@ -5259,7 +5282,15 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         }
         break;
       case TreatmentType.general:
-        // If you have general doctor and general total with payments, map here if needed.
+        final doctorName = session.generalDoctorInCharge;
+        if (doctorName != null) {
+          for (final p in session.payments) {
+            final amt = p.amount;
+            if (amt > 0) {
+              entries.add((doctorName: doctorName, procedure: Procedures.general, amount: amt, date: p.date, tag: 'rx:${session.id}:${p.date.toIso8601String()}'));
+            }
+          }
+        }
         break;
       case TreatmentType.labWork:
         break;
@@ -5268,6 +5299,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     for (final e in entries) {
       final doc = docProv.byName(e.doctorName);
       if (doc == null) continue;
+      // Compute clinic share for revenue dashboard
+      final split = docProv.allocate(doc.id, e.procedure, e.amount);
       final msg = docProv.recordPayment(
         doctorId: doc.id,
         procedureKey: e.procedure,
@@ -5277,6 +5310,15 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         dedupeTag: e.tag,
         attendance: attend,
       );
+      // Record clinic revenue entry once per unique tag
+      final clinicShare = split.$2;
+      if (clinicShare > 0) {
+        final desc = 'Clinic revenue (ledger): ${e.tag}';
+        final already = revProv.entries.any((r) => r.description == desc);
+        if (!already) {
+          await revProv.addRevenue(patientId: patientId, description: desc, amount: clinicShare);
+        }
+      }
       // Capture the first non-null message to display (e.g., attendance required)
       firstMessage ??= msg;
     }

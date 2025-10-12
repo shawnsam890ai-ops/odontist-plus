@@ -412,8 +412,19 @@ class _LedgerSection extends StatelessWidget {
     DateTime? start;
     DateTime? end;
     return StatefulBuilder(builder: (context, setSt) {
-      final entries = provider.filteredLedger(doctorId: doctorFilter, procedureKey: procFilter, start: start, end: end).reversed.toList();
+      final entries = provider
+          .filteredLedger(doctorId: doctorFilter, procedureKey: procFilter, start: start, end: end)
+          .reversed
+          .toList();
       final allDocs = provider.doctors;
+      // Compute totals for current view (exclude payouts)
+      double filteredDoctorTotal = 0, filteredClinicTotal = 0;
+      for (final e in entries) {
+        if (e.type == EntryType.payment) {
+          filteredDoctorTotal += e.doctorShare;
+          filteredClinicTotal += e.clinicShare;
+        }
+      }
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -486,7 +497,7 @@ class _LedgerSection extends StatelessWidget {
               ])
             ]),
             const SizedBox(height: 8),
-            Text('Totals — Doctor: ₹${provider.totalDoctor.toStringAsFixed(0)}    Clinic: ₹${provider.totalClinic.toStringAsFixed(0)}'),
+            Text('Totals — Doctor: ₹${filteredDoctorTotal.toStringAsFixed(0)}    Clinic: ₹${filteredClinicTotal.toStringAsFixed(0)}'),
           ]),
         ),
         const Divider(height: 1),

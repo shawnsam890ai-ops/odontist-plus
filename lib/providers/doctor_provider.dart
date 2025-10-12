@@ -78,6 +78,19 @@ class DoctorProvider with ChangeNotifier {
     return rule.split(chargeAmount);
   }
 
+  // Recalculate totals from scratch based on current ledger
+  void _recomputeTotals() {
+    double d = 0, c = 0;
+    for (final e in _ledger) {
+      if (e.type == EntryType.payment) {
+        d += e.doctorShare;
+        c += e.clinicShare;
+      }
+    }
+    _totalDoctor = d;
+    _totalClinic = c;
+  }
+
   // Attendance requirement toggle
   void setRequireAttendance(bool v) {
     _requireAttendance = v;
@@ -121,8 +134,7 @@ class DoctorProvider with ChangeNotifier {
       note: dedupeTag ?? note,
     );
     _ledger.add(entry);
-    _totalDoctor += entry.doctorShare;
-    _totalClinic += entry.clinicShare;
+    _recomputeTotals();
     notifyListeners();
     _persist();
     return null;
@@ -160,7 +172,8 @@ class DoctorProvider with ChangeNotifier {
       type: EntryType.payout,
     );
     _ledger.add(entry);
-    // totals reflect payments only; payouts affect outstanding via summary
+    // Recompute totals to keep consistency (payouts should not affect totals)
+    _recomputeTotals();
     notifyListeners();
     _persist();
   }
@@ -182,6 +195,7 @@ class DoctorProvider with ChangeNotifier {
       type: EntryType.payout,
     );
     _ledger.add(entry);
+    _recomputeTotals();
     notifyListeners();
     _persist();
   }
@@ -190,11 +204,8 @@ class DoctorProvider with ChangeNotifier {
   void deleteLedgerEntry(String entryId) {
     final idx = _ledger.indexWhere((e) => e.id == entryId);
     if (idx == -1) return;
-    final e = _ledger.removeAt(idx);
-    if (e.type == EntryType.payment) {
-      _totalDoctor -= e.doctorShare;
-      _totalClinic -= e.clinicShare;
-    }
+    _ledger.removeAt(idx);
+    _recomputeTotals();
     notifyListeners();
     _persist();
   }
@@ -279,10 +290,10 @@ class DoctorProvider with ChangeNotifier {
       for (final m in list) {
         final e = PaymentEntry.fromJson(Map<String, dynamic>.from(m as Map));
         _ledger.add(e);
-        _totalDoctor += e.doctorShare;
-        _totalClinic += e.clinicShare;
       }
     }
+    // Ensure payouts are excluded and totals are consistent on load
+    _recomputeTotals();
     notifyListeners();
   }
 
