@@ -13,6 +13,7 @@ import 'providers/doctor_attendance_provider.dart';
 import 'providers/doctor_provider.dart';
 import 'providers/lab_registry_provider.dart';
 import 'providers/medicine_provider.dart';
+import 'providers/utility_provider.dart';
 import 'ui/pages/splash_page.dart';
 import 'core/app_theme.dart';
 
@@ -27,8 +28,8 @@ class DentalClinicApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => PatientProvider()),
-        ChangeNotifierProvider(create: (_) => RevenueProvider()),
+  ChangeNotifierProvider(create: (_) => PatientProvider()),
+  ChangeNotifierProvider(create: (_) => RevenueProvider()),
         ChangeNotifierProvider(create: (_) => LabProvider()),
         ChangeNotifierProvider(create: (_) => OptionsProvider()),
         ChangeNotifierProvider(create: (_) => AppointmentProvider()),
@@ -39,6 +40,11 @@ class DentalClinicApp extends StatelessWidget {
   ChangeNotifierProvider(create: (_) => DoctorProvider()),
     ChangeNotifierProvider(create: (_) => LabRegistryProvider()),
     ChangeNotifierProvider(create: (_) => MedicineProvider()),
+    // Utility depends on RevenueProvider instance
+    ChangeNotifierProxyProvider<RevenueProvider, UtilityProvider>(
+      create: (ctx) => UtilityProvider(revenue: ctx.read<RevenueProvider>()),
+      update: (ctx, revenue, prev) => prev ?? UtilityProvider(revenue: revenue),
+    ),
       ],
       child: Builder(
         builder: (ctx) {
@@ -55,6 +61,8 @@ class DentalClinicApp extends StatelessWidget {
             ctx.read<RevenueProvider>().ensureLoaded();
             // Load medicines
             ctx.read<MedicineProvider>().ensureLoaded();
+            // Load utilities
+            ctx.read<UtilityProvider>().ensureLoaded();
           });
           return MaterialApp(
             title: 'Dental Clinic',

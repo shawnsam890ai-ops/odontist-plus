@@ -11,6 +11,7 @@ import '../../providers/doctor_provider.dart';
 import '../../providers/medicine_provider.dart';
 import '../../providers/options_provider.dart';
 import '../../models/medicine.dart';
+import '../../providers/utility_provider.dart';
 import '../widgets/cases_overview_chart.dart';
 import '../widgets/upcoming_schedule_panel.dart';
 import 'doctors_payments_section.dart';
@@ -34,6 +35,7 @@ enum DashboardSection {
   staffAttendance('Staff Attendance', Icons.badge_outlined),
   doctorsAttendance('Doctors Attendance', Icons.medical_services_outlined),
   inventory('Inventory', Icons.inventory_2_outlined),
+  utility('Utility', Icons.miscellaneous_services_outlined),
   labs('Labs', Icons.biotech_outlined),
   medicines('Medicines', Icons.medication_outlined),
   settings('Settings', Icons.settings_outlined);
@@ -128,6 +130,8 @@ class _DashboardPageState extends State<DashboardPage> {
         return _doctorsAttendanceSection();
       case DashboardSection.inventory:
         return _inventorySection();
+      case DashboardSection.utility:
+        return _utilitySection();
       case DashboardSection.labs:
         return _labsSection();
       case DashboardSection.medicines:
@@ -430,6 +434,206 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         )
       ]),
+    );
+  }
+
+  // ============== Utility ==============
+  Widget _utilitySection() {
+    final util = context.watch<UtilityProvider>();
+    // ensure data is loaded
+    if (!util.isLoaded) {
+      util.ensureLoaded();
+    }
+    final services = util.services;
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Utility', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 12),
+        Row(children: [
+          ElevatedButton.icon(onPressed: _showAddUtilityDialog, icon: const Icon(Icons.add), label: const Text('Add Utility')),
+          const SizedBox(width: 12),
+          Text('Services: ${services.length}')
+        ]),
+        const SizedBox(height: 16),
+        Expanded(
+          child: Card(
+            clipBehavior: Clip.antiAlias,
+            child: services.isEmpty
+                ? const Center(child: Text('No utilities added'))
+                : ListView.separated(
+                    itemCount: services.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, i) {
+                      final s = services[i];
+                      return ExpansionTile(
+                        title: Text(s.name),
+                        subtitle: s.regNumber == null || s.regNumber!.isEmpty ? null : Text('Reg/ID: ${s.regNumber}'),
+                        trailing: Switch(value: s.active, onChanged: (v) => context.read<UtilityProvider>().updateService(s.id, active: v)),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: FilledButton.tonalIcon(
+                                  onPressed: () => _showAddUtilityPaymentDialog(s.id),
+                                  icon: const Icon(Icons.receipt_long),
+                                  label: const Text('Add Payment'),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              _utilityPaymentsList(s.id),
+                            ]),
+                          )
+                        ],
+                      );
+                    },
+                  ),
+          ),
+        )
+      ]),
+    );
+  }
+
+  Widget _utilityPaymentsList(String serviceId) {
+    final util = context.watch<UtilityProvider>();
+    final list = util.payments.where((p) => p.serviceId == serviceId).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    if (list.isEmpty) return const Padding(padding: EdgeInsets.all(8), child: Text('No payments'));
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: list.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, i) {
+        final p = list[i];
+        final dateStr = '${p.date.year}-${p.date.month.toString().padLeft(2, '0')}-${p.date.day.toString().padLeft(2, '0')}';
+        return ListTile(
+          title: Text('₹${p.amount.toStringAsFixed(0)} • ${p.mode ?? '—'}'),
+          subtitle: Text('Date: $dateStr${p.receiptPath != null ? '  •  Receipt: ${p.receiptPath}' : ''}'),
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+            Checkbox(
+              value: p.paid,
+              onChanged: (v) => context.read<UtilityProvider>().updatePaymentPaid(p.id, v ?? false),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Delete payment',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => context.read<UtilityProvider>().deletePayment(p.id),
+            )
+          ]),
+        );
+      },
+    );
+  }
+
+  void _showAddUtilityDialog() {
+    final nameCtrl = TextEditingController();
+    final regCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Add Utility'),
+        content: SizedBox(
+          width: 400,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Service name (e.g., Electricity)')),
+            const SizedBox(height: 8),
+            TextField(controller: regCtrl, decoration: const InputDecoration(labelText: 'Reg number / ID number (optional)')),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              await context.read<UtilityProvider>().addService(name, regNumber: regCtrl.text.trim().isEmpty ? null : regCtrl.text.trim());
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Add'),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _showAddUtilityPaymentDialog(String serviceId) {
+    final amountCtrl = TextEditingController(text: '0');
+    final modeCtrl = ValueNotifier<String>('Cash');
+    final receiptCtrl = TextEditingController();
+    DateTime date = DateTime.now();
+    bool paid = false;
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSt) => AlertDialog(
+          title: const Text('Add Utility Payment'),
+          content: SizedBox(
+            width: 420,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Row(children: [
+                const Text('Select date:'),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: () async {
+                    final now = DateTime.now();
+                    final picked = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(now.year - 1), lastDate: DateTime(now.year + 1));
+                    if (picked != null) setSt(() => date = picked);
+                  },
+                  child: Text('${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'),
+                )
+              ]),
+              const SizedBox(height: 8),
+              TextField(controller: amountCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Payment amount')),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: modeCtrl.value,
+                decoration: const InputDecoration(labelText: 'Mode of transaction'),
+                items: const [
+                  DropdownMenuItem(value: 'Cash', child: Text('Cash')),
+                  DropdownMenuItem(value: 'UPI', child: Text('UPI')),
+                  DropdownMenuItem(value: 'Card', child: Text('Card')),
+                  DropdownMenuItem(value: 'Bank Transfer', child: Text('Bank Transfer')),
+                ],
+                onChanged: (v) => modeCtrl.value = v ?? 'Cash',
+              ),
+              const SizedBox(height: 8),
+              Row(children: [
+                Checkbox(
+                  value: paid,
+                  onChanged: (v) => setSt(() => paid = v ?? false),
+                ),
+                const SizedBox(width: 8),
+                const Text('Mark paid'),
+              ]),
+              const SizedBox(height: 8),
+              TextField(controller: receiptCtrl, decoration: const InputDecoration(labelText: 'Attach receipt (path or note)')),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                final amt = double.tryParse(amountCtrl.text) ?? 0;
+                if (amt <= 0) return;
+                await context.read<UtilityProvider>().addPayment(
+                      serviceId,
+                      date: date,
+                      amount: amt,
+                      mode: modeCtrl.value,
+                      paid: paid,
+                      receiptPath: receiptCtrl.text.trim().isEmpty ? null : receiptCtrl.text.trim(),
+                    );
+                if (context.mounted) Navigator.pop(context);
+              },
+              child: const Text('Add'),
+            )
+          ],
+        ),
+      ),
     );
   }
 
