@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 import '../models/staff_attendance.dart';
 import '../models/staff_member.dart';
+import 'revenue_provider.dart';
 
 class StaffAttendanceProvider with ChangeNotifier {
   final List<StaffAttendanceEntry> _entries = [];
   final List<StaffMember> _staff = [];
   final Map<String, Map<String, MonthlySalaryRecord>> _salaryRecords = {}; // staffName -> { 'YYYY-MM' : record }
+  RevenueProvider? _revenue;
 
   List<StaffAttendanceEntry> forDay(DateTime day) => _entries
       .where((e) => e.date.year == day.year && e.date.month == day.month && e.date.day == day.day)
@@ -29,6 +31,10 @@ class StaffAttendanceProvider with ChangeNotifier {
 
   StaffMember? staffByName(String name) =>
       _staff.firstWhere((s) => s.name == name, orElse: () => StaffMember(id: '__none__', name: '')); 
+
+  void registerRevenueProvider(RevenueProvider revenue) {
+    _revenue = revenue;
+  }
 
   void _ensureNameExists(String name) {
     if (_staff.any((s) => s.name == name)) return;
@@ -78,6 +84,8 @@ class StaffAttendanceProvider with ChangeNotifier {
     if (before == _staff.length) return; // nothing removed
     _entries.removeWhere((e) => e.staffName == name);
     _salaryRecords.remove(name);
+    // Remove any revenue entries for this staff member's salaries
+    _revenue?.removeByDescriptionPrefix('Staff Salary: $name ');
     notifyListeners();
   }
 
@@ -121,6 +129,13 @@ class StaffAttendanceProvider with ChangeNotifier {
     if (amount != null) rec.paidAmount = amount;
     rec.paid = true;
     rec.paymentDate = DateTime.now();
+    // Post negative revenue entry for salary payout
+    final desc = 'Staff Salary: $staffName ${year}-${month.toString().padLeft(2,'0')}';
+    final amt = amount ?? rec.totalSalary;
+    if (_revenue != null && amt != 0) {
+      _revenue!.removeByDescription(desc);
+      _revenue!.addRevenue(patientId: 'staff', description: desc, amount: -amt);
+    }
     notifyListeners();
   }
 
@@ -129,6 +144,8 @@ class StaffAttendanceProvider with ChangeNotifier {
     if (rec == null) return;
     rec.paid = false;
     rec.paymentDate = null;
+    final desc = 'Staff Salary: $staffName ${year}-${month.toString().padLeft(2,'0')}';
+    _revenue?.removeByDescription(desc);
     notifyListeners();
   }
 

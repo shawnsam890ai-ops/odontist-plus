@@ -46,5 +46,37 @@ class RevenueRepository {
     return before - _entries.length;
   }
 
+  Future<int> removeByPatientId(String patientId) async {
+    final before = _entries.length;
+    _entries.removeWhere((e) => e.patientId == patientId);
+    if (before != _entries.length) {
+      await _persist();
+    }
+    return before - _entries.length;
+  }
+
+  Future<int> removeByDescriptionPrefix(String prefix) async {
+    final before = _entries.length;
+    _entries.removeWhere((e) => e.description.startsWith(prefix));
+    if (before != _entries.length) {
+      await _persist();
+    }
+    return before - _entries.length;
+  }
+
+  Future<int> removeByDescriptionForPatient(String patientId, String description) async {
+    final before = _entries.length;
+    _entries.removeWhere((e) => e.patientId == patientId && e.description == description);
+    if (before != _entries.length) {
+      await _persist();
+    }
+    return before - _entries.length;
+  }
+
+  Future<void> clearAll() async {
+    _entries.clear();
+    await _persist();
+  }
+
   double totalRevenue() => _entries.fold(0, (p, e) => p + e.amount);
 }

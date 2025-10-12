@@ -40,7 +40,7 @@ class DentalClinicApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AppointmentProvider()),
         ChangeNotifierProvider(create: (_) => ClinicProvider()),
         ChangeNotifierProvider(create: (_) => InventoryProvider()),
-        ChangeNotifierProvider(create: (_) => StaffAttendanceProvider()),
+  ChangeNotifierProvider(create: (_) => StaffAttendanceProvider()),
         ChangeNotifierProvider(create: (_) => DoctorAttendanceProvider()),
   ChangeNotifierProvider(create: (_) => DoctorProvider()),
     ChangeNotifierProvider(create: (_) => LabRegistryProvider()),
@@ -60,6 +60,10 @@ class DentalClinicApp extends StatelessWidget {
             final opt = ctx.read<OptionsProvider>();
             final pats = ctx.read<PatientProvider>();
             opt.registerPatientProvider(pats);
+            // Register revenue into providers that need cross-updates
+            final rev = ctx.read<RevenueProvider>();
+            pats.registerRevenueProvider(rev);
+            ctx.read<StaffAttendanceProvider>().registerRevenueProvider(rev);
             // Load persisted doctors and ledger
             ctx.read<DoctorProvider>().load();
             // Load lab registry

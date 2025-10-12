@@ -26,4 +26,27 @@ class RevenueProvider extends ChangeNotifier {
     await _repo.removeByDescription(description);
     notifyListeners();
   }
+
+  Future<int> removeByPatientId(String patientId) async {
+    final removed = await _repo.removeByPatientId(patientId);
+    if (removed > 0) notifyListeners();
+    return removed;
+  }
+
+  Future<int> removeByDescriptionPrefix(String prefix) async {
+    final removed = await _repo.removeByDescriptionPrefix(prefix);
+    if (removed > 0) notifyListeners();
+    return removed;
+  }
+
+  Future<int> removeByDescriptionForPatient(String patientId, String description) async {
+    final removed = await _repo.removeByDescriptionForPatient(patientId, description);
+    if (removed > 0) notifyListeners();
+    return removed;
+  }
+
+  Future<void> clearAll() async {
+    await _repo.clearAll();
+    notifyListeners();
+  }
 }

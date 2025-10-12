@@ -11,7 +11,8 @@ class CasesOverviewChart extends StatefulWidget {
   final Color fillColor;
   final double size;
   final Duration animationDuration;
-  const CasesOverviewChart({super.key, required this.data, this.strokeColor = const Color(0xFF1D4ED8), this.fillColor = const Color(0xFF1D4ED8), this.size = 200, this.animationDuration = const Duration(milliseconds: 700)});
+  final bool showTitle;
+  const CasesOverviewChart({super.key, required this.data, this.strokeColor = const Color(0xFF1D4ED8), this.fillColor = const Color(0xFF1D4ED8), this.size = 200, this.animationDuration = const Duration(milliseconds: 700), this.showTitle = false});
 
   @override
   State<CasesOverviewChart> createState() => _CasesOverviewChartState();
@@ -126,14 +127,15 @@ class _CasesOverviewChartState extends State<CasesOverviewChart> with SingleTick
       crossAxisAlignment: CrossAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Title
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(
-            'Cases Overview',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        if (widget.showTitle)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Cases Overview',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
           ),
-        ),
         // Chart (fixed-size box so it works in scroll/unbounded contexts)
         Center(
           child: SizedBox(

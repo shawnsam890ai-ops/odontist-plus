@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/staff_attendance_provider.dart';
-import '../../providers/revenue_provider.dart';
 import '../../models/staff_member.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -286,19 +285,12 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                         final confirm = await _confirmMarkPaid(selectedStaff, monthlySalary);
                         if (confirm == true) {
                           provider.markSalaryPaid(selectedStaff, _month.year, _month.month, amount: monthlySalary);
-                          // Post negative revenue entry for salary payout
-                          final desc = 'Staff Salary: $selectedStaff ${_month.year}-${_month.month.toString().padLeft(2,'0')}';
-                          final rev = context.read<RevenueProvider>();
-                          await rev.removeByDescription(desc); // dedupe if exists
-                          await rev.addRevenue(patientId: 'staff', description: desc, amount: -monthlySalary);
                           if (mounted) setState(() {});
                         }
                       } else {
                         final confirm = await _confirmUnmarkPaid(selectedStaff);
                         if (confirm == true) {
                           provider.unmarkSalaryPaid(selectedStaff, _month.year, _month.month);
-                          final desc = 'Staff Salary: $selectedStaff ${_month.year}-${_month.month.toString().padLeft(2,'0')}';
-                          await context.read<RevenueProvider>().removeByDescription(desc);
                           if (mounted) setState(() {});
                         }
                       }

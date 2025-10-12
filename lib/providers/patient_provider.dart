@@ -3,9 +3,11 @@ import '../repositories/patient_repository.dart';
 import '../models/patient.dart';
 import '../models/treatment_session.dart';
 import '../core/enums.dart';
+import 'revenue_provider.dart';
 
 class PatientProvider extends ChangeNotifier {
   final PatientRepository _repo = PatientRepository();
+  RevenueProvider? _revenue;
   bool _loaded = false;
 
   List<Patient> get patients => _repo.patients;
@@ -16,6 +18,11 @@ class PatientProvider extends ChangeNotifier {
     await _repo.load();
     _loaded = true;
     notifyListeners();
+  }
+
+  // Called from main to register cross-provider dependency without cyclic constructor.
+  void registerRevenueProvider(RevenueProvider revenue) {
+    _revenue = revenue;
   }
 
   Future<void> addPatient({
@@ -79,6 +86,8 @@ class PatientProvider extends ChangeNotifier {
 
   Future<void> deletePatient(String patientId) async {
     await _repo.deletePatient(patientId);
+    // Remove any revenue entries tied to this patient
+    await _revenue?.removeByPatientId(patientId);
     notifyListeners();
   }
 
@@ -94,6 +103,11 @@ class PatientProvider extends ChangeNotifier {
 
   Future<void> removeSession(String patientId, String sessionId) async {
     await _repo.removeTreatmentSession(patientId, sessionId);
+    // Remove any clinic revenue ledger entries recorded for this session
+    // These use the format: 'Clinic revenue (ledger): rx:<sessionId>:' as prefix
+    await _revenue?.removeByDescriptionPrefix('Clinic revenue (ledger): rx:$sessionId:');
+    // Remove medicine/lab profit entries for this session if descriptions use session context
+    // If medicines/lab profits were not tagged by session in description, they will remain; that's acceptable.
     notifyListeners();
   }
 }

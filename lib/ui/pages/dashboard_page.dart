@@ -6,14 +6,15 @@ import '../../providers/inventory_provider.dart';
 import '../../models/inventory_item.dart';
 import 'attendance_view.dart';
 import '../../providers/staff_attendance_provider.dart';
-import '../../providers/doctor_attendance_provider.dart';
-import '../../providers/doctor_provider.dart';
+// Removed Doctors on duty feature; related providers no longer needed here.
 import '../../providers/medicine_provider.dart';
 import '../../providers/options_provider.dart';
 import '../../models/medicine.dart';
 import '../../providers/utility_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
+import '../../models/revenue_entry.dart';
+// Removed fl_chart and revenue_entry imports after chart removal
 import '../../providers/auth_provider.dart';
 import '../widgets/cases_overview_chart.dart';
 import '../widgets/upcoming_schedule_panel.dart';
@@ -34,7 +35,6 @@ enum DashboardSection {
   overview('Overview', Icons.dashboard_outlined),
   managePatients('Manage Patients', Icons.people_alt_outlined),
   revenue('Revenue', Icons.currency_rupee),
-  addClinic('Add Clinic', Icons.add_business_outlined),
   staffAttendance('Staff Attendance', Icons.badge_outlined),
   doctorsAttendance('Doctors Attendance', Icons.medical_services_outlined),
   inventory('Inventory', Icons.inventory_2_outlined),
@@ -50,70 +50,80 @@ enum DashboardSection {
 
 class _DashboardPageState extends State<DashboardPage> {
   DashboardSection _section = DashboardSection.overview;
-  bool _menuCollapsed = false;
-  bool _customizeMode = false; // when true, panels become draggable/resizable
+  // Removed "Customize" mode; simplified static layout
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Row(
-          children: [
-            _buildSideMenu(),
-            const VerticalDivider(width: 1),
-            Expanded(child: _buildSectionContent())
-          ],
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFE0F7FA), Color(0xFFE8F5E9)],
+          ),
+        ),
+        child: SafeArea(
+          child: Row(
+            children: [
+              const SizedBox(width: 8),
+              _buildSideMenu(),
+              const SizedBox(width: 12),
+              Expanded(child: _buildSectionContent()),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildSideMenu() {
-    final collapsed = _menuCollapsed;
+    final cs = Theme.of(context).colorScheme;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      width: collapsed ? 68 : 230,
-      color: Theme.of(context).colorScheme.surface,
+      width: 68,
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 18, offset: const Offset(0, 8)),
+          BoxShadow(color: cs.primary.withOpacity(.04), blurRadius: 6, offset: const Offset(0, 2)),
+        ],
+        border: Border.all(color: cs.outlineVariant.withOpacity(.25)),
+      ),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center, // center icons vertically
         children: [
-          SizedBox(
-            height: 56,
-            child: Row(
-              children: [
-                const SizedBox(width: 8),
-                if (!collapsed)
-                  Text('Main Menu', style: Theme.of(context).textTheme.titleMedium),
-                const Spacer(),
-                IconButton(
-                  tooltip: collapsed ? 'Expand' : 'Collapse',
-                  icon: Icon(collapsed ? Icons.chevron_right : Icons.chevron_left),
-                  onPressed: () => setState(() => _menuCollapsed = !collapsed),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: ListView(
-              children: DashboardSection.values.map((s) => _menuTile(s, iconsOnly: collapsed)).toList(),
-            ),
-          ),
+          for (final s in DashboardSection.values) _iconOnlyMenuItem(s),
         ],
       ),
     );
   }
 
-  Widget _menuTile(DashboardSection s, {bool iconsOnly = false}) {
+  Widget _iconOnlyMenuItem(DashboardSection s) {
     final selected = s == _section;
-    return ListTile(
-      leading: Icon(s.icon, color: selected ? Theme.of(context).colorScheme.primary : null),
-      title: iconsOnly ? null : Text(s.label, style: TextStyle(fontWeight: selected ? FontWeight.w600 : FontWeight.w400)),
-      horizontalTitleGap: iconsOnly ? 0 : null,
-      selected: selected,
-      onTap: () => setState(() => _section = s),
-      dense: iconsOnly,
-      minLeadingWidth: 0,
-      contentPadding: EdgeInsets.symmetric(horizontal: iconsOnly ? 12 : 16),
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      child: Tooltip(
+        message: s.label,
+        waitDuration: const Duration(milliseconds: 400),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => setState(() => _section = s),
+          child: Container(
+            decoration: BoxDecoration(
+              color: selected ? cs.primary.withOpacity(.12) : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: selected ? cs.primary.withOpacity(.35) : Colors.transparent),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            alignment: Alignment.center,
+            child: Icon(s.icon, color: selected ? cs.primary : cs.onSurfaceVariant),
+          ),
+        ),
+      ),
     );
   }
 
@@ -125,8 +135,6 @@ class _DashboardPageState extends State<DashboardPage> {
         return _managePatientsSection();
       case DashboardSection.revenue:
         return _revenueSection();
-      case DashboardSection.addClinic:
-        return _addClinicSection();
       case DashboardSection.staffAttendance:
         return _staffAttendanceSection();
       case DashboardSection.doctorsAttendance:
@@ -159,106 +167,123 @@ class _DashboardPageState extends State<DashboardPage> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: SingleChildScrollView(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          LayoutBuilder(builder: (context, c) {
-            final narrow = c.maxWidth < 420;
-            if (!narrow) {
-              return Row(children: [
-                Text('Overview', style: Theme.of(context).textTheme.headlineSmall),
-                const Spacer(),
-                FilledButton.tonal(
-                  onPressed: () => setState(() => _customizeMode = !_customizeMode),
-                  child: Row(children: [Icon(_customizeMode ? Icons.check : Icons.edit, size: 16), const SizedBox(width: 6), Text(_customizeMode ? 'Done' : 'Customize')]),
-                ),
-              ]);
-            }
-            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Overview', style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: FilledButton.tonal(
-                  onPressed: () => setState(() => _customizeMode = !_customizeMode),
-                  child: Row(children: [Icon(_customizeMode ? Icons.check : Icons.edit, size: 16), const SizedBox(width: 6), Text(_customizeMode ? 'Done' : 'Customize')]),
-                ),
-              ),
-            ]);
-          }),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 1100;
+          final rightColWidth = wide ? 320.0 : 0.0; // narrower right rail per request
+          final gaps = 16.0;
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Title only; removed Customize button and mode
+          Align(alignment: Alignment.centerLeft, child: Text('Overview', style: Theme.of(context).textTheme.headlineSmall)),
           const SizedBox(height: 16),
-          // Top metric tiles
-          _buildMetricsGrid(todaysRevenue, monthlyRevenue, patientProvider, inventoryProvider, revenueProvider),
-          const SizedBox(height: 16),
-          // Compact responsive panels: Upcoming Schedule, Cases, Attendance, Doctors on Duty
-          LayoutBuilder(builder: (context, c) {
-            final narrow = c.maxWidth < 1000;
-            final schedulePanel = _LargePanel(
+          if (!wide) ...[
+            // Non-wide: use existing stacked layout with compact panels
+            _buildMetricsGrid(todaysRevenue, monthlyRevenue, patientProvider, inventoryProvider, revenueProvider),
+            const SizedBox(height: 12),
+            _LargePanel(
               title: 'Upcoming Schedule',
               child: SizedBox(
-                height: narrow ? 220 : 260,
+                height: 220,
                 child: const UpcomingSchedulePanel(
                   padding: EdgeInsets.fromLTRB(12, 8, 12, 12),
                   showDoctorFilter: false,
                   showTitle: false,
                 ),
               ),
-            );
-            final casesPanel = _LargePanel(
-              title: 'Cases Overview',
-              child: SizedBox(
-                height: narrow ? 220 : 260,
-                child: const Padding(
-                  padding: EdgeInsets.only(bottom: 6),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.topCenter,
-                    child: CasesOverviewChart(
-                      data: {
-                        'Root Canal': 18,
-                        'Orthodontic': 12,
-                        'Prosthodontic': 9,
-                        'Filling': 30,
-                      },
+            ).withRadius(12),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: _LargePanel(
+                  title: 'Cases Overview',
+                  child: SizedBox(
+                    height: 220,
+                    child: const Padding(
+                      padding: EdgeInsets.only(bottom: 6),
+                      child: Center(
+                        child: CasesOverviewChart(
+                          data: {
+                            'Root Canal': 18,
+                            'Orthodontic': 12,
+                            'Prosthodontic': 9,
+                            'Filling': 30,
+                          },
+                          showTitle: false,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            );
-            final attendancePanel = _LargePanel(
-              title: 'Staff Attendance (Overview)',
-              child: SizedBox(height: narrow ? 220 : 260, child: _AttendanceOverviewWidget()),
-            );
-            final doctorsDutyPanel = _LargePanel(
-              title: 'Doctors on Duty',
-              child: SizedBox(height: narrow ? 220 : 260, child: const _DoctorsOnDutyPanel()),
-            );
-
-            if (narrow) {
-              return Column(children: [
-                _StaggeredAppear(delayMs: 0, child: schedulePanel),
-                const SizedBox(height: 16),
-                _StaggeredAppear(delayMs: 60, child: casesPanel),
-                const SizedBox(height: 16),
-                _StaggeredAppear(delayMs: 120, child: attendancePanel),
-                const SizedBox(height: 16),
-                _StaggeredAppear(delayMs: 180, child: doctorsDutyPanel),
-              ]);
-            }
-            // 2x2 grid on wide screens
-            return Column(children: [
-              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Expanded(child: _StaggeredAppear(delayMs: 0, child: schedulePanel)),
-                const SizedBox(width: 16),
-                Expanded(child: _StaggeredAppear(delayMs: 60, child: casesPanel)),
-              ]),
-              const SizedBox(height: 16),
-              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Expanded(child: _StaggeredAppear(delayMs: 120, child: attendancePanel)),
-                const SizedBox(width: 16),
-                Expanded(child: _StaggeredAppear(delayMs: 180, child: doctorsDutyPanel)),
-              ]),
-            ]);
-          }),
-        ]),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _LargePanel(
+                  title: 'Staff Attendance (Overview)',
+                  child: SizedBox(height: 220, child: _AttendanceOverviewWidget()),
+                ),
+              ),
+            ]),
+          ] else ...[
+            // Wide: two columns; right column is vertical Upcoming Schedule
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // Left column
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  // Vertically stacked metrics
+                  _buildMetricsColumn(todaysRevenue, monthlyRevenue, patientProvider, inventoryProvider, revenueProvider),
+                  const SizedBox(height: 12),
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(
+                      child: _LargePanel(
+                        title: 'Cases Overview',
+                        child: SizedBox(
+                          height: 240,
+                          child: const Padding(
+                            padding: EdgeInsets.only(bottom: 6),
+                            child: Center(
+                              child: CasesOverviewChart(
+                                data: {
+                                  'Root Canal': 18,
+                                  'Orthodontic': 12,
+                                  'Prosthodontic': 9,
+                                  'Filling': 30,
+                                },
+                                showTitle: false,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _LargePanel(
+                        title: 'Staff Attendance (Overview)',
+                        child: SizedBox(height: 240, child: _AttendanceOverviewWidget()),
+                      ),
+                    ),
+                  ]),
+                ]),
+              ),
+              SizedBox(width: gaps),
+              // Right column (vertical Upcoming Schedule)
+              SizedBox(
+                width: rightColWidth,
+                child: _LargePanel(
+                  title: 'Upcoming Schedule',
+                  child: SizedBox(
+                    height: 560,
+                    child: const UpcomingSchedulePanel(
+                      padding: EdgeInsets.fromLTRB(12, 8, 12, 12),
+                      showDoctorFilter: false,
+                      showTitle: false,
+                    ),
+                  ),
+                ).withRadius(20),
+              ),
+            ]),
+          ],
+        ]);
+        }),
       ),
     );
   }
@@ -287,13 +312,8 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     ];
     return LayoutBuilder(builder: (context, c) {
-      // Dynamically compute tile width to fit 3..1 columns without overflow
-      final w = c.maxWidth;
-      double tileW;
-      if (w >= 1200) tileW = (w - 16 * 2) / 3; // 3 columns
-      else if (w >= 800) tileW = (w - 16) / 2; // 2 columns
-      else tileW = w; // single column
-      tileW = tileW.clamp(160.0, 420.0);
+      // Fixed squarish cards to avoid empty right space; wrap will auto-flow
+      const tileW = 180.0;
       return Wrap(
         spacing: 16,
         runSpacing: 16,
@@ -313,6 +333,35 @@ class _DashboardPageState extends State<DashboardPage> {
         ],
       );
     });
+  }
+
+  // Vertical metrics stack for wide layout
+  Widget _buildMetricsColumn(double todaysRevenue, double monthlyRevenue, PatientProvider patientProvider, InventoryProvider inventoryProvider, RevenueProvider revenueProvider) {
+    final entries = [
+      ('Today', todaysRevenue, 'Revenue', Icons.today, todaysRevenue >= 0 ? Colors.green : Colors.red),
+      ('Patients', patientProvider.patients.length.toDouble(), 'Total', Icons.people, null),
+      ('Inventory', inventoryProvider.totalInventoryValue, 'Value', Icons.inventory_2, null),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (int i = 0; i < entries.length; i++) ...[
+          SizedBox(
+            width: 180,
+            height: 170,
+            child: _DashMetricCard(
+              title: entries[i].$1,
+              value: entries[i].$2,
+              subtitle: entries[i].$3,
+              icon: entries[i].$4,
+              valueColor: entries[i].$5,
+              appearDelayMs: 60 * i,
+            ),
+          ),
+          if (i != entries.length - 1) const SizedBox(height: 12),
+        ]
+      ],
+    );
   }
 
   // Removed legacy customizable canvas implementation.
@@ -346,10 +395,7 @@ class _DashboardPageState extends State<DashboardPage> {
          _DashCard(title: 'Monthly Revenue', value: '₹${monthlyRevenue.toStringAsFixed(0)}', icon: Icons.calendar_month, width: 200, valueColor: monthlyRevenue >= 0 ? Colors.green : Colors.red),
          _DashCard(title: 'Total Revenue', value: '₹${revenueProvider.total.toStringAsFixed(0)}', icon: Icons.account_balance_wallet, width: 220, valueColor: revenueProvider.total >= 0 ? Colors.green : Colors.red),
         ]),
-        const SizedBox(height: 24),
-        ElevatedButton.icon(
-            onPressed: () {}, icon: const Icon(Icons.receipt_long), label: const Text('Detailed Revenue Report (placeholder)')),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         Expanded(
           child: Card(
             clipBehavior: Clip.antiAlias,
@@ -360,22 +406,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // ============== Add Clinic ==============
-  Widget _addClinicSection() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Add / Manage Clinics', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 16),
-        TextField(decoration: const InputDecoration(labelText: 'Clinic Name')),
-        TextField(decoration: const InputDecoration(labelText: 'Address')),
-        const SizedBox(height: 12),
-        ElevatedButton.icon(onPressed: () {}, icon: const Icon(Icons.save), label: const Text('Register Clinic')),
-        const SizedBox(height: 24),
-        Expanded(child: Center(child: Text('Clinics list placeholder')))
-      ]),
-    );
-  }
+  // Add Clinic section removed
 
   // ============== Staff Attendance ==============
   Widget _staffAttendanceSection() {
@@ -1164,11 +1195,41 @@ class _RevenueListPanel extends StatefulWidget {
 
 class _RevenueListPanelState extends State<_RevenueListPanel> {
   String _filter = 'all'; // all | income | expense
+  DateTime? _from;
+  DateTime? _to;
+  String _periodMode = 'last12'; // last12 | month | year | range
+  int _month = DateTime.now().month;
+  int _year = DateTime.now().year;
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<RevenueProvider>();
     var list = provider.entries.toList();
+    // Apply time window based on period selection
+    DateTime now = DateTime.now();
+    DateTime start;
+    DateTime end;
+    switch (_periodMode) {
+      case 'month':
+        start = DateTime(_year, _month, 1);
+        end = DateTime(_year, _month + 1, 1).subtract(const Duration(days: 1));
+        break;
+      case 'year':
+        start = DateTime(_year, 1, 1);
+        end = DateTime(_year, 12, 31);
+        break;
+      case 'range':
+        start = _from ?? DateTime(now.year, now.month, 1);
+        end = _to ?? DateTime(now.year, now.month + 1, 0);
+        break;
+      case 'last12':
+      default:
+        final d = DateTime(now.year, now.month, 1);
+        start = DateTime(d.year, d.month - 11, 1);
+        end = DateTime(d.year, d.month + 1, 0);
+        break;
+    }
+    list = list.where((e) => !e.date.isBefore(start) && !e.date.isAfter(end)).toList();
     list.sort((a, b) => b.date.compareTo(a.date));
     if (_filter == 'income') {
       list = list.where((e) => e.amount > 0).toList();
@@ -1181,21 +1242,74 @@ class _RevenueListPanelState extends State<_RevenueListPanel> {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-        child: Row(children: [
-          const Text('Revenue & Expenses', style: TextStyle(fontWeight: FontWeight.w600)),
-          const Spacer(),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _filter,
-              items: const [
-                DropdownMenuItem(value: 'all', child: Text('All')),
-                DropdownMenuItem(value: 'income', child: Text('Income')),
-                DropdownMenuItem(value: 'expense', child: Text('Expenses')),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              const Text('Revenue & Expenses', style: TextStyle(fontWeight: FontWeight.w600)),
+              const Spacer(),
+              DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _filter,
+                  items: const [
+                    DropdownMenuItem(value: 'all', child: Text('All')),
+                    DropdownMenuItem(value: 'income', child: Text('Income')),
+                    DropdownMenuItem(value: 'expense', child: Text('Expenses')),
+                  ],
+                  onChanged: (v) => setState(() => _filter = v ?? 'all'),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              // Period mode selector
+              DropdownButton<String>(
+                value: _periodMode,
+                items: const [
+                  DropdownMenuItem(value: 'last12', child: Text('Last 12 months')),
+                  DropdownMenuItem(value: 'month', child: Text('Single month')),
+                  DropdownMenuItem(value: 'year', child: Text('Single year')),
+                  DropdownMenuItem(value: 'range', child: Text('Custom range')),
+                ],
+                onChanged: (v) => setState(() => _periodMode = v ?? 'last12'),
+              ),
+              if (_periodMode == 'month') ...[
+                _monthPicker(), _yearPicker()
+              ] else if (_periodMode == 'year') ...[
+                _yearPicker()
+              ] else if (_periodMode == 'range') ...[
+                _fromPicker(), _toPicker()
               ],
-              onChanged: (v) => setState(() => _filter = v ?? 'all'),
-            ),
-          ),
-        ]),
+              const SizedBox(width: 8),
+              FilledButton.tonalIcon(
+                onPressed: () => _exportPdf(list, start: start, end: end),
+                icon: const Icon(Icons.picture_as_pdf),
+                label: const Text('Export PDF'),
+              )
+              ,
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Clear all revenue entries?'),
+                      content: const Text('This will permanently delete all revenue and expense entries.'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear all')),
+                      ],
+                    ),
+                  );
+                  if (ok == true) {
+                    await context.read<RevenueProvider>().clearAll();
+                  }
+                },
+                icon: const Icon(Icons.delete_forever),
+                label: const Text('Clear all'),
+              )
+            ])
+          ],
+        ),
       ),
       const Divider(height: 1),
       Padding(
@@ -1224,7 +1338,82 @@ class _RevenueListPanelState extends State<_RevenueListPanel> {
       ),
     ]);
   }
+
+  Widget _monthPicker() {
+    return DropdownButton<int>(
+      value: _month,
+      items: [for (int m = 1; m <= 12; m++) DropdownMenuItem(value: m, child: Text(_monthName(m)))],
+      onChanged: (v) => setState(() => _month = v ?? _month),
+    );
+  }
+  Widget _yearPicker() {
+    final now = DateTime.now().year;
+    return DropdownButton<int>(
+      value: _year,
+      items: [for (int y = now - 10; y <= now; y++) DropdownMenuItem(value: y, child: Text('$y'))],
+      onChanged: (v) => setState(() => _year = v ?? _year),
+    );
+  }
+  Widget _fromPicker() {
+    return OutlinedButton.icon(
+      onPressed: () async {
+        final now = DateTime.now();
+        final d = await showDatePicker(context: context, initialDate: _from ?? now, firstDate: DateTime(now.year - 10), lastDate: DateTime(now.year + 1));
+        if (d != null) setState(() => _from = d);
+      },
+      icon: const Icon(Icons.date_range),
+      label: Text(_from == null ? 'From' : '${_from!.year}-${_from!.month.toString().padLeft(2, '0')}-${_from!.day.toString().padLeft(2, '0')}'),
+    );
+  }
+  Widget _toPicker() {
+    return OutlinedButton.icon(
+      onPressed: () async {
+        final now = DateTime.now();
+        final d = await showDatePicker(context: context, initialDate: _to ?? now, firstDate: DateTime(now.year - 10), lastDate: DateTime(now.year + 1));
+        if (d != null) setState(() => _to = d);
+      },
+      icon: const Icon(Icons.event),
+      label: Text(_to == null ? 'To' : '${_to!.year}-${_to!.month.toString().padLeft(2, '0')}-${_to!.day.toString().padLeft(2, '0')}'),
+    );
+  }
+
+  String _monthName(int m) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[(m - 1) % 12];
+  }
+
+  Future<void> _exportPdf(List<RevenueEntry> list, {required DateTime start, required DateTime end}) async {
+    // Basic PDF export using printing + pw (already imported in file)
+    final doc = pw.Document();
+    doc.addPage(
+      pw.MultiPage(
+        build: (context) {
+          final title = 'Revenue & Expenses ${start.year}-${start.month.toString().padLeft(2, '0')} to ${end.year}-${end.month.toString().padLeft(2, '0')}';
+          return [
+            pw.Text(title, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 12),
+            pw.Table.fromTextArray(
+              headers: ['Date','Description','Amount'],
+              data: [
+                for (final e in list)
+                  [
+                    '${e.date.year}-${e.date.month.toString().padLeft(2,'0')}-${e.date.day.toString().padLeft(2,'0')}',
+                    e.description,
+                    (e.amount >= 0 ? '+' : '') + '₹' + e.amount.toStringAsFixed(0),
+                  ]
+              ],
+            )
+          ];
+        },
+      ),
+    );
+    await Printing.layoutPdf(onLayout: (format) async => doc.save());
+  }
+
+  // Animated revenue chart card
 }
+
+// Removed revenue chart card (simplified revenue view per request)
 
 // Attendance overview widget (read-only calendar) used in overview section
 class _AttendanceOverviewWidget extends StatefulWidget {
@@ -1289,14 +1478,7 @@ class _AttendanceOverviewWidgetState extends State<_AttendanceOverviewWidget> {
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Title row
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Staff Attendance (Overview)',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ),
+            // Title removed to avoid duplication with outer panel
             // Staff selector with horizontal scroll
             SizedBox(
               height: 40,
@@ -1579,6 +1761,8 @@ class _DashMetricCardState extends State<_DashMetricCard> with SingleTickerProvi
     final surface = cs.surface;
     final translate = _pressed ? Offset(0, 0) : (_hovered ? const Offset(0, -2) : Offset.zero);
     final scale = _pressed ? 0.98 : (_hovered ? 1.02 : 1.0);
+    final effScale = _pressed ? 0.94 : (_hovered ? 1.04 : 1.0);
+    final iconSize = 20.0 * effScale;
     Widget card = AnimatedContainer(
       duration: const Duration(milliseconds: 160),
       curve: Curves.easeOutCubic,
@@ -1593,51 +1777,46 @@ class _DashMetricCardState extends State<_DashMetricCard> with SingleTickerProvi
           end: Alignment.bottomRight,
         ),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(_hovered ? .10 : .05), blurRadius: 14, offset: const Offset(0,8)),
-          BoxShadow(color: cs.primary.withOpacity(_hovered ? .08 : .03), blurRadius: 6, offset: const Offset(0,2)),
+          BoxShadow(color: Colors.black.withOpacity(.06), blurRadius: 12, offset: const Offset(0, 6)),
+          BoxShadow(color: cs.primary.withOpacity(.03), blurRadius: 4, offset: const Offset(0, 2)),
         ],
-        border: Border.all(color: cs.outlineVariant.withOpacity(.25)),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.22)),
       ),
       padding: const EdgeInsets.all(14),
-      child: LayoutBuilder(builder: (context, c) {
-        final s = (c.maxWidth < c.maxHeight ? c.maxWidth : c.maxHeight);
-        final effScale = (s / 160).clamp(.6, 2.2);
-        final iconSize = 22 * effScale;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 40 * effScale,
-              height: 40 * effScale,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(colors: [accentColor.withOpacity(.25), accentColor.withOpacity(.08)]),
-                border: Border.all(color: accentColor.withOpacity(.35)),
-              ),
-              child: Icon(widget.icon, color: accentColor, size: iconSize),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 40 * effScale,
+            height: 40 * effScale,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(colors: [accentColor.withOpacity(.25), accentColor.withOpacity(.08)]),
+              border: Border.all(color: accentColor.withOpacity(.35)),
             ),
-            const Spacer(),
-            AnimatedBuilder(
-              animation: _countAnim,
-              builder: (_, __) {
-                final v = _countAnim.value;
-                final isInt = widget.title == 'Patients';
-                final text = isInt ? v.toInt().toString() : '₹${v.toStringAsFixed(0)}';
-                return FittedBox(
-                  alignment: Alignment.centerLeft,
-                  child: Text(text, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: widget.valueColor ?? accentColor)),
-                );
-              },
-            ),
-            const SizedBox(height: 4),
-            Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-            if (widget.subtitle != null) ...[
-              const SizedBox(height: 2),
-              Text(widget.subtitle!, style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
-            ]
-          ],
-        );
-      }),
+            child: Icon(widget.icon, color: accentColor, size: iconSize),
+          ),
+          const Spacer(),
+          AnimatedBuilder(
+            animation: _countAnim,
+            builder: (_, __) {
+              final v = _countAnim.value;
+              final isInt = widget.title == 'Patients';
+              final text = isInt ? v.toInt().toString() : '₹${v.toStringAsFixed(0)}';
+              return FittedBox(
+                alignment: Alignment.center,
+                child: Text(text, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: widget.valueColor ?? accentColor)),
+              );
+            },
+          ),
+          const SizedBox(height: 4),
+          Align(alignment: Alignment.center, child: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+          if (widget.subtitle != null) ...[
+            const SizedBox(height: 2),
+            Align(alignment: Alignment.center, child: Text(widget.subtitle!, style: TextStyle(fontSize: 10, color: Colors.grey.shade600))),
+          ]
+        ],
+      ),
     );
     // Use fixed sized metric tiles for consistency.
     card = SizedBox(width: 160, height: 160, child: card);
@@ -1686,7 +1865,7 @@ class _LargePanelState extends State<_LargePanel> {
           transform: Matrix4.identity()..translate(0.0, translateY),
           width: double.infinity,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(widget is _RadiusLargePanel ? (widget as _RadiusLargePanel).radius : 20),
             gradient: LinearGradient(
               colors: [surface, surface.withOpacity(.96)],
               begin: Alignment.topLeft,
@@ -1717,11 +1896,22 @@ class _LargePanelState extends State<_LargePanel> {
   }
 }
 
+extension _PanelRadius on _LargePanel {
+  _LargePanel withRadius(double r) {
+    return _RadiusLargePanel(title: title, child: child, radius: r);
+  }
+}
+
+class _RadiusLargePanel extends _LargePanel {
+  final double radius;
+  const _RadiusLargePanel({required super.title, required super.child, this.radius = 20});
+}
+
 // Simple appear animation wrapper
+// ignore: avoid_unused_constructor_parameters
 class _StaggeredAppear extends StatefulWidget {
   final Widget child;
-  final int delayMs;
-  const _StaggeredAppear({required this.child, this.delayMs = 0});
+  const _StaggeredAppear({required this.child});
 
   @override
   State<_StaggeredAppear> createState() => _StaggeredAppearState();
@@ -1738,13 +1928,7 @@ class _StaggeredAppearState extends State<_StaggeredAppear> with SingleTickerPro
     _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
     _opacity = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
     _offset = Tween<Offset>(begin: const Offset(0, .04), end: Offset.zero).animate(_c);
-    if (widget.delayMs > 0) {
-      Future.delayed(Duration(milliseconds: widget.delayMs), () {
-        if (mounted) _c.forward();
-      });
-    } else {
-      _c.forward();
-    }
+    _c.forward();
   }
 
   @override
@@ -1763,46 +1947,7 @@ class _StaggeredAppearState extends State<_StaggeredAppear> with SingleTickerPro
 }
 
 // Doctors on Duty compact panel
-class _DoctorsOnDutyPanel extends StatelessWidget {
-  const _DoctorsOnDutyPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final doctors = context.watch<DoctorProvider>().doctors;
-    final attendance = context.watch<DoctorAttendanceProvider>();
-    final today = DateTime.now();
-    final key = DateTime(today.year, today.month, today.day);
-
-    final rows = <Widget>[];
-    for (final d in doctors) {
-      final map = attendance.attendance[d.name] ?? const {};
-      final present = map[key] == true;
-      rows.add(ListTile(
-        dense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-        leading: CircleAvatar(radius: 14, backgroundColor: cs.primary.withOpacity(.12), child: Icon(Icons.person, color: cs.primary, size: 16)),
-        title: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: present ? Colors.green.withOpacity(.12) : Colors.red.withOpacity(.12),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: (present ? Colors.green : Colors.red).withOpacity(.35)),
-          ),
-          child: Text(present ? 'Present' : 'Absent', style: TextStyle(color: present ? Colors.green.shade700 : Colors.red.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
-        ),
-      ));
-    }
-
-    if (rows.isEmpty) {
-      return const Center(child: Text('No doctors added'));
-    }
-    return ListView(
-      children: rows,
-    );
-  }
-}
+// Removed _DoctorsOnDutyPanel per request.
 
 // Splitter used for adjustable column widths (and optional vertical drag)
 // Removed legacy splitter widget used by the old adjustable layout.
