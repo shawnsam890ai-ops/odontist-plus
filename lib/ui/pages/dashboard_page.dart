@@ -5,7 +5,6 @@ import '../../providers/patient_provider.dart';
 import '../../providers/revenue_provider.dart';
 import '../../providers/inventory_provider.dart';
 import '../../models/inventory_item.dart';
-import 'attendance_view.dart';
 import '../../providers/staff_attendance_provider.dart';
 // Removed Doctors on duty feature; related providers no longer needed here.
 import '../../providers/medicine_provider.dart';
@@ -22,6 +21,9 @@ import '../widgets/revenue_trend_card.dart';
 import '../widgets/patient_overview_card.dart';
 import '../widgets/upcoming_schedule_panel.dart';
 import '../widgets/upcoming_appointment_widget.dart';
+import '../widgets/staff_attendance_widget.dart';
+import 'attendance_view.dart';
+import '../widgets/halfday_tile.dart';
 import 'doctors_payments_section.dart';
 import '../../providers/lab_registry_provider.dart';
 import 'manage_patients_modern.dart';
@@ -214,9 +216,9 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
             ]),
             const SizedBox(height: 12),
-            _LargePanel(
-              title: 'Staff Attendance (Overview)',
-              child: SizedBox(height: 220, child: _AttendanceOverviewWidget()),
+              _LargePanel(
+              title: '',
+              child: const SizedBox(height: 260, child: StaffAttendanceWidget()),
             ),
           ] else ...[
             // Wide: two columns; right column is vertical Upcoming Schedule
@@ -253,8 +255,8 @@ class _DashboardPageState extends State<DashboardPage> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: _LargePanel(
-                        title: 'Staff Attendance (Overview)',
-                        child: SizedBox(height: 240, child: _AttendanceOverviewWidget()),
+                        title: '',
+                        child: const SizedBox(height: 260, child: StaffAttendanceWidget()),
                       ),
                     ),
                   ]),
@@ -1458,11 +1460,7 @@ class _AttendanceOverviewWidgetState extends State<_AttendanceOverviewWidget> {
   String? _staff;
 
 
-  Color _cellColor(bool? state) {
-    if (state == true) return Colors.green.shade400;
-    if (state == false) return Colors.red.shade400;
-    return Colors.grey.shade200;
-  }
+
 
   String _monthLabel(DateTime m) {
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -1654,18 +1652,26 @@ class _AttendanceOverviewWidgetState extends State<_AttendanceOverviewWidget> {
             inner = const SizedBox.shrink();
           } else {
             final date = DateTime(year, month, day);
-            final state = provider.stateFor(staff, date);
-            final status = state == true ? 'Present' : state == false ? 'Absent' : 'No data';
+            final split = provider.stateForSplit(staff, date);
+            final morning = split[0];
+            final evening = split[1];
+            final status = (morning == true && evening == true)
+                ? 'Present'
+                : (morning == false && evening == false)
+                    ? 'Absent'
+                    : 'Half-day';
             inner = Tooltip(
               message: status,
               waitDuration: const Duration(milliseconds: 250),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: _cellColor(state),
-                  borderRadius: BorderRadius.circular(cell * 0.15),
+              child: Center(
+                child: SizedBox(
+                  width: cell,
+                  height: cell,
+                  child: Stack(alignment: Alignment.center, children: [
+                    HalfDayTile(morning: morning, evening: evening, size: cell, radius: cell * 0.15, noneColor: Colors.grey.shade200),
+                    Text('$day', style: TextStyle(fontSize: dayFont.toDouble(), fontWeight: FontWeight.w600, color: (morning == false && evening == false) ? Colors.white : Colors.black87)),
+                  ]),
                 ),
-                alignment: Alignment.center,
-                child: Text('$day', style: TextStyle(fontSize: dayFont.toDouble(), fontWeight: FontWeight.w600, color: state==false? Colors.white : Colors.black87)),
               ),
             );
             day++;

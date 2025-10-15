@@ -6,6 +6,10 @@ class StaffMember {
   String? address;
   final List<String> phoneNumbers; // primary first
   EmergencyContact? emergencyContact;
+  // Medical information
+  String? foodAllergy;
+  String? medicalConditions;
+  String? medications;
 
   StaffMember({
     required this.id,
@@ -15,6 +19,9 @@ class StaffMember {
     this.address,
     List<String>? phoneNumbers,
     this.emergencyContact,
+    this.foodAllergy,
+    this.medicalConditions,
+    this.medications,
   }) : phoneNumbers = phoneNumbers ?? [];
 }
 

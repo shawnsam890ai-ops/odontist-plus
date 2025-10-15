@@ -6,6 +6,9 @@ import '../../models/staff_member.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../widgets/staff_attendance_widget.dart';
+import '../widgets/dental_id_card.dart';
+import '../../providers/holidays_provider.dart';
 // Removed patient / session imports after extracting schedule panel to dashboard
 
 class MonthlyAttendanceView extends StatefulWidget {
@@ -19,327 +22,222 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
   String? _staff;
   final _monthlySalaryController = TextEditingController();
   bool _staffCollapsed = false;
-  String _staffSearch = '';
-  // Schedule day state removed (schedule moved to dashboard overview)
-  // Inline add-staff form removed in favor of a dialog.
-
-  @override
-  void dispose() {
-    _monthlySalaryController.dispose();
-    super.dispose();
-  }
-
-  void _changeMonth(int delta) => setState(() => _month = DateTime(_month.year, _month.month + delta));
-
-  List<DateTime> _daysInMonth() {
-    final first = _month;
-    final nextMonth = DateTime(first.year, first.month + 1, 1);
-    final days = nextMonth.subtract(const Duration(days: 1)).day;
-    return List.generate(days, (i) => DateTime(first.year, first.month, i + 1));
-  }
-
-  String _monthLabel(DateTime m) {
-    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-    return '${months[m.month - 1]} ${m.year}';
-  }
-
-  Color _cellColor(bool? state) {
-    if (state == true) return Colors.green.shade400;
-    if (state == false) return Colors.red.shade400;
-    return Colors.grey.shade300;
-  }
+  int _staffIdx = 0;
+  bool _staffToggleMode = false; // false = list (scroll), true = single with chevrons
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<StaffAttendanceProvider>();
     final staffList = provider.staffNames;
-    if (_staff == null && staffList.isNotEmpty) _staff = staffList.first;
-    final selectedStaff = _staff ?? (staffList.isNotEmpty ? staffList.first : null);
-    final days = _daysInMonth();
-    int present = 0;
-    int absent = 0;
-    if (selectedStaff != null) {
-      present = provider.presentCount(selectedStaff, _month.year, _month.month);
-      absent = provider.absentCount(selectedStaff, _month.year, _month.month);
-    }
-    final salaryRecord = selectedStaff == null ? null : provider.getSalaryRecord(selectedStaff, _month.year, _month.month);
-    final monthlySalary = salaryRecord?.totalSalary ?? 0;
-    final paid = salaryRecord?.paid ?? false;
-    if (salaryRecord != null) {
-      _monthlySalaryController.text = salaryRecord.totalSalary == 0 ? '' : salaryRecord.totalSalary.toStringAsFixed(0);
-    }
-
-    final staffPanel = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        IconButton(
-          tooltip: _staffCollapsed ? 'Expand Staff Panel' : 'Collapse Staff Panel',
-          icon: Icon(_staffCollapsed ? Icons.keyboard_double_arrow_right : Icons.keyboard_double_arrow_left, size: 20),
-          onPressed: () => setState(() => _staffCollapsed = !_staffCollapsed),
-        ),
-        if (!_staffCollapsed) ...[
-          const Icon(Icons.group, size: 18),
-          const SizedBox(width: 6),
-          Text('Staff', style: Theme.of(context).textTheme.titleMedium),
-          const Spacer(),
-          IconButton(
-            tooltip: 'Add Staff',
-            icon: const Icon(Icons.person_add, size: 20),
-            onPressed: _showAddStaffDialog,
-          ),
-          IconButton(
-              tooltip: 'Select Month',
-              onPressed: () async {
-                final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _month,
-                    firstDate: DateTime(2024),
-                    lastDate: DateTime(2100));
-                if (picked != null) setState(() => _month = DateTime(picked.year, picked.month));
-              },
-              icon: const Icon(Icons.calendar_month, size: 20))
-        ]
-      ]),
-      if (!_staffCollapsed) ...[
-        const SizedBox(height: 8),
-        TextField(
-          decoration: const InputDecoration(
-            prefixIcon: Icon(Icons.search, size: 18),
-            hintText: 'Search staff by name or phone',
-            isDense: true,
-            border: OutlineInputBorder(),
-          ),
-          onChanged: (v) => setState(() => _staffSearch = v.trim().toLowerCase()),
-        ),
-      ],
-      if (!_staffCollapsed) const SizedBox(height: 8),
-      if (!_staffCollapsed)
-        Expanded(
-          child: staffList.isEmpty
-              ? const Center(child: Text('No staff'))
-              : ListView.separated(
-                  itemCount: staffList
-                      .where((s) => _staffSearch.isEmpty || s.toLowerCase().contains(_staffSearch) || _matchesPhone(provider, s, _staffSearch))
-                      .length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (c, i) {
-                    final filtered = staffList
-                        .where((s) => _staffSearch.isEmpty || s.toLowerCase().contains(_staffSearch) || _matchesPhone(provider, s, _staffSearch))
-                        .toList()
-                      ..sort();
-                    final name = filtered[i];
-                    final member = provider.staffMembers.firstWhere((m) => m.name == name, orElse: () => StaffMember(id: '', name: name));
-                    final selected = name == selectedStaff;
-                    final primaryPhone = member.phoneNumbers.isNotEmpty ? member.phoneNumbers.first : '';
-                    return GestureDetector(
-                      onTap: () => setState(() => _staff = name),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeInOut,
-                        decoration: BoxDecoration(
-                          color: selected ? Theme.of(context).colorScheme.primary.withOpacity(0.08) : Theme.of(context).colorScheme.surface,
-                          border: Border.all(
-                              color: selected
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).dividerColor.withOpacity(.4)),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        child: Row(children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Row(children: [
-                                  Flexible(
-                                      child: Text(member.name,
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              color: selected
-                                                  ? Theme.of(context).colorScheme.primary
-                                                  : Theme.of(context).textTheme.bodyMedium?.color))),
-                                  if (member.age != null) ...[
-                                    const SizedBox(width: 6),
-                                    Text('(${member.age})', style: const TextStyle(fontSize: 12, color: Colors.grey))
-                                  ]
-                                ]),
-                                // Removed P:A stats per new requirement
-                              ],
-                            ),
-                          ),
-                          if (primaryPhone.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8.0),
-                              child: Text(primaryPhone, style: const TextStyle(fontSize: 12)),
-                            ),
-                          Wrap(spacing: 4, children: [
-                            IconButton(
-                              tooltip: 'View Details',
-                              icon: const Icon(Icons.info_outline, size: 18),
-                              onPressed: () => _showViewStaffDialog(member),
-                            ),
-                            IconButton(
-                              tooltip: 'Edit',
-                              icon: const Icon(Icons.edit, size: 18),
-                              onPressed: () => _showEditStaffDialog(member),
-                            ),
-                            IconButton(
-                              tooltip: 'WhatsApp',
-                              icon: Icon(Icons.chat, size: 18, color: primaryPhone.isEmpty ? null : Colors.green),
-                              onPressed: primaryPhone.isEmpty ? null : () => _launchWhatsApp(primaryPhone),
-                            ),
-                            IconButton(
-                              tooltip: 'Call',
-                              icon: const Icon(Icons.call, size: 18),
-                              onPressed: primaryPhone.isEmpty ? null : () => _launchCall(primaryPhone),
-                            ),
-                            IconButton(
-                              tooltip: 'Remove',
-                              icon: const Icon(Icons.close, size: 18),
-                              onPressed: () => _confirmDeleteStaff(provider, name),
-                            ),
-                          ])
-                        ]),
-                      ),
-                    );
-                  },
-                ),
-        )
-    ]);
+    final selectedStaff = _staff;
 
     final calendarCard = selectedStaff == null
         ? const Center(child: Text('Add staff to view attendance'))
         : Card(
             child: Padding(
               padding: const EdgeInsets.all(12.0),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  IconButton(onPressed: () => _changeMonth(-1), icon: const Icon(Icons.chevron_left)),
-                  Text(_monthLabel(_month), style: const TextStyle(fontWeight: FontWeight.w600)),
-                  IconButton(onPressed: () => _changeMonth(1), icon: const Icon(Icons.chevron_right)),
-                  const Spacer(),
-                  Text('Salary: ₹${monthlySalary.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w500))
-                ]),
-                const SizedBox(height: 8),
-                Row(children: [
-                  _legendBox(Colors.green.shade400, 'Present'),
-                  const SizedBox(width: 12),
-                  _legendBox(Colors.red.shade400, 'Absent'),
-                  const SizedBox(width: 12),
-                  _legendBox(Colors.grey.shade300, 'None'),
-                  const Spacer(),
-                  Text('P:$present A:$absent Salary: ₹${monthlySalary.toStringAsFixed(0)}${paid ? ' (Paid)' : ''}')
-                ]),
-                const SizedBox(height: 8),
-                _weekdayHeaderRow(),
-                const SizedBox(height: 4),
-                Expanded(
-                  child: GridView.builder(
-                    padding: const EdgeInsets.only(top: 2),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 7,
-                      mainAxisSpacing: 6,
-                      crossAxisSpacing: 6,
-                      childAspectRatio: 1.4, // wider than tall to visually shrink height
-                    ),
-                    itemCount: days.length,
-                    itemBuilder: (c, i) {
-                      final day = days[i];
-                      final state = provider.stateFor(selectedStaff, day);
-                      return GestureDetector(
-                        onTap: () {
-                          provider.cycle(selectedStaff, day);
-                          setState(() {});
-                        },
-                        child: Center(
-                          child: Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: _cellColor(state),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            alignment: Alignment.center,
-                            child: Text('${day.day}',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 11,
-                                  color: state == false ? Colors.white : Colors.black87,
-                                )),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(spacing: 12, runSpacing: 8, children: [
-                  ElevatedButton.icon(
-                    onPressed: () => _showSetSalaryDialog(selectedStaff),
-                    icon: const Icon(Icons.edit),
-                    label: const Text('Set Salary'),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      if (!paid) {
-                        final confirm = await _confirmMarkPaid(selectedStaff, monthlySalary);
-                        if (confirm == true) {
-                          provider.markSalaryPaid(selectedStaff, _month.year, _month.month, amount: monthlySalary);
-                          if (mounted) setState(() {});
-                        }
-                      } else {
-                        final confirm = await _confirmUnmarkPaid(selectedStaff);
-                        if (confirm == true) {
-                          provider.unmarkSalaryPaid(selectedStaff, _month.year, _month.month);
-                          if (mounted) setState(() {});
-                        }
-                      }
-                    },
-                    icon: Icon(paid ? Icons.undo : Icons.check_circle),
-                    label: Text(paid ? 'Unmark Paid' : 'Mark Paid'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _launchUPIPayment,
-                    icon: const Icon(Icons.payment),
-                    label: const Text('Pay (UPI)'),
-                  ),
-                ])
-              ]),
+              child: SizedBox(height: 340, child: StaffAttendanceWidget(showHeader: false, selectedStaff: selectedStaff, showMonthToggle: true)),
             ),
           );
+    
+    Widget staffPanel({required bool boundedHeight}) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(children: [
+            Row(children: [
+              const Expanded(child: Text('Staff', style: TextStyle(fontWeight: FontWeight.w700))),
+              IconButton(onPressed: _showAddStaffDialog, icon: const Icon(Icons.add)),
+              IconButton(
+                tooltip: 'Toggle staff navigator',
+                onPressed: () => setState(() => _staffToggleMode = !_staffToggleMode),
+                icon: Icon(_staffToggleMode ? Icons.view_list : Icons.swap_horiz),
+              )
+            ]),
+            const SizedBox(height: 8),
+            if (boundedHeight)
+              Expanded(child: _buildStaffContent(provider, staffList, selectedStaff, boundedHeight: true))
+            else
+              _buildStaffContent(provider, staffList, selectedStaff, shrinkWrap: true, boundedHeight: false),
+          ]),
+        ),
+      );
+    }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-  // Threshold for moving to vertical stacking.
-  final isNarrow = width < 1040; // stack vertically below this width
-        return Padding(
+    Widget calendarPanel() => Card(clipBehavior: Clip.antiAlias, child: calendarCard);
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final width = constraints.maxWidth;
+      final isNarrow = width < 1040;
+
+      // Narrow layout: allow vertical scrolling so tall content (like the
+      // staff ID card) can expand without causing an overflow.
+      if (isNarrow) {
+        return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: isNarrow
-              ? Column(children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeInOut,
-                    height: _staffCollapsed ? 56 : 260,
-                    child: staffPanel,
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(child: Card(clipBehavior: Clip.antiAlias, child: calendarCard)),
-                ])
-              : Row(children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeInOut,
-                    width: _staffCollapsed ? 52 : 300,
-                    child: staffPanel,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(child: calendarCard),
-                ]),
+          child: Column(children: [
+            // No fixed height; let the panel grow and the whole page scroll.
+            staffPanel(boundedHeight: false),
+            const SizedBox(height: 12),
+            calendarPanel(),
+          ]),
+        );
+      }
+
+      // Wide layout: keep side-by-side layout and let the parent (scaffold)
+      // constrain height — no vertical scroll here by default.
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          SizedBox(width: _staffCollapsed ? 52 : 260, child: staffPanel(boundedHeight: true)),
+          const SizedBox(width: 16),
+          Expanded(child: calendarCard),
+        ]),
+      );
+    });
+  }
+
+  Widget _buildStaffContent(StaffAttendanceProvider provider, List<String> staffList, String? selectedStaff, {bool shrinkWrap = false, required bool boundedHeight}) {
+    if (_staffToggleMode) {
+      final Widget toggleRow = Row(
+        children: [
+          IconButton(
+            onPressed: staffList.isEmpty
+                ? null
+                : () => setState(() {
+                      _staffIdx = (_staffIdx - 1 + staffList.length) % staffList.length;
+                      _staff = staffList[_staffIdx];
+                    }),
+            icon: const Icon(Icons.chevron_left),
+          ),
+          Expanded(
+            child: Builder(builder: (ctx) {
+              if (staffList.isEmpty) return const SizedBox.shrink();
+              final name = staffList[_staffIdx];
+              final member = provider.staffMembers.firstWhere((m) => m.name == name, orElse: () => StaffMember(id: '', name: name));
+              return GestureDetector(
+                onTap: () => setState(() {
+                  _staff = name;
+                  _staffIdx = staffList.indexOf(name);
+                }),
+                child: DentalIdCard(
+                  name: member.name,
+                  age: member.age?.toString(),
+                  sex: member.sex,
+                  address: member.address,
+                  phoneNumber: member.phoneNumbers.isNotEmpty ? member.phoneNumbers.first : null,
+                  emergencyContactNumber: member.emergencyContact?.phone,
+                  emergencyContactName: member.emergencyContact?.name,
+                ),
+              );
+            }),
+          ),
+          IconButton(
+            onPressed: staffList.isEmpty
+                ? null
+                : () => setState(() {
+                      _staffIdx = (_staffIdx + 1) % staffList.length;
+                      _staff = staffList[_staffIdx];
+                    }),
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
+      );
+
+      // When height is bounded (wide layout), allow the toggle content to scroll
+      // vertically to avoid bottom overflow for tall ID cards.
+      if (boundedHeight) {
+        // Use a ListView to allow vertical scrolling within the staff panel
+        // when the available height is bounded (wide layout).
+        return ListView(
+          padding: EdgeInsets.zero,
+          children: [toggleRow],
+        );
+      }
+
+      // Unbounded (narrow) layout: just return the row; the outer page scrolls.
+      return toggleRow;
+    }
+
+    // Staff list
+    return ListView.builder(
+      shrinkWrap: shrinkWrap,
+      physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
+      itemCount: staffList.length,
+      itemBuilder: (c, i) {
+        final name = staffList[i];
+        final isSelected = name == selectedStaff;
+        final member = provider.staffMembers.firstWhere((m) => m.name == name, orElse: () => StaffMember(id: '', name: name));
+        final primaryPhone = member.phoneNumbers.isNotEmpty ? member.phoneNumbers.first : '';
+        return GestureDetector(
+          onTap: () => setState(() {
+            _staff = name;
+            _staffIdx = i;
+          }),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: isSelected ? Theme.of(context).colorScheme.primary.withOpacity(0.06) : Theme.of(context).colorScheme.surface,
+              border: Border.all(color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).dividerColor.withOpacity(0.12)),
+              borderRadius: BorderRadius.circular(10),
+            ),
+                          child: Row(children: [
+              Expanded(
+                child: Text(name, style: TextStyle(fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, color: isSelected ? Theme.of(context).colorScheme.primary : null)),
+              ),
+              Row(children: [
+                IconButton(
+                  tooltip: 'View Details',
+                  icon: const Icon(Icons.info_outline, size: 18),
+                  onPressed: () => _showViewStaffDialog(member),
+                ),
+                              IconButton(
+                                tooltip: 'Edit',
+                                icon: const Icon(Icons.edit, size: 18),
+                                onPressed: () => _showEditStaffDialog(member),
+                              ),
+                              IconButton(
+                                tooltip: 'Record Payment',
+                                icon: const Icon(Icons.payments, size: 18),
+                                onPressed: () => _showRecordPaymentDialog(member.name),
+                              ),
+                IconButton(
+                  tooltip: 'WhatsApp',
+                  icon: Icon(Icons.chat, size: 18, color: primaryPhone.isEmpty ? null : Colors.green),
+                  onPressed: primaryPhone.isEmpty ? null : () => _launchWhatsApp(primaryPhone),
+                ),
+                IconButton(
+                  tooltip: 'Call',
+                  icon: const Icon(Icons.call, size: 18),
+                  onPressed: primaryPhone.isEmpty ? null : () => _launchCall(primaryPhone),
+                ),
+                              IconButton(
+                                tooltip: 'Delete',
+                                icon: const Icon(Icons.delete_outline, size: 18),
+                                onPressed: () => _confirmDeleteStaff(provider, member.name),
+                              ),
+              ])
+            ]),
+          ),
         );
       },
     );
   }
+
+  List<DateTime> _daysInMonth() {
+    final first = DateTime(_month.year, _month.month, 1);
+    final last = DateTime(_month.year, _month.month + 1, 0);
+    return List.generate(last.day, (i) => DateTime(first.year, first.month, i + 1));
+  }
+
+  String _monthLabel(DateTime m) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${months[m.month - 1]} ${m.year}';
+  }
+
 
   // Removed: appointment schedule helper widgets and state since schedule moved out
 
@@ -543,6 +441,78 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
     );
   }
 
+  Future<void> _showHolidayDialog() async {
+    final holidays = context.read<HolidaysProvider>();
+    final year = _month.year;
+    final month = _month.month;
+    final days = _daysInMonth();
+    // make a mutable set of days currently marked
+    final selected = holidays.holidaysForMonth(year, month).map((d) => d.day).toSet();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: SizedBox(
+            width: 520,
+            height: 420,
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(children: [
+                Row(children: [
+                  const Text('Manage Holidays', style: TextStyle(fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  Text(_monthLabel(_month)),
+                ]),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: GridView.count(
+                    crossAxisCount: 7,
+                    crossAxisSpacing: 6,
+                    mainAxisSpacing: 6,
+                    childAspectRatio: 1.1,
+                    children: days.map((d) {
+                      final isSel = selected.contains(d.day);
+                      return GestureDetector(
+                        onTap: () => setState(() {
+                          if (isSel) selected.remove(d.day); else selected.add(d.day);
+                        }),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isSel ? Colors.grey.shade400 : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: isSel ? Colors.grey.shade600 : Colors.transparent),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text('${d.day}', style: TextStyle(fontWeight: FontWeight.w600, color: isSel ? Colors.white : Colors.black87)),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(children: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                  const Spacer(),
+                  ElevatedButton(
+                    onPressed: () {
+                      final newH = days.where((d) => selected.contains(d.day)).toList();
+                      holidays.setHolidays(newH);
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('Save'),
+                  )
+                ])
+              ]),
+            ),
+          ),
+        );
+      },
+    );
+    setState(() {});
+  }
+
   Future<void> _showSetSalaryDialog(String staffName) async {
     final provider = context.read<StaffAttendanceProvider>();
     final existing = provider.getSalaryRecord(staffName, _month.year, _month.month);
@@ -605,6 +575,10 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
       monthlySalaryCtrl.text = salaryRec.totalSalary.toStringAsFixed(0);
     }
     String? sex = member.sex;
+    // Medical info controllers
+    final medAllergyCtrl = TextEditingController(text: member.foodAllergy ?? '');
+    final medConditionsCtrl = TextEditingController(text: member.medicalConditions ?? '');
+    final medicationsCtrl = TextEditingController(text: member.medications ?? '');
 
     await showDialog(
       context: context,
@@ -693,7 +667,17 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                     ]),
                     const SizedBox(height: 12),
                     TextFormField(controller: emgAddressCtrl, decoration: const InputDecoration(labelText: 'Address')),
-                    const SizedBox(height: 28),
+          const SizedBox(height: 20),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Medical Information', style: Theme.of(context).textTheme.titleSmall)),
+          const SizedBox(height: 8),
+          TextFormField(controller: medAllergyCtrl, decoration: const InputDecoration(labelText: 'Any Food Allergy?')),
+          const SizedBox(height: 12),
+          TextFormField(controller: medConditionsCtrl, decoration: const InputDecoration(labelText: 'Any Medical Conditions?')),
+          const SizedBox(height: 12),
+          TextFormField(controller: medicationsCtrl, decoration: const InputDecoration(labelText: 'Currently Under Any Medications?')),
+          const SizedBox(height: 20),
                     Row(children: [
                       Expanded(
                         child: ElevatedButton.icon(
@@ -719,6 +703,9 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                                       phone: emgPhoneCtrl.text.trim(),
                                       address: emgAddressCtrl.text.trim().isEmpty ? null : emgAddressCtrl.text.trim(),
                                     ),
+                              foodAllergy: medAllergyCtrl.text.trim().isEmpty ? null : medAllergyCtrl.text.trim(),
+                              medicalConditions: medConditionsCtrl.text.trim().isEmpty ? null : medConditionsCtrl.text.trim(),
+                              medications: medicationsCtrl.text.trim().isEmpty ? null : medicationsCtrl.text.trim(),
                             );
                             provider.updateStaff(updated);
                             final salary = double.tryParse(monthlySalaryCtrl.text) ?? 0;
@@ -747,6 +734,68 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Future<void> _showRecordPaymentDialog(String staffName) async {
+    final provider = context.read<StaffAttendanceProvider>();
+    final rec = provider.ensureSalaryRecord(staffName, _month.year, _month.month);
+    final amount = rec.totalSalary;
+    DateTime date = rec.paymentDate ?? DateTime.now();
+    String mode = rec.paymentMode ?? 'Cash';
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Record Payment - $staffName'),
+        content: SizedBox(
+          width: 320,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Amount: ₹${amount.toStringAsFixed(0)}'),
+              const SizedBox(height: 12),
+              Row(children: [
+                const Text('Date: '),
+                TextButton(
+                  onPressed: () async {
+                    final picked = await showDatePicker(context: ctx, initialDate: date, firstDate: DateTime(2020), lastDate: DateTime(2100));
+                    if (picked != null) {
+                      date = picked;
+                      (ctx as Element).markNeedsBuild();
+                    }
+                  },
+                  child: Text('${date.day.toString().padLeft(2,'0')}/${date.month.toString().padLeft(2,'0')}/${date.year}'),
+                )
+              ]),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: mode,
+                decoration: const InputDecoration(labelText: 'Mode of Transaction'),
+                items: const [
+                  DropdownMenuItem(value: 'Cash', child: Text('Cash')),
+                  DropdownMenuItem(value: 'UPI', child: Text('UPI')),
+                  DropdownMenuItem(value: 'Bank', child: Text('Bank Transfer')),
+                  DropdownMenuItem(value: 'Other', child: Text('Other')),
+                ],
+                onChanged: (v) { if (v != null) mode = v; },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton.icon(
+            icon: const Icon(Icons.check),
+            label: const Text('Mark Paid'),
+            onPressed: () async {
+              provider.markSalaryPaid(staffName, _month.year, _month.month, amount: amount, mode: mode, date: date);
+              Navigator.pop(ctx);
+              setState(() {});
+            },
+          )
+        ],
       ),
     );
   }
@@ -1052,6 +1101,9 @@ class _StaffViewContentState extends State<_StaffViewContent> {
               _row('Phone', member.phoneNumbers.isEmpty ? '—' : member.phoneNumbers.first),
               if (member.phoneNumbers.length > 1) _row('Alt Phone', member.phoneNumbers[1]),
               _row('Address', member.address ?? '—'),
+              _row('Food Allergy', (member.foodAllergy == null || member.foodAllergy!.trim().isEmpty) ? 'NIL' : member.foodAllergy!),
+              _row('Medical Conditions', (member.medicalConditions == null || member.medicalConditions!.trim().isEmpty) ? 'NIL' : member.medicalConditions!),
+              _row('Medications', (member.medications == null || member.medications!.trim().isEmpty) ? 'NIL' : member.medications!),
               _row('Salary (This Month)', salaryRec == null ? '—' : '₹${salaryRec.totalSalary.toStringAsFixed(0)}'),
               _row('Paid', salaryRec == null ? '—' : (salaryRec.paid ? 'Yes' : 'No')),
               if (salaryRec != null) _paymentDateRow(salaryRec),
@@ -1085,6 +1137,7 @@ class _StaffViewContentState extends State<_StaffViewContent> {
       ),
     );
   }
+
 
   Widget _row(String label, String value) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 4),

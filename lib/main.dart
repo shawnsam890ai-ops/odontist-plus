@@ -9,6 +9,7 @@ import 'providers/appointment_provider.dart';
 import 'providers/clinic_provider.dart';
 import 'providers/inventory_provider.dart';
 import 'providers/staff_attendance_provider.dart';
+import 'providers/holidays_provider.dart';
 import 'providers/doctor_attendance_provider.dart';
 import 'providers/doctor_provider.dart';
 import 'providers/lab_registry_provider.dart';
@@ -41,6 +42,7 @@ class DentalClinicApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ClinicProvider()),
         ChangeNotifierProvider(create: (_) => InventoryProvider()),
   ChangeNotifierProvider(create: (_) => StaffAttendanceProvider()),
+    ChangeNotifierProvider(create: (_) => HolidaysProvider()),
         ChangeNotifierProvider(create: (_) => DoctorAttendanceProvider()),
   ChangeNotifierProvider(create: (_) => DoctorProvider()),
     ChangeNotifierProvider(create: (_) => LabRegistryProvider()),
@@ -64,6 +66,7 @@ class DentalClinicApp extends StatelessWidget {
             final rev = ctx.read<RevenueProvider>();
             pats.registerRevenueProvider(rev);
             ctx.read<StaffAttendanceProvider>().registerRevenueProvider(rev);
+            // Holidays provider currently standalone; no cross-registration required
             // Load persisted doctors and ledger
             ctx.read<DoctorProvider>().load();
             // Load lab registry

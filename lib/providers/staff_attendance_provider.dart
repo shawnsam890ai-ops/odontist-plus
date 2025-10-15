@@ -14,6 +14,7 @@ class StaffAttendanceProvider with ChangeNotifier {
       .toList();
 
   void mark(String staffName, DateTime day, bool present) {
+    // Backwards-compatible simple full-day mark (sets both halves)
     _ensureNameExists(staffName);
     final existing = _entries.firstWhere(
         (e) => e.staffName == staffName && e.date.year == day.year && e.date.month == day.month && e.date.day == day.day,
@@ -21,7 +22,7 @@ class StaffAttendanceProvider with ChangeNotifier {
     if (!_entries.contains(existing)) {
       _entries.add(existing);
     }
-    existing.present = present;
+    existing.setFull(present);
     notifyListeners();
   }
 
@@ -65,7 +66,7 @@ class StaffAttendanceProvider with ChangeNotifier {
       for (int i = 0; i < _entries.length; i++) {
         final e = _entries[i];
         if (e.staffName == oldName) {
-          _entries[i] = StaffAttendanceEntry(id: e.id, staffName: newName, date: e.date, present: e.present);
+          _entries[i] = StaffAttendanceEntry(id: e.id, staffName: newName, date: e.date, morningPresent: e.morningPresent, eveningPresent: e.eveningPresent);
         }
       }
       if (_salaryRecords.containsKey(oldName)) {
@@ -103,13 +104,32 @@ class StaffAttendanceProvider with ChangeNotifier {
 
   /// Get entries for a full month for a staff (map day->present?)
   List<StaffAttendanceEntry> forMonth(String staffName, int year, int month) => _entries
-      .where((e) => e.staffName == staffName && e.date.year == year && e.date.month == month)
-      .toList();
+    .where((e) => e.staffName == staffName && e.date.year == year && e.date.month == month)
+    .toList();
 
-  int presentCount(String staffName, int year, int month) => forMonth(staffName, year, month).where((e) => e.present).length;
+  /// Counts a half-day as 0.5 for present/absent summary (presentCount returns total present halves)
+  int presentCount(String staffName, int year, int month) {
+    final list = forMonth(staffName, year, month);
+    int count = 0;
+    for (final e in list) {
+      if (e.morningPresent == true) count++;
+      if (e.eveningPresent == true) count++;
+    }
+    return count;
+  }
+
   int absentCount(String staffName, int year, int month) {
-    final totalMarked = forMonth(staffName, year, month).length;
-    return totalMarked - presentCount(staffName, year, month);
+    final list = forMonth(staffName, year, month);
+    int absent = 0;
+    for (final e in list) {
+      if (e.morningPresent != null) {
+        if (e.morningPresent == false) absent++;
+      }
+      if (e.eveningPresent != null) {
+        if (e.eveningPresent == false) absent++;
+      }
+    }
+    return absent;
   }
 
   double monthlySalaryComputed(String staffName, int year, int month) {
@@ -124,11 +144,12 @@ class StaffAttendanceProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void markSalaryPaid(String staffName, int year, int month, {double? amount}) {
+  void markSalaryPaid(String staffName, int year, int month, {double? amount, String? mode, DateTime? date}) {
     final rec = ensureSalaryRecord(staffName, year, month);
     if (amount != null) rec.paidAmount = amount;
     rec.paid = true;
-    rec.paymentDate = DateTime.now();
+    rec.paymentDate = date ?? DateTime.now();
+    rec.paymentMode = mode ?? rec.paymentMode;
     // Post negative revenue entry for salary payout
     // Remove unnecessary braces around simple identifier (year)
     final desc = 'Staff Salary: $staffName $year-${month.toString().padLeft(2,'0')}';
@@ -174,33 +195,53 @@ class StaffAttendanceProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void setPaymentMode(String staffName, int year, int month, String mode) {
+    final rec = ensureSalaryRecord(staffName, year, month);
+    rec.paymentMode = mode;
+    notifyListeners();
+  }
+
   /// Cycle attendance state: none -> present -> absent -> none
+  /// Cycle attendance states with half-day support.
+  /// Order: none -> full present -> morning present only -> evening present only -> full absent -> none
   void cycle(String staffName, DateTime day) {
     final existing = _entries.firstWhere(
         (e) => e.staffName == staffName && e.date.year == day.year && e.date.month == day.month && e.date.day == day.day,
         orElse: () => StaffAttendanceEntry(staffName: staffName, date: day));
     if (!_entries.contains(existing)) {
-      // Was none; set to present first
-      existing.present = true;
+      // none -> full present
+      existing.setFull(true);
       _entries.add(existing);
+    } else if (existing.isFullPresent) {
+      // full present -> morning present only
+      existing.morningPresent = true;
+      existing.eveningPresent = null;
+    } else if (existing.morningPresent == true && existing.eveningPresent == null) {
+      // morning present only -> evening present only (representing morning absent/afternoon present)
+      existing.morningPresent = null;
+      existing.eveningPresent = true;
+    } else if (existing.eveningPresent == true && existing.morningPresent == null) {
+      // evening present only -> full absent
+      existing.morningPresent = false;
+      existing.eveningPresent = false;
+    } else if (existing.isFullAbsent) {
+      // full absent -> remove (none)
+      _entries.remove(existing);
     } else {
-      if (existing.present) {
-        // present -> absent (represented by present=false but keep entry)
-        existing.present = false;
-      } else {
-        // absent -> remove (back to none)
-        _entries.remove(existing);
-      }
+      // fallback: remove
+      _entries.remove(existing);
     }
     notifyListeners();
   }
 
-  bool? stateFor(String staffName, DateTime day) {
+  /// Returns a tuple-like result for the day: (morningPresent?, eveningPresent?)
+  /// Each value is bool? (true present, false absent, null none)
+  List<bool?> stateForSplit(String staffName, DateTime day) {
     final match = _entries.firstWhere(
         (e) => e.staffName == staffName && e.date.year == day.year && e.date.month == day.month && e.date.day == day.day,
         orElse: () => StaffAttendanceEntry(staffName: '__none__', date: day));
-    if (match.staffName == '__none__') return null; // none
-    return match.present; // true=present, false=absent
+    if (match.staffName == '__none__') return [null, null];
+    return [match.morningPresent, match.eveningPresent];
   }
 }
 
@@ -211,5 +252,6 @@ class MonthlySalaryRecord {
   bool paid;
   double paidAmount;
   DateTime? paymentDate;
-  MonthlySalaryRecord({required this.year, required this.month, this.totalSalary = 0, this.paid = false, this.paidAmount = 0, this.paymentDate});
+  String? paymentMode; // Cash / UPI / Bank / Other
+  MonthlySalaryRecord({required this.year, required this.month, this.totalSalary = 0, this.paid = false, this.paidAmount = 0, this.paymentDate, this.paymentMode});
 }
