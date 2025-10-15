@@ -55,7 +55,7 @@ enum DashboardSection {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  DashboardSection _section = DashboardSection.overview;
+  DashboardSection _section = DashboardSection.staffAttendance; // default to Staff view
   // Removed "Customize" mode; simplified static layout
 
   @override

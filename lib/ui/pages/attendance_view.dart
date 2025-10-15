@@ -23,12 +23,18 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
   final _monthlySalaryController = TextEditingController();
   bool _staffCollapsed = false;
   int _staffIdx = 0;
-  bool _staffToggleMode = false; // false = list (scroll), true = single with chevrons
+  bool _staffToggleMode = true; // false = list (scroll), true = single with chevrons (default)
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<StaffAttendanceProvider>();
     final staffList = provider.staffNames;
+    // Auto-select first staff if none selected so calendar shows by default
+    if (_staff == null && staffList.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _staff == null) setState(() { _staff = staffList.first; _staffIdx = 0; });
+      });
+    }
     final selectedStaff = _staff;
 
     final calendarCard = selectedStaff == null
@@ -42,6 +48,10 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
     
     Widget staffPanel({required bool boundedHeight}) {
       return Card(
+        color: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
         child: Padding(
           padding: const EdgeInsets.all(8.0),
           child: Column(children: [
