@@ -64,17 +64,31 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
 
     return Padding(
       padding: widget.padding,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _monthYearRow(),
-          const SizedBox(height: 8),
-          if (widget.showTitle || widget.showDoctorFilter) _headerRow(),
-          if (widget.showDoctorFilter) const SizedBox(height: 6),
-          _sixDayStrip(),
-          const SizedBox(height: 12),
-          Expanded(child: _appointmentsBars(entries)),
-        ],
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+              widthFactor: 1.0,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _monthYearRow(),
+              const SizedBox(height: 8),
+              // Header now only shows the doctor filter (if enabled). Title is moved below the dates strip.
+              if (widget.showDoctorFilter) _headerRow(),
+              if (widget.showDoctorFilter) const SizedBox(height: 6),
+              _sixDayStrip(),
+              const SizedBox(height: 12),
+              // Moved title: show after dates panel
+              if (widget.showTitle)
+                Text('Upcoming Schedule', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+              if (widget.showTitle) const SizedBox(height: 8),
+              // Divider separating the dates section and the next-appointments section
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              Expanded(child: _appointmentsBars(entries)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -112,13 +126,10 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
   }
 
   Widget _headerRow() {
-    final title = widget.showTitle
-        ? Text('Upcoming Schedule', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))
-        : const SizedBox.shrink();
+    // Header row only contains the doctor filter aligned to the right.
     final doctor = _filterRow(context.read<DoctorProvider>());
     return Row(
       children: [
-        if (widget.showTitle) title,
         const Spacer(),
         if (widget.showDoctorFilter) Flexible(child: doctor),
       ],
@@ -177,7 +188,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                 onTap: () => setState(() => _selectedDay = d),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
-                  width: 56,
+                      width: 56,
                   margin: const EdgeInsets.symmetric(vertical: 6),
                   decoration: BoxDecoration(
                     color: isSel
@@ -205,7 +216,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                                   : Colors.grey[600])),
                       const SizedBox(height: 4),
                       Container(
-                        padding: const EdgeInsets.all(7),
+                            padding: const EdgeInsets.all(7),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: isToday
@@ -234,7 +245,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                 ),
               );
             },
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemCount: days.length,
           ),
         ),

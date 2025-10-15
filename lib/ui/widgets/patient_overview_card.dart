@@ -198,10 +198,10 @@ class _CardBody extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     child: Text(
                       total.toString().padLeft(2, '0'),
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.black87,
                         fontWeight: FontWeight.w800,
-                        fontSize: height * 0.24,
+                        fontSize: 28.0,
                       ),
                     ),
                   ),

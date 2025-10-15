@@ -1,4 +1,3 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/revenue_provider.dart';
@@ -37,131 +36,47 @@ class RevenueTrendCard extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, c) {
           final provider = context.watch<RevenueProvider>();
-          final now = DateTime.now();
-          final from = DateTime(now.year, now.month - (months - 1), 1);
-          final filtered = provider.entries
-              .where((e) => !e.date.isBefore(from))
-              .toList()
-            ..sort((a, b) => a.date.compareTo(b.date));
-
-          // Initialize month buckets (ensures missing months show as 0).
-            final Map<String, double> monthTotals = {};
-            for (int i = months - 1; i >= 0; i--) {
-              final d = DateTime(now.year, now.month - i, 1);
-              monthTotals[_key(d)] = 0;
-            }
-            for (final e in filtered) {
-              final k = _key(DateTime(e.date.year, e.date.month, 1));
-              if (monthTotals.containsKey(k)) {
-                monthTotals[k] = monthTotals[k]! + e.amount;
-              }
-            }
-            final orderedKeys = monthTotals.keys.toList();
-            final spots = <FlSpot>[];
-            for (int i = 0; i < orderedKeys.length; i++) {
-              spots.add(FlSpot(i.toDouble(), monthTotals[orderedKeys[i]]!));
-            }
-
-          // Build chart
-          Widget chart;
-          if (spots.length < 2) {
-            chart = const Center(child: Text('Not enough data', style: TextStyle(fontSize: 11)));
-          } else {
-            final faintSpots = spots.map((s) => FlSpot(s.x, s.y * 0.99)).toList();
-            chart = LineChart(
-              LineChartData(
-                minX: 0,
-                maxX: (spots.length - 1).toDouble(),
-                gridData: const FlGridData(show: false),
-                borderData: FlBorderData(show: false),
-                titlesData: FlTitlesData(
-                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 20,
-                      getTitlesWidget: (value, meta) {
-                        final idx = value.toInt();
-                        if (idx < 0 || idx >= orderedKeys.length) return const SizedBox.shrink();
-                        final ym = orderedKeys[idx];
-                        final month = int.parse(ym.split('-')[1]);
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            _monthAbbrev(month),
-                            style: const TextStyle(fontSize: 10, color: Colors.black54),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                lineTouchData: LineTouchData(
-                  touchTooltipData: LineTouchTooltipData(
-                    tooltipRoundedRadius: 8,
-                    tooltipPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    getTooltipColor: (_) => Colors.black87,
-                    getTooltipItems: (touched) => touched.map((s) {
-                      final idx = s.x.toInt();
-                      final ym = orderedKeys[idx];
-                      final month = int.parse(ym.split('-')[1]);
-                      return LineTooltipItem(
-                        '${_monthAbbrev(month)}: ${s.y.toStringAsFixed(0)}',
-                        const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                lineBarsData: [
-                  _primaryLine(faintSpots, faintLineColor, 2, opacity: .35),
-                  _primaryLine(spots, lineColor, 3.2),
-                ],
-              ),
-            );
-          }
-
-          // Percentage change (latest vs previous month)
-          double? pct;
-          if (spots.length >= 2) {
-            final last = spots.last.y;
-            final prev = spots[spots.length - 2].y;
-            if (prev != 0) pct = ((last - prev) / prev) * 100.0;
-          }
-      final pctColor = pct == null || pct == 0
-        ? Colors.grey
-        : (pct > 0 ? gainColor : lossColor);
-      final arrow = pct == null || pct == 0
-        ? Icons.horizontal_rule
-        : (pct > 0 ? Icons.arrow_upward : Icons.arrow_downward);
-
+          // Compute today's (or current) total revenue
+          final todayTotal = provider.total;
+          final displayTotal = (todayTotal == 0) ? '00' : todayTotal.toStringAsFixed(0);
+          // Compute effective height from parent constraints (SizedBox in dashboard sets this).
+          final effectiveH = c.hasBoundedHeight && c.maxHeight.isFinite ? c.maxHeight : minHeight;
           return ConstrainedBox(
             constraints: BoxConstraints(minHeight: minHeight, minWidth: c.maxWidth),
             child: Padding(
               padding: padding,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Row(
-                    children: [
-                      const Text('Revenue', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const Spacer(),
-                      if (pct != null)
-                        Row(
-                          children: [
-                            Icon(arrow, size: 14, color: pctColor),
-                            const SizedBox(width: 2),
-                            Text(
-                              '${pct.abs().toStringAsFixed(1)}%',
-                              style: TextStyle(color: pctColor, fontSize: 12, fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                    ],
+                  // Left circular icon
+                  Container(
+                    width: minHeight * 0.62,
+                    height: minHeight * 0.62,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 8, offset: const Offset(0,2))],
+                    ),
+                    child: overlayImage != null
+                        ? ClipOval(child: Image(image: overlayImage!, fit: BoxFit.cover))
+                        : Container(
+                            decoration: BoxDecoration(shape: BoxShape.circle, color: lineColor.withOpacity(.08)),
+                            child: Icon(Icons.show_chart, color: lineColor, size: minHeight * 0.28),
+                          ),
                   ),
-                  const SizedBox(height: 6),
-                  Expanded(child: chart),
+                  const SizedBox(width: 22),
+                  // Right text and value
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Revenue', style: TextStyle(fontWeight: FontWeight.w700, fontSize: effectiveH * 0.10, color: Colors.black87)),
+                        const SizedBox(height: 8),
+                        Text(displayTotal, style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w800, fontSize: minHeight * 0.24)),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -171,14 +86,5 @@ class RevenueTrendCard extends StatelessWidget {
     );
   }
 
-  static String _key(DateTime d) => '${d.year}-${d.month.toString().padLeft(2,'0')}';
-  static String _monthAbbrev(int m) => const ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1];
-
-  LineChartBarData _primaryLine(List<FlSpot> spots, Color color, double width, {double opacity = 1}) => LineChartBarData(
-        spots: spots,
-        isCurved: true,
-        barWidth: width,
-        color: color.withOpacity(opacity),
-        dotData: const FlDotData(show: false),
-      );
+  // No helper functions required for compact revenue card
 }

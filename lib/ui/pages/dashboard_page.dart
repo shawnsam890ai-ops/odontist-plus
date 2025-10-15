@@ -182,20 +182,25 @@ class _DashboardPageState extends State<DashboardPage> {
             // Non-wide: use existing stacked layout with compact panels
             _buildMetricsGrid(todaysRevenue, monthlyRevenue, patientProvider, inventoryProvider, revenueProvider),
             const SizedBox(height: 12),
-            _LargePanel(
-              title: 'Upcoming Schedule',
-              child: SizedBox(
-                height: 220,
-                child: const UpcomingSchedulePanel(
-                  padding: EdgeInsets.fromLTRB(12, 8, 12, 12),
-                  showDoctorFilter: false,
-                  showTitle: false,
-                ),
-              ),
-            ).withRadius(12),
-            const SizedBox(height: 12),
-            Row(children: [
+            // Upcoming Schedule and Cases Overview side by side
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(
+                flex: 1,
+                child: _LargePanel(
+                  title: '',
+                  child: SizedBox(
+                    height: 260,
+                    child: const UpcomingSchedulePanel(
+                      padding: EdgeInsets.fromLTRB(12, 8, 12, 12),
+                      showDoctorFilter: false,
+                      showTitle: false,
+                    ),
+                  ),
+                ).withRadius(12),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 1,
                 child: _LargePanel(
                   title: 'Cases Overview',
                   child: SizedBox(
@@ -217,14 +222,12 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _LargePanel(
-                  title: 'Staff Attendance (Overview)',
-                  child: SizedBox(height: 220, child: _AttendanceOverviewWidget()),
-                ),
-              ),
             ]),
+            const SizedBox(height: 12),
+            _LargePanel(
+              title: 'Staff Attendance (Overview)',
+              child: SizedBox(height: 220, child: _AttendanceOverviewWidget()),
+            ),
           ] else ...[
             // Wide: two columns; right column is vertical Upcoming Schedule
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -272,7 +275,7 @@ class _DashboardPageState extends State<DashboardPage> {
               SizedBox(
                 width: rightColWidth,
                 child: _LargePanel(
-                  title: 'Upcoming Schedule',
+                  title: '',
                   child: SizedBox(
                     height: 560,
                     child: const UpcomingSchedulePanel(
@@ -306,13 +309,17 @@ class _DashboardPageState extends State<DashboardPage> {
     return LayoutBuilder(builder: (context, c) {
       // Revenue trend card becomes a responsive main tile; other metrics remain fixed width.
       // Keep revenue at a fixed small tile, but make patient card wider.
-      const double revenueWidth = 180.0;
+      const double revenueWidth = 210.0;
       const double _patientAspect = 1.1; // PatientOverviewCard aspectRatio
-      final double revenueHeight = (revenueWidth / _patientAspect).clamp(110.0, 400.0);
     // Patient width: slightly reduced responsive tile (clamped to reasonable range)
     final double patientWidth = (c.maxWidth < 420)
       ? c.maxWidth
       : (c.maxWidth * 0.32).clamp(240.0, 360.0);
+    // PatientOverviewCard internally clamps width to its maxWidth (180), so
+    // derive the effective patient width and height and use that for revenue height
+    final double effectivePatientW = patientWidth.clamp(110.0, 180.0);
+    final double patientHeight = (effectivePatientW / _patientAspect).clamp(110.0, 400.0);
+  final double revenueHeight = patientHeight + 8.0;
       return Wrap(
         spacing: 16,
         runSpacing: 16,
@@ -322,6 +329,7 @@ class _DashboardPageState extends State<DashboardPage> {
             width: revenueWidth,
             child: const RevenueTrendCard(
               months: 6,
+              overlayImage: AssetImage('assets/images/revenue_icon.png'),
             ),
           ),
           // Patients card (auto scalable, make it rectangular/wider)
@@ -1928,14 +1936,17 @@ class _LargePanelState extends State<_LargePanel> {
           ),
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
           child: LayoutBuilder(builder: (context, c) {
-            final header = Row(children: [
-              Expanded(child: Text(widget.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis)),
-            ]);
+            final hasHeader = widget.title.trim().isNotEmpty;
+            final header = hasHeader
+                ? Row(children: [
+                    Expanded(child: Text(widget.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis)),
+                  ])
+                : const SizedBox.shrink();
             // If child might overflow, wrap in SingleChildScrollView to be safe.
             final body = ClipRect(child: widget.child);
             return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              header,
-              const SizedBox(height: 8),
+              if (hasHeader) header,
+              if (hasHeader) const SizedBox(height: 8),
               body,
             ]);
           }),
