@@ -423,9 +423,9 @@ class _DashboardPageState extends State<DashboardPage> {
         Text('Revenue', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 16),
         Wrap(spacing: 16, runSpacing: 16, children: [
-         _DashCard(title: "Today's Revenue", value: '₹${todaysRevenue.toStringAsFixed(0)}', icon: Icons.today, width: 200, valueColor: todaysRevenue >= 0 ? Colors.green : Colors.red),
-         _DashCard(title: 'Monthly Revenue', value: '₹${monthlyRevenue.toStringAsFixed(0)}', icon: Icons.calendar_month, width: 200, valueColor: monthlyRevenue >= 0 ? Colors.green : Colors.red),
-         _DashCard(title: 'Total Revenue', value: '₹${revenueProvider.total.toStringAsFixed(0)}', icon: Icons.account_balance_wallet, width: 220, valueColor: revenueProvider.total >= 0 ? Colors.green : Colors.red),
+         _DashCard(title: "Today's Revenue", value: '₹${todaysRevenue.toStringAsFixed(0)}', icon: Icons.today, width: 220, valueColor: todaysRevenue >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/money_bag.png'), minHeight: 130),
+         _DashCard(title: 'Monthly Revenue', value: '₹${monthlyRevenue.toStringAsFixed(0)}', icon: Icons.calendar_month, width: 220, valueColor: monthlyRevenue >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/coin_gear.png'), minHeight: 130),
+         _DashCard(title: 'Total Revenue', value: '₹${revenueProvider.total.toStringAsFixed(0)}', icon: Icons.account_balance_wallet, width: 220, valueColor: revenueProvider.total >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/envelope_cash.png'), minHeight: 130),
         ]),
         const SizedBox(height: 16),
         Expanded(
@@ -1717,23 +1717,70 @@ class _DashCard extends StatelessWidget {
   final IconData icon;
   final double width;
   final Color? valueColor;
-  const _DashCard({required this.title, required this.value, required this.icon, this.width = 180, this.valueColor});
+  final ImageProvider? overlayImage;
+  final double minHeight;
+
+  _DashCard({required this.title, required this.value, required this.icon, this.width = 180, this.valueColor, this.overlayImage, this.minHeight = 120});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
-      child: Card(
-        elevation: 1,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [Icon(icon, size: 20), const SizedBox(width: 6), Expanded(child: Text(title, style: const TextStyle(fontSize: 12)))]),
-            const SizedBox(height: 8),
-            Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: valueColor)),
-          ]),
-        ),
-      ),
+      child: LayoutBuilder(builder: (context, c) {
+        final effectiveH = c.hasBoundedHeight && c.maxHeight.isFinite ? c.maxHeight : minHeight;
+        return ConstrainedBox(
+          constraints: BoxConstraints(minHeight: minHeight, minWidth: c.maxWidth),
+          child: Card(
+            elevation: 1,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(children: [
+                Container(
+                  width: effectiveH * 0.62,
+                  height: effectiveH * 0.62,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 8, offset: const Offset(0,2))],
+                  ),
+                  child: overlayImage != null
+                      ? ClipOval(
+                          child: Image(
+                            image: overlayImage!,
+                            fit: BoxFit.cover,
+                            // If the image fails to load (missing asset), show the default revenue icon or an Icon.
+                            errorBuilder: (context, error, stackTrace) {
+                              // try fallback asset
+                              return ClipOval(
+                                child: Image.asset(
+                                  'assets/images/revenue_icon.png',
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (c, e, s) => Container(
+                                    decoration: BoxDecoration(shape: BoxShape.circle, color: Theme.of(context).colorScheme.primary.withOpacity(.08)),
+                                    child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: effectiveH * 0.28),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        )
+                      : Container(
+                          decoration: BoxDecoration(shape: BoxShape.circle, color: Theme.of(context).colorScheme.primary.withOpacity(.08)),
+                          child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: effectiveH * 0.28),
+                        ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                    Text(title, style: TextStyle(fontWeight: FontWeight.w700, fontSize: effectiveH * 0.10, color: Colors.black87)),
+                    const SizedBox(height: 8),
+                    Text(value, style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w800, fontSize: minHeight * 0.20,)),
+                  ]),
+                ),
+              ]),
+            ),
+          ),
+        );
+      }),
     );
   }
 }
