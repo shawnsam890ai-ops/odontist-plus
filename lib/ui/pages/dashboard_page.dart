@@ -21,6 +21,7 @@ import '../widgets/cases_overview_chart.dart';
 import '../widgets/revenue_trend_card.dart';
 import '../widgets/patient_overview_card.dart';
 import '../widgets/upcoming_schedule_panel.dart';
+import '../widgets/upcoming_appointment_widget.dart';
 import 'doctors_payments_section.dart';
 import '../../providers/lab_registry_provider.dart';
 import 'manage_patients_modern.dart';
@@ -202,22 +203,11 @@ class _DashboardPageState extends State<DashboardPage> {
               Expanded(
                 flex: 1,
                 child: _LargePanel(
-                  title: 'Cases Overview',
-                  child: SizedBox(
+                  title: 'Upcoming Appointment',
+                  child: const SizedBox(
                     height: 220,
-                    child: const Padding(
-                      padding: EdgeInsets.only(bottom: 6),
-                      child: Center(
-                        child: CasesOverviewChart(
-                          data: {
-                            'Root Canal': 18,
-                            'Orthodontic': 12,
-                            'Prosthodontic': 9,
-                            'Filling': 30,
-                          },
-                          showTitle: false,
-                        ),
-                      ),
+                    child: UpcomingAppointmentWidget(
+                      padding: EdgeInsets.all(12),
                     ),
                   ),
                 ),
