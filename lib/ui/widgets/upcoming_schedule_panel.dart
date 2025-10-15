@@ -31,6 +31,7 @@ class UpcomingSchedulePanel extends StatefulWidget {
 class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
   DateTime _selectedDay = DateTime.now();
   String? _doctorId;
+  int _appointmentIndex = 0; // Track which appointment is currently displayed
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +86,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
               // Divider separating the dates section and the next-appointments section
               const Divider(height: 1),
               const SizedBox(height: 12),
-              Expanded(child: _appointmentsBars(entries)),
+              Expanded(child: _appointmentsNavigator(entries)),
             ],
           ),
         ),
@@ -162,13 +163,18 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
   // First container: 6-date strip
   Widget _sixDayStrip() {
     final selected = _selectedDay;
-    final weekday = selected.weekday; // 1=Mon..7=Sun
-    final start = selected.subtract(Duration(days: (weekday) % 7));
+    final today = DateTime.now();
+    final todayKey = DateTime(today.year, today.month, today.day);
+    
+    // Calculate start date: center today's date in the strip
+    // Show 3 days before today and 2 days after (today in center)
+    final start = todayKey.subtract(const Duration(days: 3));
+    
     final days = List.generate(6, (i) {
       final d = start.add(Duration(days: i));
       return DateTime(d.year, d.month, d.day);
     });
-    final today = DateTime.now();
+    
     return SizedBox(
       height: 68,
       child: Row(children: [
@@ -183,9 +189,12 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
             itemBuilder: (_, i) {
               final d = days[i];
               final isSel = _sameDay(d, selected);
-              final isToday = _sameDay(d, today);
+              final isToday = _sameDay(d, todayKey);
               return GestureDetector(
-                onTap: () => setState(() => _selectedDay = d),
+                onTap: () => setState(() {
+                  _selectedDay = d;
+                  _appointmentIndex = 0; // Reset to first appointment when changing day
+                }),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                       width: 56,
@@ -257,19 +266,46 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
     );
   }
 
-  // Second container: appointment bars
-  Widget _appointmentsBars(List<_ApptEntry> entries) {
+  // Appointment navigator with left/right buttons
+  Widget _appointmentsNavigator(List<_ApptEntry> entries) {
     if (entries.isEmpty) return _emptyBar();
-    return ListView.separated(
-      padding: const EdgeInsets.only(top: 2),
-      itemCount: entries.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) {
-        final e = entries[i];
-        final isNow = _sameDay(DateTime.now(), e.time) &&
-            DateTime.now().difference(e.time).inMinutes.abs() <= 30;
-        return _barTile(e, isNow: isNow);
-      },
+    
+    // Ensure index is within bounds
+    if (_appointmentIndex >= entries.length) {
+      _appointmentIndex = 0;
+    }
+    
+    final currentEntry = entries[_appointmentIndex];
+    final isNow = _sameDay(DateTime.now(), currentEntry.time) &&
+        DateTime.now().difference(currentEntry.time).inMinutes.abs() <= 30;
+    
+    return Row(
+      children: [
+        // Left navigation button - compact
+        IconButton(
+          icon: const Icon(Icons.chevron_left, size: 20),
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          padding: EdgeInsets.zero,
+          onPressed: _appointmentIndex > 0
+              ? () => setState(() => _appointmentIndex--)
+              : null,
+          tooltip: 'Previous appointment',
+        ),
+        // Current appointment card - maximized width
+        Expanded(
+          child: _barTile(currentEntry, isNow: isNow),
+        ),
+        // Right navigation button - compact
+        IconButton(
+          icon: const Icon(Icons.chevron_right, size: 20),
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          padding: EdgeInsets.zero,
+          onPressed: _appointmentIndex < entries.length - 1
+              ? () => setState(() => _appointmentIndex++)
+              : null,
+          tooltip: 'Next appointment',
+        ),
+      ],
     );
   }
 
@@ -277,7 +313,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
     return Center(
       child: Container(
         height: 60,
-        margin: const EdgeInsets.symmetric(horizontal: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 0),
         decoration: _barDecoration(),
         child: Row(children: const [
           SizedBox(width: 12),
@@ -308,27 +344,21 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
 
   Widget _barTile(_ApptEntry e, {required bool isNow}) {
     final cs = Theme.of(context).colorScheme;
-    final time =
-        '${e.time.hour.toString().padLeft(2, '0')}:${e.time.minute.toString().padLeft(2, '0')}';
-    final dateCircle = Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: cs.primary.withOpacity(.1),
-          border: Border.all(color: cs.primary.withOpacity(.35))),
-      alignment: Alignment.center,
-      child: Text('${e.time.day}',
-          style: TextStyle(fontWeight: FontWeight.w700, color: cs.primary)),
-    );
+    // Convert to 12-hour format
+    final hour = e.time.hour;
+    final hour12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final time = '${hour12.toString().padLeft(2, '0')}:${e.time.minute.toString().padLeft(2, '0')} $period';
+    
     return Container(
       height: 66,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 0),
       decoration: _barDecoration(highlighted: isNow),
       child: Row(children: [
-        const SizedBox(width: 12),
+        // Time chip on left
+        const SizedBox(width: 2),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
           decoration: BoxDecoration(
               color: isNow ? cs.primary : Colors.blueGrey.shade50,
               borderRadius: BorderRadius.circular(8)),
@@ -338,29 +368,22 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                   fontWeight: FontWeight.w600,
                   color: isNow ? Colors.white : Colors.black87)),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(e.patient.name,
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
-                if (e.complaint != null && e.complaint!.isNotEmpty)
-                  Text(e.complaint!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          const TextStyle(fontSize: 12, color: Colors.grey)),
-                if (e.doctor != null)
-                  Text(e.doctor!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          const TextStyle(fontSize: 12, color: Colors.grey)),
-              ]),
+        const Spacer(),
+        // Patient name with doctor name below in brackets (extreme right)
+        Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(e.patient.name,
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            if (e.doctor != null)
+              Text('(${e.doctor!})',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          ],
         ),
-        Padding(padding: const EdgeInsets.only(right: 12), child: dateCircle),
+        const SizedBox(width: 4),
       ]),
     );
   }

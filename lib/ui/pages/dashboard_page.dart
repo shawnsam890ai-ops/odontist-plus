@@ -192,7 +192,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   child: SizedBox(
                     height: 260,
                     child: const UpcomingSchedulePanel(
-                      padding: EdgeInsets.fromLTRB(12, 8, 12, 12),
+                      padding: EdgeInsets.fromLTRB(0, 8, 0, 12),
                       showDoctorFilter: false,
                       showTitle: false,
                     ),
