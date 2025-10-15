@@ -2273,12 +2273,12 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                             child: Text('None - Independent Session'),
                           ),
                           ...eligibleSessions.map((s) => DropdownMenuItem(
-                            value: s.id,
-                            child: Text(
-                              '${s.date.day}/${s.date.month}/${s.date.year} - ${s.type.label}${s.chiefComplaint?.complaints.isNotEmpty == true ? ' (${s.chiefComplaint!.complaints.first})' : ''}',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          )).toList(),
+                                value: s.id,
+                                child: Text(
+                                  '${s.date.day}/${s.date.month}/${s.date.year} - ${s.type.label}${s.chiefComplaint?.complaints.isNotEmpty == true ? ' (${s.chiefComplaint!.complaints.first})' : ''}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              )),
                         ],
                         onChanged: (v) => setState(() => _linkedSessionId = v),
                       ),
@@ -3895,7 +3895,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                               .toList();
                           const maxItems = 4;
                           if (entries.length > maxItems) {
-                            line = entries.take(maxItems).join(', ') + ' +${entries.length - maxItems} more';
+                            line = '${entries.take(maxItems).join(', ')} +${entries.length - maxItems} more';
                           } else {
                             line = entries.join(', ');
                           }
@@ -3937,7 +3937,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                               .toList();
                           const maxItems = 4;
                           if (entries.length > maxItems) {
-                            treatmentDoneLine = entries.take(maxItems).join(', ') + ' +${entries.length - maxItems} more';
+                            treatmentDoneLine = '${entries.take(maxItems).join(', ')} +${entries.length - maxItems} more';
                           } else {
                             treatmentDoneLine = entries.join(', ');
                           }
@@ -4048,7 +4048,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                 ],
                               ),
                             );
-                          }).toList(),
+                          }),
                           if (total > 0)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
@@ -4148,7 +4148,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                 ],
                               ),
                             );
-                          }).toList(),
+                          }),
                           if (total > 0)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
@@ -4267,7 +4267,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                 ],
                               ),
                             );
-                          }).toList(),
+                          }),
                           if (total > 0)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
@@ -4370,7 +4370,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                 ],
                               ),
                             );
-                          }).toList(),
+                          }),
                           if (total > 0)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
@@ -4879,12 +4879,12 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       // Build simple lines similar to root canal using existing helper then enrich
       final lines = <String>[];
       if (s.prosthodonticFindings.isNotEmpty) {
-        lines.add('Oral Findings: ' + s.prosthodonticFindings.map((e) => (e.toothNumber.trim().isEmpty ? e.finding : '${e.toothNumber}, ${e.finding}')).join(' | '));
+  lines.add('Oral Findings: ${s.prosthodonticFindings.map((e) => (e.toothNumber.trim().isEmpty ? e.finding : '${e.toothNumber}, ${e.finding}')).join(' | ')}');
       } else {
         lines.add('Oral Findings: None');
       }
       if (s.prosthodonticPlans.isNotEmpty) {
-        lines.add('Treatment Plan: ' + s.prosthodonticPlans.map((e) => (e.toothNumber.trim().isEmpty ? e.plan : '${e.toothNumber}, ${e.plan}')).join(' | '));
+  lines.add('Treatment Plan: ${s.prosthodonticPlans.map((e) => (e.toothNumber.trim().isEmpty ? e.plan : '${e.toothNumber}, ${e.plan}')).join(' | ')}');
       } else {
         lines.add('Treatment Plan: None');
       }
@@ -5417,12 +5417,12 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       final hasExt = base.contains('.') && !base.endsWith('.');
       final candidates = <String>[];
       if (hasExt) {
-        candidates.add('assets/images/' + base);
+  candidates.add('assets/images/$base');
       } else {
         candidates.addAll([
-          'assets/images/' + base + '.png',
-          'assets/images/' + base + '.jpg',
-          'assets/images/' + base + '.jpeg',
+          'assets/images/$base.png',
+          'assets/images/$base.jpg',
+          'assets/images/$base.jpeg',
         ]);
       }
       for (final c in candidates) {
@@ -5431,7 +5431,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       }
       // Debug print (will show in console, harmless in release)
       // ignore: avoid_print
-      print('Print header/footer: none of these paths found: ' + candidates.join(', '));
+  print('Print header/footer: none of these paths found: ${candidates.join(', ')}');
       return null;
     }
 
@@ -5442,16 +5442,16 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     // Build concise history summary (only show non-empty)
     List<pw.Widget> historyLines = [];
     if (patient.pastDentalHistory.isNotEmpty) {
-      historyLines.add(pw.Text('Dental: ' + patient.pastDentalHistory.join(', '), style: const pw.TextStyle(fontSize: 9)));
+  historyLines.add(pw.Text('Dental: ${patient.pastDentalHistory.join(', ')}', style: const pw.TextStyle(fontSize: 9)));
     }
     if (patient.pastMedicalHistory.isNotEmpty) {
-      historyLines.add(pw.Text('Medical: ' + patient.pastMedicalHistory.join(', '), style: const pw.TextStyle(fontSize: 9)));
+  historyLines.add(pw.Text('Medical: ${patient.pastMedicalHistory.join(', ')}', style: const pw.TextStyle(fontSize: 9)));
     }
     if (patient.currentMedications.isNotEmpty) {
-      historyLines.add(pw.Text('Meds: ' + patient.currentMedications.join(', '), style: const pw.TextStyle(fontSize: 9)));
+  historyLines.add(pw.Text('Meds: ${patient.currentMedications.join(', ')}', style: const pw.TextStyle(fontSize: 9)));
     }
     if (patient.drugAllergies.isNotEmpty) {
-  historyLines.add(pw.Text('Allergies: ' + patient.drugAllergies.join(', '), style: const pw.TextStyle(fontSize: 9)));
+  historyLines.add(pw.Text('Allergies: ${patient.drugAllergies.join(', ')}', style: const pw.TextStyle(fontSize: 9)));
     }
 
     doc.addPage(
@@ -5542,7 +5542,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                   value: _sessionFilterDateStr ?? '',
                   items: [
                     const DropdownMenuItem(value: '', child: Text('All Dates')),
-                    ...dates.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                    ...dates.map((d) => DropdownMenuItem(value: d, child: Text(d))),
                   ],
                   onChanged: (val) => setState(() => _sessionFilterDateStr = (val == '' ? null : val)),
                 ),

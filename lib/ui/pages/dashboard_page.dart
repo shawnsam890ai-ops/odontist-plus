@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import '../../providers/patient_provider.dart';
 import '../../providers/revenue_provider.dart';
@@ -17,6 +18,8 @@ import '../../models/revenue_entry.dart';
 // Removed fl_chart and revenue_entry imports after chart removal
 import '../../providers/auth_provider.dart';
 import '../widgets/cases_overview_chart.dart';
+import '../widgets/revenue_trend_card.dart';
+import '../widgets/patient_overview_card.dart';
 import '../widgets/upcoming_schedule_panel.dart';
 import 'doctors_payments_section.dart';
 import '../../providers/lab_registry_provider.dart';
@@ -292,18 +295,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _buildMetricsGrid(double todaysRevenue, double monthlyRevenue, PatientProvider patientProvider, InventoryProvider inventoryProvider, RevenueProvider revenueProvider) {
     final items = [
-      (
-        title: 'Today',
-        value: todaysRevenue,
-        subtitle: 'Revenue',
-        icon: Icons.today
-      ),
-      (
-        title: 'Patients',
-        value: patientProvider.patients.length.toDouble(),
-        subtitle: 'Total',
-        icon: Icons.people
-      ),
+      // Inventory only; render using PatientOverviewCard-style with an asset avatar.
       (
         title: 'Inventory',
         value: inventoryProvider.totalInventoryValue,
@@ -312,23 +304,51 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     ];
     return LayoutBuilder(builder: (context, c) {
-      // Fixed squarish cards to avoid empty right space; wrap will auto-flow
-      const tileW = 180.0;
+      // Revenue trend card becomes a responsive main tile; other metrics remain fixed width.
+      // Keep revenue at a fixed small tile, but make patient card wider.
+      const double revenueWidth = 180.0;
+      const double _patientAspect = 1.1; // PatientOverviewCard aspectRatio
+      final double revenueHeight = (revenueWidth / _patientAspect).clamp(110.0, 400.0);
+    // Patient width: slightly reduced responsive tile (clamped to reasonable range)
+    final double patientWidth = (c.maxWidth < 420)
+      ? c.maxWidth
+      : (c.maxWidth * 0.32).clamp(240.0, 360.0);
       return Wrap(
         spacing: 16,
         runSpacing: 16,
         children: [
+          SizedBox(
+            height: revenueHeight,
+            width: revenueWidth,
+            child: const RevenueTrendCard(
+              months: 6,
+            ),
+          ),
+          // Patients card (auto scalable, make it rectangular/wider)
+          SizedBox(
+            width: patientWidth,
+            child: const _PatientOverviewCardWrapper(
+              // No subtitle to avoid wrapping text like 'Total'
+              subtitle: null,
+            ),
+          ),
           for (int i = 0; i < items.length; i++)
+            // For inventory we prefer the richer patient-like layout with avatar.
             SizedBox(
-              width: tileW,
-              child: _DashMetricCard(
-                title: items[i].title,
-                value: items[i].value,
-                subtitle: items[i].subtitle,
-                icon: items[i].icon,
-                valueColor: i == 0 ? (items[i].value >= 0 ? Colors.green : Colors.red) : null,
-                appearDelayMs: 60 * i,
-              ),
+              width: patientWidth,
+              child: (items[i].title == 'Inventory')
+                  ? const PatientOverviewCard(
+                      avatar: AssetImage('assets/images/inventory_icon.png'),
+                      title: 'Inventory',
+                      subtitle: 'Value',
+                    )
+                  : _DashMetricCard(
+                      title: items[i].title,
+                      value: items[i].value,
+                      subtitle: items[i].subtitle,
+                      icon: items[i].icon,
+                      appearDelayMs: 60 * (i + 2),
+                    ),
             ),
         ],
       );
@@ -339,24 +359,38 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildMetricsColumn(double todaysRevenue, double monthlyRevenue, PatientProvider patientProvider, InventoryProvider inventoryProvider, RevenueProvider revenueProvider) {
     final entries = [
       ('Today', todaysRevenue, 'Revenue', Icons.today, todaysRevenue >= 0 ? Colors.green : Colors.red),
-      ('Patients', patientProvider.patients.length.toDouble(), 'Total', Icons.people, null),
+      // Patients replaced by PatientOverviewCard below
       ('Inventory', inventoryProvider.totalInventoryValue, 'Value', Icons.inventory_2, null),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        SizedBox(
+          width: 320,
+          height: 170,
+          child: const _PatientOverviewCardWrapper(
+            subtitle: null,
+          ),
+        ),
+        const SizedBox(height: 12),
         for (int i = 0; i < entries.length; i++) ...[
           SizedBox(
-            width: 180,
+            width: 320,
             height: 170,
-            child: _DashMetricCard(
-              title: entries[i].$1,
-              value: entries[i].$2,
-              subtitle: entries[i].$3,
-              icon: entries[i].$4,
-              valueColor: entries[i].$5,
-              appearDelayMs: 60 * i,
-            ),
+            child: entries[i].$1 == 'Inventory'
+                ? const PatientOverviewCard(
+                    avatar: AssetImage('assets/images/inventory_icon.png'),
+                    title: 'Inventory',
+                    subtitle: 'Value',
+                  )
+                : _DashMetricCard(
+                    title: entries[i].$1,
+                    value: entries[i].$2,
+                    subtitle: entries[i].$3,
+                    icon: entries[i].$4,
+                    valueColor: entries[i].$5,
+                    appearDelayMs: 60 * i,
+                  ),
           ),
           if (i != entries.length - 1) const SizedBox(height: 12),
         ]
@@ -1330,8 +1364,8 @@ class _RevenueListPanelState extends State<_RevenueListPanel> {
                   return ListTile(
                     dense: true,
                     title: Text(e.description, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(dateStr + (e.patientId.isNotEmpty ? '  •  ${e.patientId}' : '')),
-                    trailing: Text((e.amount >= 0 ? '+' : '') + '₹${e.amount.toStringAsFixed(0)}', style: TextStyle(color: amtColor, fontWeight: FontWeight.w700)),
+                    subtitle: Text('$dateStr${e.patientId.isNotEmpty ? '  •  ${e.patientId}' : ''}'),
+                    trailing: Text('${e.amount >= 0 ? '+' : ''}₹${e.amount.toStringAsFixed(0)}', style: TextStyle(color: amtColor, fontWeight: FontWeight.w700)),
                   );
                 },
               ),
@@ -1384,7 +1418,7 @@ class _RevenueListPanelState extends State<_RevenueListPanel> {
 
   Future<void> _exportPdf(List<RevenueEntry> list, {required DateTime start, required DateTime end}) async {
     // Basic PDF export using printing + pw (already imported in file)
-    final doc = pw.Document();
+  final doc = pw.Document();
     doc.addPage(
       pw.MultiPage(
         build: (context) {
@@ -1399,7 +1433,7 @@ class _RevenueListPanelState extends State<_RevenueListPanel> {
                   [
                     '${e.date.year}-${e.date.month.toString().padLeft(2,'0')}-${e.date.day.toString().padLeft(2,'0')}',
                     e.description,
-                    (e.amount >= 0 ? '+' : '') + '₹' + e.amount.toStringAsFixed(0),
+                    '${e.amount >= 0 ? '+' : ''}₹${e.amount.toStringAsFixed(0)}',
                   ]
               ],
             )
@@ -1833,6 +1867,21 @@ class _DashMetricCardState extends State<_DashMetricCard> with SingleTickerProvi
   }
 }
 
+// Wrapper widget for patient overview using person icon as placeholder
+class _PatientOverviewCardWrapper extends StatelessWidget {
+  final String? subtitle;
+  const _PatientOverviewCardWrapper({this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    // Use null avatar to trigger icon fallback in PatientOverviewCard
+    return PatientOverviewCard(
+  avatar: const AssetImage('assets/images/patient_avatar.png'),  // Change from null
+  subtitle: subtitle,
+);
+  }
+}
+
 class _LargePanel extends StatefulWidget {
   final String title;
   final Widget child;
@@ -1887,7 +1936,7 @@ class _LargePanelState extends State<_LargePanel> {
             return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               header,
               const SizedBox(height: 8),
-              Expanded(flex: 0, child: body),
+              body,
             ]);
           }),
         ),

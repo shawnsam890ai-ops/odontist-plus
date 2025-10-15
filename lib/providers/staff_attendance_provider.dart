@@ -90,14 +90,14 @@ class StaffAttendanceProvider with ChangeNotifier {
   }
 
   MonthlySalaryRecord ensureSalaryRecord(String staffName, int year, int month) {
-    final key = '$year-${month.toString().padLeft(2,'0')}';
+  final key = '$year-${month.toString().padLeft(2,'0')}';
     _salaryRecords.putIfAbsent(staffName, () => {});
     _salaryRecords[staffName]!.putIfAbsent(key, () => MonthlySalaryRecord(year: year, month: month));
     return _salaryRecords[staffName]![key]!;
   }
 
   MonthlySalaryRecord? getSalaryRecord(String staffName, int year, int month) {
-    final key = '$year-${month.toString().padLeft(2,'0')}';
+  final key = '$year-${month.toString().padLeft(2,'0')}';
     return _salaryRecords[staffName]?[key];
   }
 
@@ -130,7 +130,8 @@ class StaffAttendanceProvider with ChangeNotifier {
     rec.paid = true;
     rec.paymentDate = DateTime.now();
     // Post negative revenue entry for salary payout
-    final desc = 'Staff Salary: $staffName ${year}-${month.toString().padLeft(2,'0')}';
+    // Remove unnecessary braces around simple identifier (year)
+    final desc = 'Staff Salary: $staffName $year-${month.toString().padLeft(2,'0')}';
     final amt = amount ?? rec.totalSalary;
     if (_revenue != null && amt != 0) {
       _revenue!.removeByDescription(desc);
@@ -144,7 +145,7 @@ class StaffAttendanceProvider with ChangeNotifier {
     if (rec == null) return;
     rec.paid = false;
     rec.paymentDate = null;
-    final desc = 'Staff Salary: $staffName ${year}-${month.toString().padLeft(2,'0')}';
+    final desc = 'Staff Salary: $staffName $year-${month.toString().padLeft(2,'0')}';
     _revenue?.removeByDescription(desc);
     notifyListeners();
   }

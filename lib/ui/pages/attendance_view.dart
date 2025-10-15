@@ -1181,7 +1181,7 @@ class _StaffViewContentState extends State<_StaffViewContent> {
                             ],
                           ),
                           const Divider(height: 12),
-                          ..._displayHistory.map((h) => _historyRow(h)).toList(),
+                          ..._displayHistory.map((h) => _historyRow(h)),
                         ],
                       ),
               ),

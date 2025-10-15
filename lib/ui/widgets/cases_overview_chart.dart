@@ -306,7 +306,9 @@ class _RadarPainter extends CustomPainter {
       final tp = TextPainter(text: TextSpan(text: v.toStringAsFixed(v % 1 == 0 ? 0 : 1), style: textStyle), textDirection: TextDirection.ltr)..layout();
       tp.paint(canvas, pos - Offset(tp.width/2, tp.height/2));
       tpList.add(tp);
-      if (tpList.length > 5) break;
+      if (tpList.length > 5) {
+        break;
+      }
     }
     // Max label slightly outside
     final maxTp = TextPainter(text: TextSpan(text: maxValue.toStringAsFixed(maxValue % 1 == 0 ? 0 : 1), style: textStyle.copyWith(fontWeight: FontWeight.bold)), textDirection: TextDirection.ltr)..layout();

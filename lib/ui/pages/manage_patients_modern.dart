@@ -14,7 +14,7 @@ import '../pages/add_patient_page.dart';
 import '../pages/patient_detail_page.dart';
 
 class ManagePatientsModern extends StatelessWidget {
-  const ManagePatientsModern({Key? key}) : super(key: key);
+  const ManagePatientsModern({super.key});
 
   static const routeName = '/manage-patients-modern';
 
@@ -28,7 +28,7 @@ class ManagePatientsModern extends StatelessWidget {
 }
 
 class ManagePatientsModernBody extends StatefulWidget {
-  const ManagePatientsModernBody({Key? key, this.embedded = false}) : super(key: key);
+  const ManagePatientsModernBody({super.key, this.embedded = false});
   final bool embedded;
 
   @override
