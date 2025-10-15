@@ -674,15 +674,26 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
 
   Widget _buildAppointmentCard(BuildContext context, Appointment a) {
     final t = TimeOfDay.fromDateTime(a.dateTime).format(context);
-    return Card(
-      color: Colors.white,
-      surfaceTintColor: Colors.white,
-      shadowColor: Colors.black.withOpacity(0.05),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 2,
+    final patientProvider = context.read<PatientProvider>();
+    final doctorProvider = context.read<DoctorProvider>();
+    final patient = patientProvider.byId(a.patientId);
+    final doctor = a.doctorId != null ? doctorProvider.doctors.firstWhere((d) => d.id == a.doctorId, orElse: () => doctorProvider.doctors.first) : null;
+    
+    final patientLabel = patient != null ? '${patient.name} (${patient.displayNumber})' : 'Unknown';
+    final doctorName = a.doctorName ?? doctor?.name ?? '-';
+    final doctorRole = doctor != null ? _formatRole(doctor.role) : '';
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Row(children: [
+          // Time on left
           Container(
             width: 64,
             height: 36,
@@ -691,12 +702,22 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
             child: Text(t, style: TextStyle(color: _text, fontWeight: FontWeight.w700)),
           ),
           const SizedBox(width: 12),
+          // Patient name (ID) in middle
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(a.doctorName == null ? 'Consultation' : a.doctorName!, style: TextStyle(fontWeight: FontWeight.w600, color: _text)),
-              Text(a.reason ?? '-', style: TextStyle(color: _secondary)),
-            ]),
+            child: Text(patientLabel, style: TextStyle(fontWeight: FontWeight.w600, color: _text)),
           ),
+          const SizedBox(width: 12),
+          // Doctor name with specialty on right
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(doctorName, style: TextStyle(fontWeight: FontWeight.w600, color: _text)),
+              if (doctorRole.isNotEmpty)
+                Text('($doctorRole)', style: TextStyle(fontSize: 11, color: _secondary)),
+            ],
+          ),
+          const SizedBox(width: 12),
           IconButton(
             tooltip: 'View Details',
             onPressed: () {
@@ -742,5 +763,15 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
         ]),
       ),
     );
+  }
+
+  String _formatRole(dynamic role) {
+    if (role == null) return 'General Dentist';
+    final roleStr = role.toString().split('.').last;
+    // Convert camelCase to Title Case
+    return roleStr.replaceAllMapped(
+      RegExp(r'([A-Z])'),
+      (match) => ' ${match.group(0)}',
+    ).trim().replaceAll(RegExp(r'\s+'), ' ');
   }
 }
