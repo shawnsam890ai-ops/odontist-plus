@@ -11,6 +11,12 @@ class AppointmentProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Remove an appointment by id.
+  void remove(String id) {
+    _appointments.removeWhere((a) => a.id == id);
+    notifyListeners();
+  }
+
   List<Appointment> forDay(DateTime day) {
     return _appointments.where((a) => a.dateTime.year == day.year && a.dateTime.month == day.month && a.dateTime.day == day.day).toList();
   }

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:table_calendar/table_calendar.dart';
+// table_calendar removed from this page
 
 import '../../providers/patient_provider.dart';
 import '../../providers/doctor_provider.dart';
@@ -44,8 +44,6 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
 
   final TextEditingController _searchCtrl = TextEditingController();
   bool _filterActive = false;
-  CalendarFormat _calFormat = CalendarFormat.month;
-  DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
   String? _doctorId;
 
@@ -64,17 +62,7 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
     super.dispose();
   }
 
-  // Compute a safe rowHeight for TableCalendar given available height and current format
-  double _calendarRowHeight(double available) {
-    // Reserve header + days-of-week heights (approximate) and padding
-    const headerH = 52.0; // header (month + buttons)
-    const daysRowH = 22.0; // Sun..Sat labels
-    const padding = 16.0; // internal paddings/margins
-    final weeks = _calFormat == CalendarFormat.twoWeeks ? 2 : 6; // TableCalendar uses 6 rows for month view
-    final usable = (available - headerH - daysRowH - padding).clamp(80.0, 800.0);
-    final perRow = (usable / weeks).clamp(20.0, 44.0);
-    return perRow;
-  }
+  // Calendar removed; helper not needed
 
   @override
   Widget build(BuildContext context) {
@@ -374,6 +362,9 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
 
   // Right column ---------------------------------------------
   Widget _buildScheduleSection(BuildContext context, DoctorProvider doctorProvider, List<Appointment> todays, String dayLabel, {bool stacked = false}) {
+    // Apply doctor filter to today's appointments
+    final filteredTodays = (_doctorId == null) ? todays : todays.where((a) => a.doctorId == _doctorId).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -408,82 +399,8 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
           ),
         ),
         const SizedBox(height: 12),
-        // Calendar (flexible in wide; fixed height in stacked mode)
-        if (!stacked)
-          Flexible(
-            fit: FlexFit.loose,
-            child: Card(
-              color: Colors.white,
-              surfaceTintColor: Colors.white,
-              shadowColor: Colors.black.withOpacity(0.05),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 3,
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: LayoutBuilder(builder: (context, c) {
-                  // Choose row height based on weeks shown to avoid overflow
-                  final available = c.maxHeight.isFinite ? c.maxHeight : 280.0;
-                  final rowH = _calendarRowHeight(available);
-                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    TableCalendar(
-                      firstDay: DateTime.utc(2020,1,1),
-                      lastDay: DateTime.utc(2035,12,31),
-                      focusedDay: _focusedDay,
-                      calendarFormat: _calFormat,
-                      selectedDayPredicate: (d) => _selectedDay != null && isSameDay(d, _selectedDay),
-                      onDaySelected: (selected, focused) => setState(() { _selectedDay = selected; _focusedDay = focused; }),
-                      onFormatChanged: (fmt) => setState(() => _calFormat = fmt),
-                      headerStyle: HeaderStyle(formatButtonVisible: true, titleCentered: true, titleTextStyle: TextStyle(color: _text)),
-                      calendarStyle: CalendarStyle(
-                        todayDecoration: BoxDecoration(color: _primary.withOpacity(.15), shape: BoxShape.circle),
-                        selectedDecoration: BoxDecoration(color: _primary, shape: BoxShape.circle),
-                      ),
-                      rowHeight: rowH,
-                    ),
-                    const SizedBox(height: 6),
-                    Align(alignment: Alignment.centerRight, child: Text('Today', style: TextStyle(color: _primary, fontWeight: FontWeight.w600))),
-                  ]);
-                }),
-              ),
-            ),
-          )
-        else
-          SizedBox(
-            height: 300,
-            child: Card(
-              color: Colors.white,
-              surfaceTintColor: Colors.white,
-              shadowColor: Colors.black.withOpacity(0.05),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 3,
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: LayoutBuilder(builder: (context, c) {
-                  final available = c.maxHeight.isFinite ? c.maxHeight : 300.0;
-                  final rowH = _calendarRowHeight(available);
-                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    TableCalendar(
-                      firstDay: DateTime.utc(2020,1,1),
-                      lastDay: DateTime.utc(2035,12,31),
-                      focusedDay: _focusedDay,
-                      calendarFormat: _calFormat,
-                      selectedDayPredicate: (d) => _selectedDay != null && isSameDay(d, _selectedDay),
-                      onDaySelected: (selected, focused) => setState(() { _selectedDay = selected; _focusedDay = focused; }),
-                      onFormatChanged: (fmt) => setState(() => _calFormat = fmt),
-                      headerStyle: HeaderStyle(formatButtonVisible: true, titleCentered: true, titleTextStyle: TextStyle(color: _text)),
-                      calendarStyle: CalendarStyle(
-                        todayDecoration: BoxDecoration(color: _primary.withOpacity(.15), shape: BoxShape.circle),
-                        selectedDecoration: BoxDecoration(color: _primary, shape: BoxShape.circle),
-                      ),
-                      rowHeight: rowH,
-                    ),
-                    const SizedBox(height: 6),
-                    Align(alignment: Alignment.centerRight, child: Text('Today', style: TextStyle(color: _primary, fontWeight: FontWeight.w600))),
-                  ]);
-                }),
-              ),
-            ),
-          ),
+        // Calendar removed - appointments list retained below
+        const SizedBox(height: 6),
         const SizedBox(height: 12),
         if (!stacked)
           Expanded(
@@ -497,7 +414,50 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
                 padding: const EdgeInsets.all(12.0),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(children: [
-                    Expanded(child: Text('Appointments for $dayLabel', style: TextStyle(fontWeight: FontWeight.w700, color: _text))),
+                    // Previous day button
+                    IconButton(
+                      icon: Icon(Icons.chevron_left, color: _secondary),
+                      onPressed: () => setState(() {
+                        _selectedDay = (_selectedDay ?? DateTime.now()).subtract(const Duration(days: 1));
+                      }),
+                      tooltip: 'Previous day',
+                    ),
+                    // Date label - tappable to open calendar
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final now = DateTime.now();
+                          final pickedDate = await showDatePicker(
+                            context: context,
+                            initialDate: _selectedDay ?? now,
+                            firstDate: DateTime(now.year - 1),
+                            lastDate: DateTime(now.year + 2),
+                          );
+                          if (pickedDate != null) {
+                            setState(() => _selectedDay = pickedDate);
+                          }
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.calendar_today, size: 16, color: _primary),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Appointments for $dayLabel',
+                              style: TextStyle(fontWeight: FontWeight.w700, color: _text),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Next day button
+                    IconButton(
+                      icon: Icon(Icons.chevron_right, color: _secondary),
+                      onPressed: () => setState(() {
+                        _selectedDay = (_selectedDay ?? DateTime.now()).add(const Duration(days: 1));
+                      }),
+                      tooltip: 'Next day',
+                    ),
                     ElevatedButton.icon(
                       onPressed: () => _showAddAppointmentDialog(context),
                       icon: const Icon(Icons.add),
@@ -507,13 +467,13 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
                   ]),
                   const SizedBox(height: 8),
                   Expanded(
-                    child: todays.isEmpty
+                    child: filteredTodays.isEmpty
                         ? const Center(child: Text('No appointments'))
                         : ListView.separated(
                             padding: const EdgeInsets.only(bottom: 8),
-                            itemCount: todays.length,
+                            itemCount: filteredTodays.length,
                             separatorBuilder: (_, __) => const SizedBox(height: 8),
-                            itemBuilder: (_, i) => _buildAppointmentCard(context, todays[i]),
+                            itemBuilder: (_, i) => _buildAppointmentCard(context, filteredTodays[i]),
                           ),
                   ),
                 ]),
@@ -531,7 +491,50 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
               padding: const EdgeInsets.all(12.0),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  Expanded(child: Text('Appointments for $dayLabel', style: TextStyle(fontWeight: FontWeight.w700, color: _text))),
+                  // Previous day button
+                  IconButton(
+                    icon: Icon(Icons.chevron_left, color: _secondary),
+                    onPressed: () => setState(() {
+                      _selectedDay = (_selectedDay ?? DateTime.now()).subtract(const Duration(days: 1));
+                    }),
+                    tooltip: 'Previous day',
+                  ),
+                  // Date label - tappable to open calendar
+                  Expanded(
+                    child: InkWell(
+                      onTap: () async {
+                        final now = DateTime.now();
+                        final pickedDate = await showDatePicker(
+                          context: context,
+                          initialDate: _selectedDay ?? now,
+                          firstDate: DateTime(now.year - 1),
+                          lastDate: DateTime(now.year + 2),
+                        );
+                        if (pickedDate != null) {
+                          setState(() => _selectedDay = pickedDate);
+                        }
+                      },
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.calendar_today, size: 16, color: _primary),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Appointments for $dayLabel',
+                            style: TextStyle(fontWeight: FontWeight.w700, color: _text),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Next day button
+                  IconButton(
+                    icon: Icon(Icons.chevron_right, color: _secondary),
+                    onPressed: () => setState(() {
+                      _selectedDay = (_selectedDay ?? DateTime.now()).add(const Duration(days: 1));
+                    }),
+                    tooltip: 'Next day',
+                  ),
                   ElevatedButton.icon(
                     onPressed: () => _showAddAppointmentDialog(context),
                     icon: const Icon(Icons.add),
@@ -540,16 +543,16 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
                   ),
                 ]),
                 const SizedBox(height: 8),
-                if (todays.isEmpty)
+                if (filteredTodays.isEmpty)
                   const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: Text('No appointments')))
                 else
                   ListView.separated(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     padding: const EdgeInsets.only(bottom: 8),
-                    itemCount: todays.length,
+                    itemCount: filteredTodays.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) => _buildAppointmentCard(context, todays[i]),
+                    itemBuilder: (_, i) => _buildAppointmentCard(context, filteredTodays[i]),
                   ),
               ]),
             ),
@@ -694,8 +697,48 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
               Text(a.reason ?? '-', style: TextStyle(color: _secondary)),
             ]),
           ),
-          IconButton(tooltip: 'View Details', onPressed: () {}, icon: Icon(Icons.visibility_outlined, color: _secondary)),
-          IconButton(tooltip: 'Cancel', onPressed: () {}, icon: Icon(Icons.cancel_outlined, color: _secondary)),
+          IconButton(
+            tooltip: 'View Details',
+            onPressed: () {
+              final patient = context.read<PatientProvider>().byId(a.patientId);
+              final patientLabel = patient != null ? '${patient.name} (${patient.displayNumber})' : a.patientId;
+              showDialog(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Appointment Details'),
+                  content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Time: $t'),
+                    const SizedBox(height: 8),
+                    Text('Doctor: ${a.doctorName ?? '-'}'),
+                    const SizedBox(height: 8),
+                    Text('Patient: $patientLabel'),
+                    const SizedBox(height: 8),
+                    Text('Reason: ${a.reason ?? '-'}'),
+                  ]),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+                  ],
+                ),
+              );
+            },
+            icon: Icon(Icons.visibility_outlined, color: _secondary)),
+          IconButton(
+            tooltip: 'Cancel',
+            onPressed: () async {
+              final confirm = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+                title: const Text('Cancel appointment'),
+                content: const Text('Are you sure you want to cancel this appointment?'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
+                  TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes')),
+                ],
+              ));
+              if (confirm == true) {
+                // remove via provider
+                context.read<AppointmentProvider>().remove(a.id);
+              }
+            },
+            icon: Icon(Icons.cancel_outlined, color: _secondary)),
         ]),
       ),
     );
