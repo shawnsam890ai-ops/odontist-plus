@@ -60,6 +60,17 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    String _shortNumber(double v) {
+      if (v.abs() >= 100000) {
+        final val = (v / 100000).toStringAsFixed(v % 100000 == 0 ? 0 : 1);
+        return '${val}L';
+      }
+      if (v.abs() >= 1000) {
+        final val = (v / 1000).toStringAsFixed(v % 1000 == 0 ? 0 : 1);
+        return '${val}k';
+      }
+      return v.toStringAsFixed(0);
+    }
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -289,6 +300,18 @@ class _DashboardPageState extends State<DashboardPage> {
   // Removed legacy standard top row with adjustable split; simplified overview is used instead.
 
   Widget _buildMetricsGrid(double todaysRevenue, double monthlyRevenue, PatientProvider patientProvider, InventoryProvider inventoryProvider, RevenueProvider revenueProvider) {
+    String _shortNumber(double v) {
+      if (v.abs() >= 100000) {
+        // show in lakhs (1L = 100000)
+        final val = (v / 100000).toStringAsFixed(v % 100000 == 0 ? 0 : 1);
+        return '${val}L';
+      }
+      if (v.abs() >= 1000) {
+        final val = (v / 1000).toStringAsFixed(v % 1000 == 0 ? 0 : 1);
+        return '${val}k';
+      }
+      return v.toStringAsFixed(0);
+    }
     final items = [
       // Inventory only; render using PatientOverviewCard-style with an asset avatar.
       (
@@ -319,9 +342,9 @@ class _DashboardPageState extends State<DashboardPage> {
           SizedBox(
             height: revenueHeight,
             width: revenueWidth,
-            child: const RevenueTrendCard(
+            child: RevenueTrendCard(
               months: 6,
-              overlayImage: AssetImage('assets/images/revenue_icon.png'),
+              overlayImage: const AssetImage('assets/images/revenue_icon.png'),
             ),
           ),
           // Patients card (auto scalable, make it rectangular/wider)
@@ -337,10 +360,11 @@ class _DashboardPageState extends State<DashboardPage> {
             SizedBox(
               width: patientWidth,
               child: (items[i].title == 'Inventory')
-                  ? const PatientOverviewCard(
-                      avatar: AssetImage('assets/images/inventory_icon.png'),
+                  ? PatientOverviewCard(
+                      avatar: const AssetImage('assets/images/inventory_icon.png'),
                       title: 'Inventory',
                       subtitle: 'Value',
+                      numericLabel: _shortNumber(items[i].value),
                     )
                   : _DashMetricCard(
                       title: items[i].title,
@@ -357,6 +381,17 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // Vertical metrics stack for wide layout
   Widget _buildMetricsColumn(double todaysRevenue, double monthlyRevenue, PatientProvider patientProvider, InventoryProvider inventoryProvider, RevenueProvider revenueProvider) {
+    String _shortNumberLocal(double v) {
+      if (v.abs() >= 100000) {
+        final val = (v / 100000).toStringAsFixed(v % 100000 == 0 ? 0 : 1);
+        return '${val}L';
+      }
+      if (v.abs() >= 1000) {
+        final val = (v / 1000).toStringAsFixed(v % 1000 == 0 ? 0 : 1);
+        return '${val}k';
+      }
+      return v.toStringAsFixed(0);
+    }
     final entries = [
       ('Today', todaysRevenue, 'Revenue', Icons.today, todaysRevenue >= 0 ? Colors.green : Colors.red),
       // Patients replaced by PatientOverviewCard below
@@ -378,10 +413,11 @@ class _DashboardPageState extends State<DashboardPage> {
             width: 320,
             height: 170,
             child: entries[i].$1 == 'Inventory'
-                ? const PatientOverviewCard(
-                    avatar: AssetImage('assets/images/inventory_icon.png'),
+                ? PatientOverviewCard(
+                    avatar: const AssetImage('assets/images/inventory_icon.png'),
                     title: 'Inventory',
                     subtitle: 'Value',
+                    numericLabel: _shortNumberLocal(entries[i].$2),
                   )
                 : _DashMetricCard(
                     title: entries[i].$1,
@@ -419,15 +455,29 @@ class _DashboardPageState extends State<DashboardPage> {
     double monthlyRevenue = revenueProvider.entries
         .where((e) => e.date.year == today.year && e.date.month == today.month)
         .fold(0.0, (p, e) => p + e.amount);
+    String _shortNumber(double v) {
+      if (v.abs() >= 100000) {
+        final val = (v / 100000).toStringAsFixed(v % 100000 == 0 ? 0 : 1);
+        return '${val}L';
+      }
+      if (v.abs() >= 1000) {
+        final val = (v / 1000).toStringAsFixed(v % 1000 == 0 ? 0 : 1);
+        return '${val}k';
+      }
+      return v.toStringAsFixed(0);
+    }
+    final todaysStr = '₹${_shortNumber(todaysRevenue)}';
+    final monthlyStr = '₹${_shortNumber(monthlyRevenue)}';
+    final totalStr = '₹${_shortNumber(revenueProvider.total)}';
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Revenue', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 16),
         Wrap(spacing: 16, runSpacing: 16, children: [
-         _DashCard(title: "Today's Revenue", value: '₹${todaysRevenue.toStringAsFixed(0)}', icon: Icons.today, width: 220, valueColor: todaysRevenue >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/money_bag.png'), minHeight: 130),
-         _DashCard(title: 'Monthly Revenue', value: '₹${monthlyRevenue.toStringAsFixed(0)}', icon: Icons.calendar_month, width: 220, valueColor: monthlyRevenue >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/coin_gear.png'), minHeight: 130),
-         _DashCard(title: 'Total Revenue', value: '₹${revenueProvider.total.toStringAsFixed(0)}', icon: Icons.account_balance_wallet, width: 220, valueColor: revenueProvider.total >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/envelope_cash.png'), minHeight: 130),
+         _DashCard(title: "Today's Revenue", value: todaysStr, icon: Icons.today, width: 220, valueColor: todaysRevenue >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/money_bag.png'), minHeight: 130),
+         _DashCard(title: 'Monthly Revenue', value: monthlyStr, icon: Icons.calendar_month, width: 220, valueColor: monthlyRevenue >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/coin_gear.png'), minHeight: 130),
+         _DashCard(title: 'Total Revenue', value: totalStr, icon: Icons.account_balance_wallet, width: 220, valueColor: revenueProvider.total >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/envelope_cash.png'), minHeight: 130),
         ]),
         const SizedBox(height: 16),
         Expanded(
@@ -1779,7 +1829,7 @@ class _DashCard extends StatelessWidget {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                     Text(title, style: TextStyle(fontWeight: FontWeight.w700, fontSize: effectiveH * 0.10, color: Colors.black87)),
                     const SizedBox(height: 8),
-                    Text(value, style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w800, fontSize: minHeight * 0.20,)),
+                    Text(value, style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w800, fontSize: minHeight * 0.16,)),
                   ]),
                 ),
               ]),
@@ -1848,6 +1898,17 @@ class _DashMetricCardState extends State<_DashMetricCard> with SingleTickerProvi
     final scale = _pressed ? 0.98 : (_hovered ? 1.02 : 1.0);
     final effScale = _pressed ? 0.94 : (_hovered ? 1.04 : 1.0);
     final iconSize = 20.0 * effScale;
+    String _shortNumber(double v) {
+      if (v.abs() >= 100000) {
+        final val = (v / 100000).toStringAsFixed(v % 100000 == 0 ? 0 : 1);
+        return '${val}L';
+      }
+      if (v.abs() >= 1000) {
+        final val = (v / 1000).toStringAsFixed(v % 1000 == 0 ? 0 : 1);
+        return '${val}k';
+      }
+      return v.toStringAsFixed(0);
+    }
     Widget card = AnimatedContainer(
       duration: const Duration(milliseconds: 160),
       curve: Curves.easeOutCubic,
@@ -1887,10 +1948,12 @@ class _DashMetricCardState extends State<_DashMetricCard> with SingleTickerProvi
             builder: (_, __) {
               final v = _countAnim.value;
               final isInt = widget.title == 'Patients';
-              final text = isInt ? v.toInt().toString() : '₹${v.toStringAsFixed(0)}';
+              final text = isInt ? v.toInt().toString() : '₹${_shortNumber(v)}';
+              // Smaller numeric font that scales with effective height
+              final numStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: widget.valueColor ?? accentColor, fontSize: 18 * (effScale));
               return FittedBox(
                 alignment: Alignment.center,
-                child: Text(text, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: widget.valueColor ?? accentColor)),
+                child: Text(text, style: numStyle),
               );
             },
           ),

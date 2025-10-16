@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/appointment_provider.dart';
 import '../../providers/doctor_provider.dart';
+import '../../models/doctor.dart';
 
 /// Responsive UI component for displaying the next upcoming appointment.
 /// Shows doctor info (left column) and doctor avatar (right column).
@@ -49,7 +50,7 @@ class UpcomingAppointmentWidget extends StatelessWidget {
     final doctor = doctors.isNotEmpty ? doctors.first : null;
 
     final doctorName = doctor?.name ?? nextAppointment.doctorName ?? 'Dr. Unknown';
-    final specialty = doctor != null ? _formatRole(doctor.role) : 'General Dentist';
+  final specialty = doctor != null ? doctor.role.label() : 'General Dentist';
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
@@ -152,15 +153,7 @@ class UpcomingAppointmentWidget extends StatelessWidget {
     );
   }
 
-  String _formatRole(dynamic role) {
-    if (role == null) return 'General Dentist';
-    final roleStr = role.toString().split('.').last;
-    // Convert camelCase to Title Case
-    return roleStr.replaceAllMapped(
-      RegExp(r'([A-Z])'),
-      (match) => ' ${match.group(0)}',
-    ).trim().replaceAll(RegExp(r'\s+'), ' ');
-  }
+  // _formatRole removed; use DoctorRole.label() where a Doctor instance exists.
 
   String _formatTime(DateTime dateTime) {
     final hour = dateTime.hour > 12 ? dateTime.hour - 12 : dateTime.hour;

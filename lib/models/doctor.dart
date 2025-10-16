@@ -7,7 +7,7 @@ enum DoctorRole {
   oralMaxillofacialSurgeon,
   prosthodontist,
   periodontist,
-  owner,
+  chiefDentalSurgeon,
 }
 
 class Doctor {
@@ -25,4 +25,25 @@ class Doctor {
     Map<String, PaymentRule>? rules,
     this.active = true,
   }) : rules = rules ?? {};
+}
+
+extension DoctorRoleLabel on DoctorRole {
+  String label() {
+    switch (this) {
+      case DoctorRole.endodontist:
+        return 'Endodontist';
+      case DoctorRole.orthodontist:
+        return 'Orthodontist';
+      case DoctorRole.pedodontist:
+        return 'Pedodontist';
+      case DoctorRole.oralMaxillofacialSurgeon:
+        return 'Oral & Maxillofacial Surgeon';
+      case DoctorRole.prosthodontist:
+        return 'Prosthodontist';
+      case DoctorRole.periodontist:
+        return 'Periodontist';
+      case DoctorRole.chiefDentalSurgeon:
+        return 'Chief Dental Surgeon';
+    }
+  }
 }

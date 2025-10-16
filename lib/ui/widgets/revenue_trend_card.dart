@@ -36,9 +36,20 @@ class RevenueTrendCard extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, c) {
           final provider = context.watch<RevenueProvider>();
-          // Compute today's (or current) total revenue
+          // Compute today's (or current) total revenue and format compactly (k for thousands, L for lakhs)
           final todayTotal = provider.total;
-          final displayTotal = (todayTotal == 0) ? '00' : todayTotal.toStringAsFixed(0);
+          String _shortNumber(double v) {
+            if (v.abs() >= 100000) {
+              final val = (v / 100000).toStringAsFixed(v % 100000 == 0 ? 0 : 1);
+              return '${val}L';
+            }
+            if (v.abs() >= 1000) {
+              final val = (v / 1000).toStringAsFixed(v % 1000 == 0 ? 0 : 1);
+              return '${val}k';
+            }
+            return v.toStringAsFixed(0);
+          }
+          final displayTotal = (todayTotal == 0) ? '00' : _shortNumber(todayTotal);
           // Compute effective height from parent constraints (SizedBox in dashboard sets this).
           final effectiveH = c.hasBoundedHeight && c.maxHeight.isFinite ? c.maxHeight : minHeight;
           return ConstrainedBox(
@@ -73,7 +84,7 @@ class RevenueTrendCard extends StatelessWidget {
                       children: [
                         Text('Revenue', style: TextStyle(fontWeight: FontWeight.w700, fontSize: effectiveH * 0.10, color: Colors.black87)),
                         const SizedBox(height: 8),
-                        Text(displayTotal, style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w800, fontSize: minHeight * 0.24)),
+                        Text(displayTotal, style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w800, fontSize: minHeight * 0.18)),
                       ],
                     ),
                   ),

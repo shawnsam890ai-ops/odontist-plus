@@ -16,6 +16,7 @@ class PatientOverviewCard extends StatefulWidget {
   final double aspectRatio; // width / height target
   final Color? background;
   final Color? accentColor;
+  final String? numericLabel;
 
   const PatientOverviewCard({
     super.key,
@@ -29,6 +30,7 @@ class PatientOverviewCard extends StatefulWidget {
   this.aspectRatio = 1.1,
     this.background,
     this.accentColor,
+    this.numericLabel,
   });  @override
   State<PatientOverviewCard> createState() => _PatientOverviewCardState();
 }
@@ -94,6 +96,7 @@ class _PatientOverviewCardState extends State<PatientOverviewCard> {
             total: total,
             title: widget.title,
             subtitle: widget.subtitle,
+            numericLabel: widget.numericLabel,
           ),
         );
       },
@@ -112,6 +115,7 @@ class _CardBody extends StatelessWidget {
   final int total;
   final String title;
   final String? subtitle;
+  final String? numericLabel;
 
   const _CardBody({
     required this.width,
@@ -124,10 +128,14 @@ class _CardBody extends StatelessWidget {
     required this.total,
     required this.title,
     this.subtitle,
+    this.numericLabel,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Match numeric font sizing with RevenueTrendCard: that widget uses minHeight * 0.18 (minHeight=120 by default).
+    // So we approximate the same absolute font size here by capping height at 120 before scaling.
+    final numberFontSize = (height.clamp(0.0, 120.0)) * 0.18;
     return Card(
       elevation: 1.5,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -197,11 +205,11 @@ class _CardBody extends StatelessWidget {
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      total.toString().padLeft(2, '0'),
-                      style: const TextStyle(
+                      (numericLabel ?? total.toString().padLeft(2, '0')),
+                      style: TextStyle(
                         color: Colors.black87,
                         fontWeight: FontWeight.w800,
-                        fontSize: 28.0,
+                        fontSize: numberFontSize,
                       ),
                     ),
                   ),

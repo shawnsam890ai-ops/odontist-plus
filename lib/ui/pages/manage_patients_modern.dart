@@ -767,6 +767,10 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
 
   String _formatRole(dynamic role) {
     if (role == null) return 'General Dentist';
+    // Prefer model-provided labels when available
+    try {
+      return (role as dynamic).label();
+    } catch (_) {}
     final roleStr = role.toString().split('.').last;
     // Convert camelCase to Title Case
     return roleStr.replaceAllMapped(

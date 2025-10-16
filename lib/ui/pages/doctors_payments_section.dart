@@ -76,7 +76,7 @@ class DoctorsPaymentsSection extends StatelessWidget {
 
   void _showAddDoctorDialog(BuildContext context) {
     final nameCtrl = TextEditingController();
-    DoctorRole role = DoctorRole.endodontist;
+  DoctorRole role = DoctorRole.endodontist;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -91,7 +91,7 @@ class DoctorsPaymentsSection extends StatelessWidget {
                 value: role,
                 decoration: const InputDecoration(labelText: 'Role in clinic'),
                 items: DoctorRole.values
-                    .map((r) => DropdownMenuItem(value: r, child: Text(_roleLabel(r))))
+                    .map((r) => DropdownMenuItem(value: r, child: Text(r.label())))
                     .toList(),
                 onChanged: (v) => setSt(() => role = v ?? role),
               );
@@ -115,24 +115,7 @@ class DoctorsPaymentsSection extends StatelessWidget {
     );
   }
 
-  static String _roleLabel(DoctorRole r) {
-    switch (r) {
-      case DoctorRole.endodontist:
-        return 'Endodontist';
-      case DoctorRole.orthodontist:
-        return 'Orthodontist';
-      case DoctorRole.pedodontist:
-        return 'Pedodontist';
-      case DoctorRole.oralMaxillofacialSurgeon:
-        return 'Oral & Maxillofacial Surgeon';
-      case DoctorRole.prosthodontist:
-        return 'Prosthodontist';
-      case DoctorRole.periodontist:
-        return 'Periodontist';
-      case DoctorRole.owner:
-        return 'Owner';
-    }
-  }
+  // Role labels are provided by DoctorRole.label() extension in the model.
 }
 
 class _DoctorsList extends StatelessWidget {
@@ -164,7 +147,7 @@ class _DoctorTile extends StatelessWidget {
     final s = provider.summaryFor(d.id);
     return ExpansionTile(
       title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('${d.name} • ${DoctorsPaymentsSection._roleLabel(d.role)}'),
+  Text('${d.name} • ${d.role.label()}'),
         const SizedBox(height: 4),
         Text('Doctor: ₹${s.doctorEarned.toStringAsFixed(0)}  •  Payouts: ₹${s.payouts.toStringAsFixed(0)}  •  Outstanding: ₹${s.outstanding.toStringAsFixed(0)}',
             style: const TextStyle(fontSize: 12, color: Colors.black54)),
@@ -236,9 +219,9 @@ class _DoctorTile extends StatelessWidget {
               return DropdownButtonFormField<DoctorRole>(
                 value: role,
                 decoration: const InputDecoration(labelText: 'Role in clinic'),
-                items: DoctorRole.values
-                    .map((r) => DropdownMenuItem(value: r, child: Text(DoctorsPaymentsSection._roleLabel(r))))
-                    .toList(),
+        items: DoctorRole.values
+          .map((r) => DropdownMenuItem(value: r, child: Text(r.label())))
+          .toList(),
                 onChanged: (v) => setSt(() => role = v ?? role),
               );
             }),
