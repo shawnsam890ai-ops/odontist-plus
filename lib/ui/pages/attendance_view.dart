@@ -42,7 +42,8 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
         : Card(
             child: Padding(
               padding: const EdgeInsets.all(12.0),
-              child: SizedBox(height: 340, child: StaffAttendanceWidget(showHeader: false, selectedStaff: selectedStaff, showMonthToggle: true)),
+              // Increased only the parent container height; attendance widget unchanged
+              child: SizedBox(height: 420, child: StaffAttendanceWidget(showHeader: false, selectedStaff: selectedStaff, showMonthToggle: true)),
             ),
           );
     
