@@ -21,7 +21,7 @@ import '../widgets/revenue_trend_card.dart';
 import '../widgets/patient_overview_card.dart';
 import '../widgets/upcoming_schedule_panel.dart';
 import '../widgets/upcoming_appointment_widget.dart';
-import '../widgets/staff_attendance_widget.dart';
+import '../widgets/staff_attendance_overview_widget.dart';
 import 'attendance_view.dart';
 import '../widgets/halfday_tile.dart';
 import 'doctors_payments_section.dart';
@@ -218,7 +218,7 @@ class _DashboardPageState extends State<DashboardPage> {
             const SizedBox(height: 12),
               _LargePanel(
               title: '',
-              child: const SizedBox(height: 260, child: StaffAttendanceWidget()),
+              child: const SizedBox(height: 420, child: StaffAttendanceOverviewWidget()),
             ),
           ] else ...[
             // Wide: two columns; right column is vertical Upcoming Schedule
@@ -256,7 +256,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     Expanded(
                       child: _LargePanel(
                         title: '',
-                        child: const SizedBox(height: 260, child: StaffAttendanceWidget()),
+                        child: const SizedBox(height: 420, child: StaffAttendanceOverviewWidget()),
                       ),
                     ),
                   ]),
