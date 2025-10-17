@@ -251,24 +251,8 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
 
 
   // Removed: appointment schedule helper widgets and state since schedule moved out
-
-  Widget _weekdayHeaderRow() {
-    const labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: labels
-          .map((l) => Expanded(child: Center(child: Text(l, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)))))
-          .toList(),
-    );
-  }
-
-  Widget _legendBox(Color color, String label) => Row(children: [
-        Container(width: 18, height: 18, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4))),
-        const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 12)),
-      ]);
-
-  Future<void> _launchUPIPayment() async {
+    
+    Future<void> _launchUPIPayment() async {
     const dummyUrl = 'upi://pay?pa=dentist@upi&pn=Dental%20Clinic&am=0&cu=INR';
     try {
       final uri = Uri.parse(dummyUrl);

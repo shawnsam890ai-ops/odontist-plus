@@ -90,8 +90,34 @@ class _StaffAttendanceOverviewWidgetState extends State<StaffAttendanceOverviewW
   @override
   Widget build(BuildContext context) {
     StaffAttendanceProvider? prov; try { prov = context.watch<StaffAttendanceProvider>(); } catch (_) { prov = null; }
-    final staffNames = prov != null && prov.staffNames.isNotEmpty ? prov.staffNames : _staff.map((e)=>e.name).toList();
-    String staffName = staffNames.isNotEmpty ? staffNames[_staffIdx.clamp(0, staffNames.length-1)] : _staff[_staffIdx].name;
+    final bool hasStaff = prov != null && prov.staffNames.isNotEmpty;
+  final List<String> staffNames = hasStaff ? prov.staffNames : const <String>[];
+
+    // If no staff have been added, show an empty state rather than sample data
+    if (!hasStaff) {
+      return Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text('Staff Attendance', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              SizedBox(height: 12),
+              Center(child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 24.0),
+                child: Text('Add staff to view attendance', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black54)),
+              )),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // We have staff in provider, pick the current staff name based on index
+    String staffName = staffNames[_staffIdx.clamp(0, staffNames.length-1)];
 
   final days = _days();
   const double cellHeight = 40, cellWidth = 56, spacing = 4;
@@ -104,13 +130,13 @@ class _StaffAttendanceOverviewWidgetState extends State<StaffAttendanceOverviewW
   final int rows = (totalCells / 7).ceil();
   final double gridHeight = rows * cellHeight + (rows - 1) * spacing;
     double present = 0, absent = 0;
-    if (prov != null && prov.staffNames.contains(staffName)) {
+  if (prov.staffNames.contains(staffName)) {
       present = prov.presentCount(staffName, _month.year, _month.month) / 2.0;
       absent = prov.absentCount(staffName, _month.year, _month.month) / 2.0;
     } else {
-      final s = _staff.firstWhere((x)=>x.name==staffName, orElse:()=>_staff.first);
-      present = _store.presentDays(s.id, _month.year, _month.month);
-      absent = _store.absentDays(s.id, _month.year, _month.month);
+      // Shouldn't happen with hasStaff check, but keep safe defaults
+      present = 0;
+      absent = 0;
     }
 
     return Card(

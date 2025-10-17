@@ -27,6 +27,10 @@ import '../widgets/halfday_tile.dart';
 import 'doctors_payments_section.dart';
 import '../../providers/lab_registry_provider.dart';
 import 'manage_patients_modern.dart';
+import '../../providers/doctor_provider.dart';
+import '../../providers/appointment_provider.dart';
+import '../../models/appointment.dart' as appt;
+import 'add_patient_page.dart';
 
 /// Dashboard main page with side navigation and section placeholders.
 class DashboardPage extends StatefulWidget {
@@ -40,6 +44,7 @@ class DashboardPage extends StatefulWidget {
 enum DashboardSection {
   overview('Overview', Icons.dashboard_outlined),
   managePatients('Manage Patients', Icons.people_alt_outlined),
+  appointments('Appointments', Icons.event_available),
   revenue('Revenue', Icons.currency_rupee),
   staffAttendance('Staff Attendance', Icons.badge_outlined),
   doctorsAttendance('Doctors Attendance', Icons.medical_services_outlined),
@@ -60,17 +65,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    String _shortNumber(double v) {
-      if (v.abs() >= 100000) {
-        final val = (v / 100000).toStringAsFixed(v % 100000 == 0 ? 0 : 1);
-        return '${val}L';
-      }
-      if (v.abs() >= 1000) {
-        final val = (v / 1000).toStringAsFixed(v % 1000 == 0 ? 0 : 1);
-        return '${val}k';
-      }
-      return v.toStringAsFixed(0);
-    }
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -150,6 +144,8 @@ class _DashboardPageState extends State<DashboardPage> {
         return _overviewSection();
       case DashboardSection.managePatients:
         return _managePatientsSection();
+      case DashboardSection.appointments:
+        return _appointmentsSection();
       case DashboardSection.revenue:
         return _revenueSection();
       case DashboardSection.staffAttendance:
@@ -167,6 +163,148 @@ class _DashboardPageState extends State<DashboardPage> {
       case DashboardSection.settings:
         return _settingsSection();
     }
+  }
+
+  // ================= Appointments =================
+  Widget _appointmentsSection() {
+    // Reuse the upcoming schedule panel and provide an Add Appointment action
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(
+          children: [
+            Expanded(child: Text('Appointments', style: Theme.of(context).textTheme.headlineSmall)),
+            FilledButton.icon(
+              onPressed: () => _openAddAppointmentDialog(context),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Appointment'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: Card(
+            clipBehavior: Clip.antiAlias,
+            child: const UpcomingSchedulePanel(
+              padding: EdgeInsets.fromLTRB(0, 8, 0, 12),
+              showDoctorFilter: true,
+              showTitle: true,
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  // Add Appointment dialog reused by Appointments section
+  void _openAddAppointmentDialog(BuildContext context) {
+    final patientProvider = context.read<PatientProvider>();
+    final apptProvider = context.read<AppointmentProvider>();
+    final doctorProvider = context.read<DoctorProvider>();
+    final patients = patientProvider.patients;
+    bool existing = true;
+    String search = '';
+    String? selectedPatientId;
+    DateTime? date = DateTime.now();
+    TimeOfDay? time = TimeOfDay.now();
+    final noteCtrl = TextEditingController();
+    String? doctorId;
+
+    Future<void> openPicker() async {
+      final now = DateTime.now();
+      final first = DateTime(now.year - 1, now.month, now.day);
+      final last = DateTime(now.year + 2, now.month, now.day);
+      final pickedDate = await showDatePicker(context: context, initialDate: date ?? now, firstDate: first, lastDate: last);
+      if (pickedDate == null) return;
+      final pickedTime = await showTimePicker(context: context, initialTime: time ?? TimeOfDay.now());
+      if (pickedTime == null) return;
+      date = pickedDate;
+      time = pickedTime;
+    }
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(builder: (context, setSt) {
+        final filtered = search.trim().isEmpty
+            ? patients
+            : patients.where((p) => p.name.toLowerCase().contains(search.toLowerCase()) || p.displayNumber.toString() == search).toList();
+        return AlertDialog(
+          title: const Text('Add Appointment'),
+          content: SizedBox(
+            width: 520,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Row(children: [
+                ChoiceChip(label: const Text('Existing patient'), selected: existing, onSelected: (v) => setSt(() => existing = true)),
+                const SizedBox(width: 8),
+                ChoiceChip(label: const Text('New patient'), selected: !existing, onSelected: (v) => setSt(() => existing = false)),
+              ]),
+              const SizedBox(height: 12),
+              if (existing) ...[
+                TextField(
+                  decoration: const InputDecoration(prefixIcon: Icon(Icons.search), labelText: 'Search by name or ID'),
+                  onChanged: (v) => setSt(() => search = v.trim()),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: selectedPatientId,
+                  decoration: const InputDecoration(labelText: 'Select patient'),
+                  items: filtered.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.displayNumber}. ${p.name}'))).toList(),
+                  onChanged: (v) => setSt(() => selectedPatientId = v),
+                ),
+                const SizedBox(height: 12),
+              ] else ...[
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await Navigator.of(context).pushNamed(AddPatientPage.routeName);
+                    WidgetsBinding.instance.addPostFrameCallback((_) => _openAddAppointmentDialog(context));
+                  },
+                  icon: const Icon(Icons.person_add),
+                  label: const Text('Open Add Patient form'),
+                ),
+                const SizedBox(height: 12),
+              ],
+              DropdownButtonFormField<String?>(
+                value: doctorId,
+                decoration: const InputDecoration(labelText: 'Doctor (optional)'),
+                items: [
+                  const DropdownMenuItem<String?>(value: null, child: Text('Any doctor')),
+                  for (final d in doctorProvider.doctors) DropdownMenuItem<String?>(value: d.id, child: Text(d.name)),
+                ],
+                onChanged: (v) => setSt(() => doctorId = v),
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async { await openPicker(); setSt(() {}); },
+                    icon: const Icon(Icons.event),
+                    label: Text(date == null || time == null ? 'Pick date & time' : '${date!.year}-${date!.month.toString().padLeft(2,'0')}-${date!.day.toString().padLeft(2,'0')}  ${time!.format(context)}'),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 8),
+              TextField(controller: noteCtrl, decoration: const InputDecoration(labelText: 'Purpose of visit (note)')),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () {
+                if (existing && (selectedPatientId == null || date == null || time == null)) return;
+                if (!existing) return;
+                final dt = DateTime(date!.year, date!.month, date!.day, time!.hour, time!.minute);
+                final doctorName = doctorId == null ? null : doctorProvider.byId(doctorId!)?.name;
+                apptProvider.add(appt.Appointment(patientId: selectedPatientId!, dateTime: dt, reason: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(), doctorId: doctorId, doctorName: doctorName));
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Appointment created')));
+              },
+              child: const Text('Save'),
+            )
+          ],
+        );
+      }),
+    );
   }
 
   // ================= Overview =================
