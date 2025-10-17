@@ -6,7 +6,10 @@ import 'package:flutter_svg/flutter_svg.dart';
 // table_calendar removed from this page
 
 import '../../providers/patient_provider.dart';
+import '../../providers/doctor_provider.dart';
+import '../../core/enums.dart';
 import '../../models/patient.dart';
+import '../../models/treatment_session.dart';
 import '../pages/add_patient_page.dart';
 import '../pages/patient_detail_page.dart';
 
@@ -40,11 +43,16 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
 
   final TextEditingController _searchCtrl = TextEditingController();
   bool _filterActive = false;
+  // Advanced filters
+  DateTimeRange? _dateRange;
+  final Set<TreatmentType> _typeFilters = {};
+  String? _doctorIdFilter;
   // Removed appointments-related state (_selectedDay, _doctorId)
 
   @override
   Widget build(BuildContext context) {
     final patientProvider = context.watch<PatientProvider>();
+    final doctorProvider = context.watch<DoctorProvider>();
     final allPatients = patientProvider.patients;
     final query = _searchCtrl.text.trim().toLowerCase();
     var patients = allPatients.where((p) {
@@ -55,6 +63,45 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
     }).toList();
     if (_filterActive) {
       patients = patients.where((p) => p.sessions.isNotEmpty).toList();
+    }
+    // Apply advanced filters if any
+    final hasAdv = _dateRange != null || _typeFilters.isNotEmpty || _doctorIdFilter != null;
+    if (hasAdv) {
+      final doctorName = _doctorIdFilter == null ? null : doctorProvider.byId(_doctorIdFilter!)?.name;
+      bool sessionMatches(TreatmentSession s) {
+        // Date filter
+        if (_dateRange != null) {
+          final d = s.date;
+          final start = DateTime(_dateRange!.start.year, _dateRange!.start.month, _dateRange!.start.day);
+          final end = DateTime(_dateRange!.end.year, _dateRange!.end.month, _dateRange!.end.day, 23, 59, 59);
+          if (d.isBefore(start) || d.isAfter(end)) return false;
+        }
+        // Type filter
+        if (_typeFilters.isNotEmpty && !_typeFilters.contains(s.type)) return false;
+        // Doctor filter
+        if (doctorName != null && doctorName.trim().isNotEmpty) {
+          String? inCharge;
+          switch (s.type) {
+            case TreatmentType.general:
+              inCharge = s.generalDoctorInCharge;
+              break;
+            case TreatmentType.orthodontic:
+              inCharge = s.orthoDoctorInCharge;
+              break;
+            case TreatmentType.rootCanal:
+              inCharge = s.rootCanalDoctorInCharge;
+              break;
+            case TreatmentType.prosthodontic:
+              inCharge = s.prosthodonticDoctorInCharge;
+              break;
+            default:
+              inCharge = null;
+          }
+          if (inCharge == null || inCharge.trim() != doctorName) return false;
+        }
+        return true;
+      }
+      patients = patients.where((p) => p.sessions.any(sessionMatches)).toList();
     }
 
     return LayoutBuilder(builder: (context, c) {
@@ -114,6 +161,9 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
           const SizedBox(width: 12),
           Text('${patients.length} results', style: TextStyle(color: _secondary)),
         ]),
+        const SizedBox(height: 10),
+        // Advanced filters row (responsive wrap)
+        _advancedFiltersRow(doctorProvider),
         const SizedBox(height: 12),
         if (!stacked) Expanded(child: listWidget) else listWidget,
       ]);
@@ -123,6 +173,86 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
       }
       return Padding(padding: const EdgeInsets.all(16), child: content);
     });
+  }
+
+  Widget _advancedFiltersRow(DoctorProvider doctorProvider) {
+    final bool hasFilters = _dateRange != null || _typeFilters.isNotEmpty || _doctorIdFilter != null;
+    String dateLabel() {
+      if (_dateRange == null) return 'Date range';
+      final s = _dateRange!.start;
+      final e = _dateRange!.end;
+      return '${s.month}/${s.day} - ${e.month}/${e.day}';
+    }
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        OutlinedButton.icon(
+          onPressed: () async {
+            final now = DateTime.now();
+            final picked = await showDateRangePicker(
+              context: context,
+              firstDate: DateTime(now.year - 3),
+              lastDate: DateTime(now.year + 3),
+              initialDateRange: _dateRange,
+              saveText: 'Apply',
+            );
+            if (picked != null) setState(() => _dateRange = picked);
+          },
+          icon: const Icon(Icons.date_range),
+          label: Text(dateLabel()),
+        ),
+        // Treatment type filter chips
+        _typeChip('General', TreatmentType.general),
+        _typeChip('Ortho', TreatmentType.orthodontic),
+        _typeChip('Root Canal', TreatmentType.rootCanal),
+        _typeChip('Prostho', TreatmentType.prosthodontic),
+        // Doctor dropdown
+        SizedBox(
+          width: 240,
+          child: DropdownButtonFormField<String?>(
+            value: _doctorIdFilter,
+            decoration: const InputDecoration(labelText: 'Doctor'),
+            items: [
+              const DropdownMenuItem<String?>(value: null, child: Text('All doctors')),
+              for (final d in doctorProvider.doctors)
+                DropdownMenuItem<String?>(value: d.id, child: Text(d.name)),
+            ],
+            onChanged: (v) => setState(() => _doctorIdFilter = v),
+          ),
+        ),
+        if (hasFilters)
+          TextButton.icon(
+            onPressed: () => setState(() {
+              _dateRange = null;
+              _typeFilters.clear();
+              _doctorIdFilter = null;
+            }),
+            icon: const Icon(Icons.clear),
+            label: const Text('Clear filters'),
+          ),
+      ],
+    );
+  }
+
+  Widget _typeChip(String label, TreatmentType type) {
+    final selected = _typeFilters.contains(type);
+    return FilterChip(
+      label: Text(label, style: TextStyle(color: selected ? Colors.white : _secondary)),
+      selected: selected,
+      onSelected: (v) => setState(() {
+        if (v) {
+          _typeFilters.add(type);
+        } else {
+          _typeFilters.remove(type);
+        }
+      }),
+      selectedColor: _primary,
+      checkmarkColor: Colors.white,
+      backgroundColor: Colors.white,
+      side: BorderSide(color: _border),
+    );
   }
 
   Widget _buildPatientCard(Patient p) {

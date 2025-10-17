@@ -183,13 +183,10 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         const SizedBox(height: 12),
         Expanded(
-          child: Card(
-            clipBehavior: Clip.antiAlias,
-            child: const UpcomingSchedulePanel(
-              padding: EdgeInsets.fromLTRB(0, 8, 0, 12),
-              showDoctorFilter: true,
-              showTitle: true,
-            ),
+          child: const UpcomingSchedulePanel(
+            padding: EdgeInsets.fromLTRB(0, 8, 0, 12),
+            showDoctorFilter: true,
+            showTitle: true,
           ),
         ),
       ]),
