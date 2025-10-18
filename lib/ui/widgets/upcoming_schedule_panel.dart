@@ -94,49 +94,64 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
           'January','February','March','April','May','June','July','August','September','October','November','December'
         ];
         final monthLabel = '${months[m.month - 1]} ${m.year}';
-        return Row(children: [
-          IconButton(
-            tooltip: 'Previous month',
-            onPressed: () => setState(() => _selectedDay = DateTime(m.year, m.month - 1, m.day)),
-            icon: const Icon(Icons.chevron_left, size: 20),
-          ),
-          Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(6),
-              onTap: () async {
-                final now = DateTime.now();
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _selectedDay,
-                  firstDate: DateTime(now.year - 3),
-                  lastDate: DateTime(now.year + 3),
-                );
-                if (picked != null) setState(() => _selectedDay = picked);
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(
-                  monthLabel,
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        return Row(
+          children: [
+            // Left area: previous chevron
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  tooltip: 'Previous month',
+                  onPressed: () => setState(() => _selectedDay = DateTime(m.year, m.month - 1, m.day)),
+                  icon: const Icon(Icons.chevron_left, size: 20),
                 ),
               ),
             ),
-          ),
-          IconButton(
-            tooltip: 'Next month',
-            onPressed: () => setState(() => _selectedDay = DateTime(m.year, m.month + 1, m.day)),
-            icon: const Icon(Icons.chevron_right, size: 20),
-          ),
-          Flexible(
-            fit: FlexFit.loose,
-            child: TextButton(
-              onPressed: () => setState(() => _selectedDay = DateTime.now()),
-              child: const Text('Today', overflow: TextOverflow.ellipsis),
+            // Center area: month label (true centered)
+            Expanded(
+              flex: 2,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: () async {
+                  final now = DateTime.now();
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDay,
+                    firstDate: DateTime(now.year - 3),
+                    lastDate: DateTime(now.year + 3),
+                  );
+                  if (picked != null) setState(() => _selectedDay = picked);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    monthLabel,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
             ),
-          ),
-        ]);
+            // Right area: Today + next chevron
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => setState(() => _selectedDay = DateTime.now()),
+                    child: const Text('Today', overflow: TextOverflow.ellipsis),
+                  ),
+                  IconButton(
+                    tooltip: 'Next month',
+                    onPressed: () => setState(() => _selectedDay = DateTime(m.year, m.month + 1, m.day)),
+                    icon: const Icon(Icons.chevron_right, size: 20),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
       }
 
       String? _purposeForNextAppointment(TreatmentSession s) {
@@ -203,52 +218,16 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
               onPressed: () => setState(() => _selectedDay = _selectedDay.subtract(const Duration(days: 7))),
             ),
             Expanded(
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                itemBuilder: (_, i) {
-                  final d = days[i];
-                  final isSel = _sameDay(d, selected);
-                  final isToday = _sameDay(d, todayKey);
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedDay = d),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: 56,
-                      margin: const EdgeInsets.symmetric(vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isSel ? Theme.of(context).colorScheme.primary.withOpacity(.1) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: isSel ? Theme.of(context).colorScheme.primary : Colors.transparent, width: 1.1),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(_weekdayShort(d.weekday),
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: isSel ? Theme.of(context).colorScheme.primary : Colors.grey[600])),
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.all(7),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isToday
-                                  ? Theme.of(context).colorScheme.primary
-                                  : (isSel ? Theme.of(context).colorScheme.primary.withOpacity(.15) : Colors.grey.shade200),
-                            ),
-                            child: Text('${d.day}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: isToday ? Colors.white : (isSel ? Theme.of(context).colorScheme.primary : Colors.black87),
-                                )),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemCount: days.length,
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (int i = 0; i < days.length; i++) ...[
+                      _dayChip(days[i], selected, todayKey),
+                      if (i != days.length - 1) const SizedBox(width: 8),
+                    ]
+                  ],
+                ),
               ),
             ),
             IconButton(
@@ -256,6 +235,55 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
               onPressed: () => setState(() => _selectedDay = _selectedDay.add(const Duration(days: 7))),
             ),
           ]),
+        );
+      }
+
+      Widget _dayChip(DateTime d, DateTime selected, DateTime todayKey) {
+        final isSel = _sameDay(d, selected);
+        final isToday = _sameDay(d, todayKey);
+        return GestureDetector(
+          onTap: () => setState(() => _selectedDay = d),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: 56,
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(
+              color: isSel ? Theme.of(context).colorScheme.primary.withOpacity(.1) : Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: isSel ? Theme.of(context).colorScheme.primary : Colors.transparent, width: 1.1),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _weekdayShort(d.weekday),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isSel ? Theme.of(context).colorScheme.primary : Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isToday
+                        ? Theme.of(context).colorScheme.primary
+                        : (isSel ? Theme.of(context).colorScheme.primary.withOpacity(.15) : Colors.grey.shade200),
+                  ),
+                  child: Text(
+                    '${d.day}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isToday ? Colors.white : (isSel ? Theme.of(context).colorScheme.primary : Colors.black87),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       }
 
