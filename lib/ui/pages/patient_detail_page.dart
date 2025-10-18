@@ -163,6 +163,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
 
   // Session history filtering by registered date (unique existing session dates)
   String? _sessionFilterDateStr; // YYYY-MM-DD string currently selected
+  // New: Selected treatment date for Add Rx (General/Ortho/Root Canal/Prostho)
+  DateTime _selectedSessionDate = DateTime.now();
 
   @override
   Widget build(BuildContext context) {
@@ -216,9 +218,12 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                     : () async {
                                         setState(() => _savingSession = true);
                                         try {
+                                          String? savedDateStr; // YYYY-MM-DD for filter auto-select
                                           if (_editingSessionId == null) {
                                             final session = _createSession();
                                             await context.read<PatientProvider>().addSession(patient.id, session);
+                                            // Remember saved date for filter auto-select
+                                            savedDateStr = session.date.toLocal().toString().split(' ').first;
                                             // If it's a Lab Work session, record clinic profit to Revenue
                                             if (session.type == TreatmentType.labWork) {
                                               try {
@@ -276,6 +281,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                           } else {
                                             final updated = _createSession().copyWith(id: _editingSessionId);
                                             await context.read<PatientProvider>().updateSession(patient.id, updated);
+                                            // Remember saved date for filter auto-select
+                                            savedDateStr = updated.date.toLocal().toString().split(' ').first;
                                             final syncMsg2 = await _syncDoctorPaymentsFromSession(context, patient.id, patient.name, updated);
                                             if (mounted && syncMsg2 != null) {
                                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(syncMsg2)));
@@ -286,6 +293,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                           }
                                           if (mounted) {
                                             setState(() {
+                                              // Auto-select saved date in the Registered Date filter to show the new session immediately
+                                              if (savedDateStr != null) {
+                                                _sessionFilterDateStr = savedDateStr;
+                                              }
                                               _editingSessionId = null;
                                               _showRxForm = false;
                                               _resetFormState();
@@ -545,6 +556,32 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Date of treatment (before Chief Complaint)
+        if (_followUpParentId == null)
+          Card(
+            margin: const EdgeInsets.only(bottom: 16),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Expanded(child: Text('Date of treatment', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))),
+                  TextButton.icon(
+                    icon: const Icon(Icons.calendar_month),
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedSessionDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) setState(() => _selectedSessionDate = picked);
+                    },
+                    label: Text(_selectedSessionDate.toLocal().toString().split(' ').first),
+                  ),
+                ],
+              ),
+            ),
+          ),
         // Doctor in Charge for General
         if (_followUpParentId == null)
           Card(
@@ -911,6 +948,14 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               Row(
           children: [
             Expanded(child: Text(_nextAppointment == null ? 'Not set' : _nextAppointment!.toLocal().toString().split(' ').first)),
+            if (_nextAppointment != null) ...[
+              TextButton.icon(
+                onPressed: () => setState(() => _nextAppointment = null),
+                icon: const Icon(Icons.clear, size: 18, color: Colors.redAccent),
+                label: const Text('Cancel', style: TextStyle(color: Colors.redAccent)),
+              ),
+              const SizedBox(width: 8),
+            ],
             TextButton(
                 onPressed: () async {
                   final now = DateTime.now();
@@ -1091,6 +1136,31 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Date of treatment
+        Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(child: Text('Date of treatment', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))),
+                TextButton.icon(
+                  icon: const Icon(Icons.calendar_month),
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedSessionDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                    );
+                    if (picked != null) setState(() => _selectedSessionDate = picked);
+                  },
+                  label: Text(_selectedSessionDate.toLocal().toString().split(' ').first),
+                ),
+              ],
+            ),
+          ),
+        ),
         // Card 1: Fixed Orthodontic Plan Info
         Card(
           margin: const EdgeInsets.only(bottom: 16),
@@ -1232,6 +1302,40 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         }
                       },
                     ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Next Appointment inside Monthly Treatment Sessions
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _nextAppointment == null
+                            ? 'Next Appointment: Not set'
+                            : 'Next Appointment: ${_nextAppointment!.toLocal().toString().split(' ').first}',
+                      ),
+                    ),
+                    if (_nextAppointment != null) ...[
+                      TextButton.icon(
+                        onPressed: () => setState(() => _nextAppointment = null),
+                        icon: const Icon(Icons.clear, size: 18, color: Colors.redAccent),
+                        label: const Text('Cancel', style: TextStyle(color: Colors.redAccent)),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    TextButton(
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _nextAppointment ?? now,
+                          firstDate: now.subtract(const Duration(days: 1)),
+                          lastDate: now.add(const Duration(days: 365)),
+                        );
+                        if (picked != null) setState(() => _nextAppointment = picked);
+                      },
+                      child: const Text('Select'),
+                    )
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -1386,6 +1490,31 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Date of treatment
+        Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(child: Text('Date of treatment', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))),
+                TextButton.icon(
+                  icon: const Icon(Icons.calendar_month),
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedSessionDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                    );
+                    if (picked != null) setState(() => _selectedSessionDate = picked);
+                  },
+                  label: Text(_selectedSessionDate.toLocal().toString().split(' ').first),
+                ),
+              ],
+            ),
+          ),
+        ),
         // 1. RCT Plan Container
         Card(
           margin: const EdgeInsets.only(bottom: 16),
@@ -1534,6 +1663,40 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Treatment Sessions', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                // Next Appointment inside RCT Treatment Sessions
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _nextAppointment == null
+                            ? 'Next Appointment: Not set'
+                            : 'Next Appointment: ${_nextAppointment!.toLocal().toString().split(' ').first}',
+                      ),
+                    ),
+                    if (_nextAppointment != null) ...[
+                      TextButton.icon(
+                        onPressed: () => setState(() => _nextAppointment = null),
+                        icon: const Icon(Icons.clear, size: 18, color: Colors.redAccent),
+                        label: const Text('Cancel', style: TextStyle(color: Colors.redAccent)),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    TextButton(
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _nextAppointment ?? now,
+                          firstDate: now.subtract(const Duration(days: 1)),
+                          lastDate: now.add(const Duration(days: 365)),
+                        );
+                        if (picked != null) setState(() => _nextAppointment = picked);
+                      },
+                      child: const Text('Select'),
+                    )
+                  ],
+                ),
                 const SizedBox(height: 8),
                 if (!_addingRcSession) ...[
                   ElevatedButton.icon(
@@ -1813,6 +1976,31 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Date of treatment
+        Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(child: Text('Date of treatment', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))),
+                TextButton.icon(
+                  icon: const Icon(Icons.calendar_month),
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedSessionDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                    );
+                    if (picked != null) setState(() => _selectedSessionDate = picked);
+                  },
+                  label: Text(_selectedSessionDate.toLocal().toString().split(' ').first),
+                ),
+              ],
+            ),
+          ),
+        ),
         // 1. Prosthodontic Plan Container
         Card(
           margin: const EdgeInsets.only(bottom: 16),
@@ -1987,6 +2175,40 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           _newProsthoSessionDate = DateTime.now();
                         }
                       }),
+                    )
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Next Appointment inside Prosthodontic Procedure Session
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _nextAppointment == null
+                            ? 'Next Appointment: Not set'
+                            : 'Next Appointment: ${_nextAppointment!.toLocal().toString().split(' ').first}',
+                      ),
+                    ),
+                    if (_nextAppointment != null) ...[
+                      TextButton.icon(
+                        onPressed: () => setState(() => _nextAppointment = null),
+                        icon: const Icon(Icons.clear, size: 18, color: Colors.redAccent),
+                        label: const Text('Cancel', style: TextStyle(color: Colors.redAccent)),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    TextButton(
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _nextAppointment ?? now,
+                          firstDate: now.subtract(const Duration(days: 1)),
+                          lastDate: now.add(const Duration(days: 365)),
+                        );
+                        if (picked != null) setState(() => _nextAppointment = picked);
+                      },
+                      child: const Text('Select'),
                     )
                   ],
                 ),
@@ -2439,7 +2661,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         return TreatmentSession(
           id: uuid.v4(),
           type: TreatmentType.general,
-          date: DateTime.now(),
+          date: _selectedSessionDate,
           parentSessionId: _followUpParentId,
           // Deep copies to preserve snapshot (avoid later clears mutating saved session)
           chiefComplaint: ChiefComplaintEntry(
@@ -2465,19 +2687,20 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         return TreatmentSession(
           id: uuid.v4(),
           type: TreatmentType.orthodontic,
-          date: DateTime.now(),
+          date: _selectedSessionDate,
           parentSessionId: _followUpParentId,
           orthoOralFindings: _orthoFindings.text.trim(),
           bracketType: _bracketType,
           orthoTotalAmount: double.tryParse(_orthoTotal.text.trim()),
           orthoDoctorInCharge: _selectedOrthoDoctor,
           orthoSteps: List.from(_orthoSteps),
+          nextAppointment: _nextAppointment,
         );
       case TreatmentType.rootCanal:
         return TreatmentSession(
           id: uuid.v4(),
           type: TreatmentType.rootCanal,
-          date: DateTime.now(),
+          date: _selectedSessionDate,
           parentSessionId: _followUpParentId,
           rootCanalFindings: List.from(_rcFindings),
           rootCanalTotalAmount: double.tryParse(_rcTotal.text.trim()),
@@ -2486,18 +2709,20 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           rootCanalDoctorInCharge: _selectedRcDoctor,
           // Allow prescription captured from RCT form as well
           prescription: List.from(_prescription),
+          nextAppointment: _nextAppointment,
         );
       case TreatmentType.prosthodontic:
         return TreatmentSession(
           id: uuid.v4(),
           type: TreatmentType.prosthodontic,
-          date: DateTime.now(),
+          date: _selectedSessionDate,
           parentSessionId: _followUpParentId,
           prosthodonticFindings: List.from(_prosthoFindings),
           prosthodonticTotalAmount: double.tryParse(_prosthoTotal.text.trim()),
           prosthodonticSteps: List.from(_prosthoSteps),
           prosthodonticPlans: List.from(_prosthoPlans),
           prosthodonticDoctorInCharge: _selectedProsthoDoctor,
+          nextAppointment: _nextAppointment,
         );
       case TreatmentType.labWork:
         return TreatmentSession(
@@ -5133,6 +5358,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           _orthoSteps
             ..clear()
             ..addAll(s.orthoSteps);
+          _nextAppointment = s.nextAppointment;
           break;
         case TreatmentType.rootCanal:
           _rcFindings
@@ -5149,6 +5375,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           _prescription
             ..clear()
             ..addAll(s.prescription);
+          _nextAppointment = s.nextAppointment;
           break;
         case TreatmentType.prosthodontic:
           _prosthoFindings
@@ -5162,6 +5389,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             ..clear()
             ..addAll(s.prosthodonticPlans);
           _selectedProsthoDoctor = s.prosthodonticDoctorInCharge;
+          _nextAppointment = s.nextAppointment;
           break;
         case TreatmentType.labWork:
           _selectedLabName = s.labName;
@@ -5534,12 +5762,17 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 dateSet.add(s.date.toLocal().toString().split(' ').first);
               }
               final dates = dateSet.toList()..sort((a,b)=> b.compareTo(a));
+              // Ensure the current value exists in items exactly once; fallback to 'All Dates' ('') if not.
+              var effectiveValue = _sessionFilterDateStr ?? '';
+              if (effectiveValue.isNotEmpty && !dates.contains(effectiveValue)) {
+                effectiveValue = '';
+              }
               final dateDropdown = ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 220),
                 child: DropdownButtonFormField<String>(
                   isDense: true,
                   decoration: const InputDecoration(labelText: 'Registered Date'),
-                  value: _sessionFilterDateStr ?? '',
+                  value: effectiveValue,
                   items: [
                     const DropdownMenuItem(value: '', child: Text('All Dates')),
                     ...dates.map((d) => DropdownMenuItem(value: d, child: Text(d))),

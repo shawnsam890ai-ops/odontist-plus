@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/patient.dart';
 import '../../models/treatment_session.dart';
+import '../../core/enums.dart';
 import '../../providers/patient_provider.dart';
 import '../../providers/doctor_provider.dart';
 import '../../providers/appointment_provider.dart';
 import '../../models/appointment.dart' as appt;
+import '../pages/patient_detail_page.dart';
 
 class _ApptEntry {
   _ApptEntry(this.patient, this.time, this.complaint, this.doctor);
@@ -55,7 +57,9 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
           final na = s.nextAppointment!;
           final nd = DateTime(na.year, na.month, na.day);
           if (nd == dayKey) {
-            entries.add(_ApptEntry(p, na, s.chiefComplaint?.complaints.isNotEmpty == true ? s.chiefComplaint!.complaints.first : null, null));
+            final purpose = _purposeForNextAppointment(s) ??
+                (s.chiefComplaint?.complaints.isNotEmpty == true ? s.chiefComplaint!.complaints.first : null);
+            entries.add(_ApptEntry(p, na, purpose, null));
           }
         }
       }
@@ -114,6 +118,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                 child: Text(
                   monthLabel,
                   textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
@@ -124,11 +129,40 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
             onPressed: () => setState(() => _selectedDay = DateTime(m.year, m.month + 1, m.day)),
             icon: const Icon(Icons.chevron_right, size: 20),
           ),
-          TextButton(
-            onPressed: () => setState(() => _selectedDay = DateTime.now()),
-            child: const Text('Today'),
+          Flexible(
+            fit: FlexFit.loose,
+            child: TextButton(
+              onPressed: () => setState(() => _selectedDay = DateTime.now()),
+              child: const Text('Today', overflow: TextOverflow.ellipsis),
+            ),
           ),
         ]);
+      }
+
+      String? _purposeForNextAppointment(TreatmentSession s) {
+        switch (s.type) {
+          case TreatmentType.orthodontic:
+            return 'Ortho Treatment';
+          case TreatmentType.rootCanal:
+            return _planSummary(s.rootCanalPlans);
+          case TreatmentType.prosthodontic:
+            return _planSummary(s.prosthodonticPlans);
+          case TreatmentType.general:
+          case TreatmentType.labWork:
+            return null;
+        }
+      }
+
+      String? _planSummary(List<ToothPlanEntry> plans) {
+        if (plans.isEmpty) return null;
+        final parts = <String>[];
+        for (final e in plans.take(2)) {
+          final tooth = (e.toothNumber.isNotEmpty) ? '${e.toothNumber}: ' : '';
+          parts.add('$tooth${e.plan}');
+        }
+        var s = parts.join(', ');
+        if (plans.length > 2) s += ' …';
+        return s;
       }
 
       Widget _doctorFilterRow() {
@@ -278,22 +312,37 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
-              // Left: Time and doctor in brackets
-              SizedBox(
-                width: 140,
+              // Left: Time and doctor in brackets (flexible, no fixed width)
+              Flexible(
+                flex: 3,
+                fit: FlexFit.tight,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(time, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text(
+                      time,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
+                    ),
                     if (e.doctor != null && e.doctor!.trim().isNotEmpty)
-                      Text('(${e.doctor})', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text(
+                        '(${e.doctor})',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: false,
+                      ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
               // Middle: Reason / complaint
-              Expanded(
+              Flexible(
+                flex: 5,
+                fit: FlexFit.tight,
                 child: Text(
                   e.complaint ?? '-',
                   maxLines: 2,
@@ -302,14 +351,26 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                 ),
               ),
               const SizedBox(width: 8),
-              // Right: Patient name
-              SizedBox(
-                width: 180,
-                child: Text(
-                  e.patient.name,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                  overflow: TextOverflow.ellipsis,
+              // Right: Patient name (clickable to open patient detail)
+              Flexible(
+                flex: 5,
+                fit: FlexFit.tight,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(context).pushNamed(
+                      PatientDetailPage.routeName,
+                      arguments: {'patientId': e.patient.id},
+                    ),
+                    child: Text(
+                      e.patient.name,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
+                    ),
+                  ),
                 ),
               ),
             ],
