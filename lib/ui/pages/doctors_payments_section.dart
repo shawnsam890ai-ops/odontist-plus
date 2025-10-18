@@ -497,9 +497,11 @@ class _LedgerSection extends StatelessWidget {
               final d = provider.byId(e.doctorId);
               final dateStr = '${e.date.year}-${e.date.month.toString().padLeft(2, '0')}-${e.date.day.toString().padLeft(2, '0')}';
               final isPayout = e.type == EntryType.payout;
+              // Build a human-friendly subtitle, hiding raw rx: tags similar to revenue ledger
+              final friendly = _prettyLedgerSubtitle(context, e, dateStr);
               return ListTile(
                 title: Text('${d?.name ?? e.doctorId} • ${isPayout ? 'PAYOUT' : e.procedureKey.toUpperCase()} • ${isPayout ? '₹${e.doctorShare.toStringAsFixed(0)}' : '₹${e.amountReceived.toStringAsFixed(0)}'}'),
-                subtitle: Text('${isPayout ? '' : 'Doctor: ₹${e.doctorShare.toStringAsFixed(0)}  |  Clinic: ₹${e.clinicShare.toStringAsFixed(0)}  •  '} $dateStr${e.mode != null ? '  •  ${e.mode}' : ''}${e.patient != null ? '  •  ${e.patient}' : ''}${e.note != null ? '  •  ${e.note}' : ''}'),
+                subtitle: Text(friendly),
                 trailing: IconButton(
                   tooltip: 'Delete entry',
                   icon: const Icon(Icons.delete_outline),
@@ -526,6 +528,34 @@ class _LedgerSection extends StatelessWidget {
       ]),
     );
     });
+  }
+
+  // Hide raw rx: tags and show patient/purpose more nicely, similar to revenue ledger behavior.
+  String _prettyLedgerSubtitle(BuildContext context, PaymentEntry e, String dateStr) {
+    final base = StringBuffer();
+    final isPayout = e.type == EntryType.payout;
+    if (!isPayout) {
+      base.write('Doctor: ₹${e.doctorShare.toStringAsFixed(0)}  |  Clinic: ₹${e.clinicShare.toStringAsFixed(0)}  •  ');
+    }
+    base.write(dateStr);
+    if (e.mode != null) base.write('  •  ${e.mode}');
+    // If note contains rx:<sessionId>:... convert to readable label using existing revenue logic pattern
+    if (e.note != null && e.note!.startsWith('rx:')) {
+      final desc = _friendlyDescriptionFromRx(context, e);
+      if (desc != null) base.write('  •  $desc');
+    } else if (e.patient != null) {
+      base.write('  •  ${e.patient}');
+    } else if (e.note != null) {
+      base.write('  •  ${e.note}');
+    }
+    return base.toString();
+  }
+
+  String? _friendlyDescriptionFromRx(BuildContext context, PaymentEntry e) {
+    // We only have patient name in PaymentEntry, not patientId/session graph here.
+    // Prefer showing patient name if available; otherwise hide the opaque rx tag.
+    if (e.patient != null && e.patient!.isNotEmpty) return e.patient;
+    return null;
   }
 }
 

@@ -72,16 +72,16 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _monthHeader(),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           if (widget.showDoctorFilter) _doctorFilterRow(),
-          if (widget.showDoctorFilter) const SizedBox(height: 6),
+          if (widget.showDoctorFilter) const SizedBox(height: 4),
           _sevenDayStrip(),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           if (widget.showTitle)
             Text('Upcoming Schedule', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-          if (widget.showTitle) const SizedBox(height: 8),
-          const Divider(height: 1),
-          const SizedBox(height: 12),
+          if (widget.showTitle) const SizedBox(height: 6),
+          const Divider(height: 0.5),
+          const SizedBox(height: 8),
           Expanded(child: _appointmentsList(entries)),
         ],
       ),
@@ -94,63 +94,88 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
           'January','February','March','April','May','June','July','August','September','October','November','December'
         ];
         final monthLabel = '${months[m.month - 1]} ${m.year}';
-        return Row(
-          children: [
-            // Left area: previous chevron
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton(
-                  tooltip: 'Previous month',
-                  onPressed: () => setState(() => _selectedDay = DateTime(m.year, m.month - 1, m.day)),
-                  icon: const Icon(Icons.chevron_left, size: 20),
-                ),
-              ),
-            ),
-            // Center area: month label (true centered)
-            Expanded(
-              flex: 2,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(6),
-                onTap: () async {
-                  final now = DateTime.now();
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _selectedDay,
-                    firstDate: DateTime(now.year - 3),
-                    lastDate: DateTime(now.year + 3),
-                  );
-                  if (picked != null) setState(() => _selectedDay = picked);
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(
-                    monthLabel,
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final narrow = constraints.maxWidth.isFinite && constraints.maxWidth < 380;
+            final arrowSize = narrow ? 32.0 : 36.0;
+            return Row(
+              children: [
+                // Left area: previous chevron
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      constraints: BoxConstraints.tightFor(width: arrowSize, height: arrowSize),
+                      padding: EdgeInsets.zero,
+                      tooltip: 'Previous month',
+                      onPressed: () => setState(() => _selectedDay = DateTime(m.year, m.month - 1, m.day)),
+                      icon: const Icon(Icons.chevron_left, size: 20),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            // Right area: Today + next chevron
-            Expanded(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => setState(() => _selectedDay = DateTime.now()),
-                    child: const Text('Today', overflow: TextOverflow.ellipsis),
+                // Center area: month label (true centered)
+                Expanded(
+                  flex: 2,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () async {
+                      final now = DateTime.now();
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDay,
+                        firstDate: DateTime(now.year - 3),
+                        lastDate: DateTime(now.year + 3),
+                      );
+                      if (picked != null) setState(() => _selectedDay = picked);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(
+                        monthLabel,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
                   ),
-                  IconButton(
-                    tooltip: 'Next month',
-                    onPressed: () => setState(() => _selectedDay = DateTime(m.year, m.month + 1, m.day)),
-                    icon: const Icon(Icons.chevron_right, size: 20),
+                ),
+                // Right area: Today (icon on narrow) + next chevron
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (narrow)
+                        IconButton(
+                          constraints: BoxConstraints.tightFor(width: arrowSize, height: arrowSize),
+                          padding: EdgeInsets.zero,
+                          tooltip: 'Today',
+                          onPressed: () => setState(() => _selectedDay = DateTime.now()),
+                          icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                        )
+                      else
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            minimumSize: const Size(0, 0),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          onPressed: () => setState(() => _selectedDay = DateTime.now()),
+                          child: const Text('Today', overflow: TextOverflow.ellipsis),
+                        ),
+                      IconButton(
+                        constraints: BoxConstraints.tightFor(width: arrowSize, height: arrowSize),
+                        padding: EdgeInsets.zero,
+                        tooltip: 'Next month',
+                        onPressed: () => setState(() => _selectedDay = DateTime(m.year, m.month + 1, m.day)),
+                        icon: const Icon(Icons.chevron_right, size: 20),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ],
+                ),
+              ],
+            );
+          },
         );
       }
 
@@ -205,52 +230,88 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
         final today = DateTime.now();
         final todayKey = DateTime(today.year, today.month, today.day);
         final center = DateTime(selected.year, selected.month, selected.day);
-        final start = center.subtract(const Duration(days: 3));
-        final days = List.generate(7, (i) {
+        // Show 5-day window centered on selected day
+        final start = center.subtract(const Duration(days: 2));
+        final days = List.generate(5, (i) {
           final d = start.add(Duration(days: i));
           return DateTime(d.year, d.month, d.day);
         });
-        return SizedBox(
-          height: 68,
-          child: Row(children: [
-            IconButton(
-              icon: const Icon(Icons.chevron_left, size: 20),
-              onPressed: () => setState(() => _selectedDay = _selectedDay.subtract(const Duration(days: 7))),
-            ),
-            Expanded(
-              child: Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (int i = 0; i < days.length; i++) ...[
-                      _dayChip(days[i], selected, todayKey),
-                      if (i != days.length - 1) const SizedBox(width: 8),
-                    ]
-                  ],
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // Adaptive sizing to avoid overflow on narrow tiles
+            const count = 5;
+            final maxW = constraints.maxWidth.isFinite ? constraints.maxWidth : 0.0;
+            // More aggressive compacting for narrow widths
+            final narrow = maxW < 420;
+            final arrowW = narrow ? 20.0 : 28.0;
+            final gap = narrow ? 2.0 : 5.0;
+            final minChip = 24.0;
+            final maxChip = 44.0;
+            // Aggressive safety margin to avoid right-edge overflow
+            const extraMargin = 32.0;
+            final avail = maxW - (arrowW * 2) - extraMargin;
+            double chipW = (avail - gap * (count - 1)) / count;
+            // If calculation yields too-large chips (due to negative avail), clamp down
+            if (chipW.isNaN || chipW.isInfinite) chipW = minChip;
+            chipW = chipW.clamp(minChip, maxChip);
+            final stripH = narrow ? 48.0 : 56.0;
+            return SizedBox(
+              height: stripH,
+              child: Row(children: [
+                SizedBox(
+                  width: arrowW,
+                  child: IconButton(
+                    constraints: BoxConstraints.tightFor(width: arrowW, height: 36),
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.chevron_left, size: 20),
+                    onPressed: () => setState(() => _selectedDay = _selectedDay.subtract(const Duration(days: 5))),
+                  ),
                 ),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.chevron_right, size: 20),
-              onPressed: () => setState(() => _selectedDay = _selectedDay.add(const Duration(days: 7))),
-            ),
-          ]),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (int i = 0; i < days.length; i++) ...[
+                            _dayChip(days[i], selected, todayKey, chipW),
+                            if (i != days.length - 1) SizedBox(width: gap),
+                          ]
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: arrowW,
+                  child: IconButton(
+                    constraints: BoxConstraints.tightFor(width: arrowW, height: 36),
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.chevron_right, size: 20),
+                    onPressed: () => setState(() => _selectedDay = _selectedDay.add(const Duration(days: 5))),
+                  ),
+                ),
+              ]),
+            );
+          },
         );
       }
 
-      Widget _dayChip(DateTime d, DateTime selected, DateTime todayKey) {
+      Widget _dayChip(DateTime d, DateTime selected, DateTime todayKey, [double width = 56]) {
         final isSel = _sameDay(d, selected);
         final isToday = _sameDay(d, todayKey);
+        final compact = width <= 40;
         return GestureDetector(
           onTap: () => setState(() => _selectedDay = d),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            width: 56,
-            margin: const EdgeInsets.symmetric(vertical: 6),
+            width: width,
+            margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 0),
             decoration: BoxDecoration(
               color: isSel ? Theme.of(context).colorScheme.primary.withOpacity(.1) : Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: isSel ? Theme.of(context).colorScheme.primary : Colors.transparent, width: 1.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: isSel ? Theme.of(context).colorScheme.primary : Colors.transparent, width: 1.0),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -258,14 +319,14 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                 Text(
                   _weekdayShort(d.weekday),
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: compact ? 9 : 10,
                     fontWeight: FontWeight.w600,
                     color: isSel ? Theme.of(context).colorScheme.primary : Colors.grey[600],
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: compact ? 2 : 3),
                 Container(
-                  padding: const EdgeInsets.all(7),
+                  padding: EdgeInsets.all(compact ? 5 : 6),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: isToday
@@ -275,7 +336,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                   child: Text(
                     '${d.day}',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: compact ? 10 : 11,
                       fontWeight: FontWeight.w600,
                       color: isToday ? Colors.white : (isSel ? Theme.of(context).colorScheme.primary : Colors.black87),
                     ),

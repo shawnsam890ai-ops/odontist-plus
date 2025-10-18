@@ -79,4 +79,14 @@ class RevenueRepository {
   }
 
   double totalRevenue() => _entries.fold(0, (p, e) => p + e.amount);
+
+  Future<bool> removeById(String id) async {
+    final before = _entries.length;
+    _entries.removeWhere((e) => e.id == id);
+    final changed = before != _entries.length;
+    if (changed) {
+      await _persist();
+    }
+    return changed;
+  }
 }

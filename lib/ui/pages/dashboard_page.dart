@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import '../../providers/patient_provider.dart';
 import '../../providers/revenue_provider.dart';
+import '../../models/treatment_session.dart';
+import '../../core/enums.dart';
 import '../../providers/inventory_provider.dart';
 import '../../models/inventory_item.dart';
 import '../../providers/staff_attendance_provider.dart';
@@ -20,6 +22,7 @@ import '../widgets/cases_overview_chart.dart';
 import '../widgets/revenue_trend_card.dart';
 import '../widgets/patient_overview_card.dart';
 import '../widgets/upcoming_schedule_panel.dart';
+import '../widgets/upcoming_schedule_compact.dart';
 import '../widgets/upcoming_appointment_widget.dart';
 import '../widgets/staff_attendance_overview_widget.dart';
 import 'attendance_view.dart';
@@ -339,10 +342,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   title: '',
                   child: SizedBox(
                     height: 260,
-                    child: const UpcomingSchedulePanel(
-                      padding: EdgeInsets.fromLTRB(0, 8, 0, 12),
-                      showDoctorFilter: false,
-                      showTitle: false,
+                    child: const UpcomingScheduleCompact(
+                      padding: EdgeInsets.fromLTRB(0, 4, 0, 8),
                     ),
                   ),
                 ).withRadius(12),
@@ -416,10 +417,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   title: '',
                   child: SizedBox(
                     height: 560,
-                    child: const UpcomingSchedulePanel(
-                      padding: EdgeInsets.fromLTRB(12, 8, 12, 12),
-                      showDoctorFilter: false,
-                      showTitle: false,
+                    child: const UpcomingScheduleCompact(
+                      padding: EdgeInsets.fromLTRB(8, 4, 8, 8),
                     ),
                   ),
                 ).withRadius(20),
@@ -1413,6 +1412,15 @@ class _RevenueListPanel extends StatefulWidget {
 }
 
 class _RevenueListPanelState extends State<_RevenueListPanel> {
+  @override
+  void initState() {
+    super.initState();
+    // Make sure dependent providers are loaded so we can map patientId -> name
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<PatientProvider>().ensureLoaded();
+      context.read<RevenueProvider>().ensureLoaded();
+    });
+  }
   String _filter = 'all'; // all | income | expense
   DateTime? _from;
   DateTime? _to;
@@ -1458,7 +1466,9 @@ class _RevenueListPanelState extends State<_RevenueListPanel> {
     final total = list.fold<double>(0, (p, e) => p + e.amount);
     final color = total >= 0 ? Colors.green : Colors.red;
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+  // Watch PatientProvider as well to rebuild when names load
+  context.watch<PatientProvider>();
+  return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
         child: Column(
@@ -1539,23 +1549,138 @@ class _RevenueListPanelState extends State<_RevenueListPanel> {
       Expanded(
         child: list.isEmpty
             ? const Center(child: Text('No entries'))
-            : ListView.separated(
+              : ListView.separated(
                 itemCount: list.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (context, i) {
                   final e = list[i];
                   final dateStr = '${e.date.year}-${e.date.month.toString().padLeft(2, '0')}-${e.date.day.toString().padLeft(2, '0')}';
                   final amtColor = e.amount >= 0 ? Colors.green : Colors.red;
+                  final displayDesc = _prettyRevenueDescription(context, e);
                   return ListTile(
                     dense: true,
-                    title: Text(e.description, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text('$dateStr${e.patientId.isNotEmpty ? '  •  ${e.patientId}' : ''}'),
-                    trailing: Text('${e.amount >= 0 ? '+' : ''}₹${e.amount.toStringAsFixed(0)}', style: TextStyle(color: amtColor, fontWeight: FontWeight.w700)),
+                    title: Text(displayDesc, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    // Show only date; hide internal UUIDs
+                    subtitle: Text(dateStr),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${e.amount >= 0 ? '+' : ''}₹${e.amount.toStringAsFixed(0)}',
+                          style: TextStyle(color: amtColor, fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: 'Delete entry',
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () async {
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (_) => AlertDialog(
+                                title: const Text('Delete entry?'),
+                                content: Text('Delete this ${e.amount >= 0 ? 'income' : 'expense'} entry from $dateStr (₹${e.amount.toStringAsFixed(0)})?'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                                  FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+                                ],
+                              ),
+                            );
+                            if (ok == true) {
+                              await context.read<RevenueProvider>().removeById(e.id);
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Entry deleted')));
+                            }
+                          },
+                        ),
+                      ],
+                    ),
                   );
                 },
               ),
       ),
     ]);
+  }
+
+  String _prettyRevenueDescription(BuildContext context, RevenueEntry e) {
+    // Medicine profit entries → show "<Patient Name> (<ID>) - medicine"
+    if (e.description.startsWith('Medicine profit:')) {
+      final p = context.read<PatientProvider>().byId(e.patientId);
+      if (p != null) return '${p.name} (${p.displayNumber}) - medicine';
+      return e.description;
+    }
+    // Ledger clinic revenue entries include a tag like rx:<sessionId>:<subId>
+    const prefix = 'Clinic revenue (ledger): ';
+    if (e.description.startsWith(prefix)) {
+      final tag = e.description.substring(prefix.length);
+      final sessionId = _extractSessionId(tag);
+      if (sessionId != null) {
+        final patient = context.read<PatientProvider>().byId(e.patientId);
+        if (patient != null) {
+          final s = patient.sessions.where((s) => s.id == sessionId).cast<TreatmentSession?>().firstOrNull ??
+              (patient.sessions.isNotEmpty ? patient.sessions.first : null);
+          if (s != null) {
+            final purpose = _sessionPurpose(s);
+            return '${patient.name} (${patient.displayNumber}) - $purpose';
+          }
+        }
+      }
+    }
+    return e.description;
+  }
+
+  String? _extractSessionId(String tag) {
+    // tag format: rx:<sessionId>:<...>
+    final idx = tag.indexOf('rx:');
+    if (idx == -1) return null;
+    final rest = tag.substring(idx + 3);
+    final parts = rest.split(':');
+    if (parts.isEmpty) return null;
+    return parts.first;
+  }
+
+  String _sessionPurpose(TreatmentSession s) {
+    switch (s.type) {
+      case TreatmentType.general:
+        // Prefer treatments done; fallback to first chief complaint
+        if (s.treatmentsDone.isNotEmpty) {
+          return _doneSummary(s.treatmentsDone);
+        }
+        final cc = s.chiefComplaint?.complaints;
+        return (cc != null && cc.isNotEmpty) ? cc.first : 'General visit';
+      case TreatmentType.orthodontic:
+        return 'Orthodontic treatment';
+      case TreatmentType.rootCanal:
+        final sum = _planSummary(s.rootCanalPlans);
+        return sum ?? 'Root canal treatment';
+      case TreatmentType.prosthodontic:
+        final sum = _planSummary(s.prosthodonticPlans);
+        return sum ?? 'Prosthodontic treatment';
+      case TreatmentType.labWork:
+        return 'Lab work';
+    }
+  }
+
+  String _doneSummary(List<ToothTreatmentDoneEntry> done) {
+    final items = <String>[];
+    for (final d in done.take(2)) {
+      final tooth = d.toothNumber.isNotEmpty ? '${d.toothNumber}: ' : '';
+      items.add('$tooth${d.treatment}');
+    }
+    var s = items.join(', ');
+    if (done.length > 2) s += ' …';
+    return s.isEmpty ? 'General treatment' : s;
+  }
+
+  String? _planSummary(List<ToothPlanEntry> plans) {
+    if (plans.isEmpty) return null;
+    final parts = <String>[];
+    for (final e in plans.take(2)) {
+      final tooth = (e.toothNumber.isNotEmpty) ? '${e.toothNumber}: ' : '';
+      parts.add('$tooth${e.plan}');
+    }
+    var s = parts.join(', ');
+    if (plans.length > 2) s += ' …';
+    return s;
   }
 
   Widget _monthPicker() {

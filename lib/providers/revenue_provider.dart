@@ -49,4 +49,10 @@ class RevenueProvider extends ChangeNotifier {
     await _repo.clearAll();
     notifyListeners();
   }
+
+  Future<bool> removeById(String id) async {
+    final ok = await _repo.removeById(id);
+    if (ok) notifyListeners();
+    return ok;
+  }
 }
