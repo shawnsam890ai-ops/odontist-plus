@@ -69,6 +69,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   final List<String> _rvgImages = [];
   DateTime? _nextAppointment;
   final TextEditingController _notes = TextEditingController();
+  // Consent form attachment (single image path)
+  String? _consentFormPath;
 
   // Prescription
   final List<PrescriptionItem> _prescription = [];
@@ -658,6 +660,61 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                   ),
                 ),
                 const SizedBox(height: 8),
+                // New: Select common findings, optionally specify a tooth, then Add
+                Builder(builder: (ctx) {
+                  final opt = ctx.watch<OptionsProvider>();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SearchEditableMultiSelect(
+                        label: 'Select Findings',
+                        options: opt.oralFindingsOptions,
+                        initial: _selectedOralFindingOptions,
+                        onChanged: (vals) => setState(() => _selectedOralFindingOptions = vals),
+                        onAdd: (v) => opt.addValue('oralFindings', v),
+                        onDelete: (v) async {
+                          final ok = await opt.removeValue('oralFindings', v);
+                          if (!ok && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: option in use.')));
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 90,
+                            child: TextField(
+                              controller: _inlineToothController,
+                              decoration: const InputDecoration(labelText: 'Tooth'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.add),
+                            label: const Text('Add Selected'),
+                            onPressed: () {
+                              if (_selectedOralFindingOptions.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select at least one finding')));
+                                return;
+                              }
+                              final tooth = _inlineToothController.text.trim();
+                              setState(() {
+                                for (final f in _selectedOralFindingOptions) {
+                                  _oralFindings.add(OralExamFinding(toothNumber: tooth, finding: f));
+                                }
+                                _sortByTooth(_oralFindings, (f) => f.toothNumber);
+                                _selectedOralFindingOptions.clear();
+                                _inlineToothController.clear();
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                }),
+                const SizedBox(height: 8),
                 if (_selectedOralFindingOptions.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
@@ -1093,6 +1150,44 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             ]),
           ),
         ),
+        // Consent Form: after media attachments
+        Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionTitle('Consent Form (Image)'),
+                Row(children: [
+                  ElevatedButton.icon(
+                    onPressed: _pickConsentFormImage,
+                    icon: const Icon(Icons.photo_library),
+                    label: Text(_consentFormPath == null ? 'Attach Image' : 'Change Image'),
+                  ),
+                  const SizedBox(width: 8),
+                  if (_consentFormPath != null) ...[
+                    OutlinedButton.icon(
+                      onPressed: _viewConsentFormImage,
+                      icon: const Icon(Icons.visibility),
+                      label: const Text('View'),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: 'Remove',
+                      icon: const Icon(Icons.delete, size: 18),
+                      onPressed: () => setState(() => _consentFormPath = null),
+                    )
+                  ]
+                ]),
+                if (_consentFormPath != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_consentFormPath!.split('/').last, style: Theme.of(context).textTheme.bodySmall),
+                ]
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -1168,6 +1263,40 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                     onChanged: (v)=> setState(()=> _selectedOrthoDoctor = v),
                   );
                 }),
+                const SizedBox(height: 12),
+                // Consent Form (image) after Doctor in Charge
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Consent Form (Image)', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      ElevatedButton.icon(
+                        onPressed: _pickConsentFormImage,
+                        icon: const Icon(Icons.photo_library),
+                        label: Text(_consentFormPath == null ? 'Attach Image' : 'Change Image'),
+                      ),
+                      const SizedBox(width: 8),
+                      if (_consentFormPath != null) ...[
+                        OutlinedButton.icon(
+                          onPressed: _viewConsentFormImage,
+                          icon: const Icon(Icons.visibility),
+                          label: const Text('View'),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: 'Remove',
+                          icon: const Icon(Icons.delete, size: 18),
+                          onPressed: () => setState(() => _consentFormPath = null),
+                        )
+                      ]
+                    ]),
+                    if (_consentFormPath != null) ...[
+                      const SizedBox(height: 6),
+                      Text(_consentFormPath!.split('/').last, style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
@@ -1538,6 +1667,40 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                     onChanged: (v)=> setState(()=> _selectedRcDoctor = v),
                   );
                 }),
+                const SizedBox(height: 12),
+                // Consent Form (image) after Doctor in Charge
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Consent Form (Image)', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      ElevatedButton.icon(
+                        onPressed: _pickConsentFormImage,
+                        icon: const Icon(Icons.photo_library),
+                        label: Text(_consentFormPath == null ? 'Attach Image' : 'Change Image'),
+                      ),
+                      const SizedBox(width: 8),
+                      if (_consentFormPath != null) ...[
+                        OutlinedButton.icon(
+                          onPressed: _viewConsentFormImage,
+                          icon: const Icon(Icons.visibility),
+                          label: const Text('View'),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: 'Remove',
+                          icon: const Icon(Icons.delete, size: 18),
+                          onPressed: () => setState(() => _consentFormPath = null),
+                        )
+                      ]
+                    ]),
+                    if (_consentFormPath != null) ...[
+                      const SizedBox(height: 6),
+                      Text(_consentFormPath!.split('/').last, style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ],
+                ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _rcTotal,
@@ -2034,6 +2197,40 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                     )
                   ]);
                 }),
+                const SizedBox(height: 12),
+                // Consent Form (image) after Doctor in Charge
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Consent Form (Image)', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      ElevatedButton.icon(
+                        onPressed: _pickConsentFormImage,
+                        icon: const Icon(Icons.photo_library),
+                        label: Text(_consentFormPath == null ? 'Attach Image' : 'Change Image'),
+                      ),
+                      const SizedBox(width: 8),
+                      if (_consentFormPath != null) ...[
+                        OutlinedButton.icon(
+                          onPressed: _viewConsentFormImage,
+                          icon: const Icon(Icons.visibility),
+                          label: const Text('View'),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: 'Remove',
+                          icon: const Icon(Icons.delete, size: 18),
+                          onPressed: () => setState(() => _consentFormPath = null),
+                        )
+                      ]
+                    ]),
+                    if (_consentFormPath != null) ...[
+                      const SizedBox(height: 6),
+                      Text(_consentFormPath!.split('/').last, style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ],
+                ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _prosthoTotal,
@@ -2575,6 +2772,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           payments: List.from(_generalPayments),
           mediaPaths: List.from(_mediaPaths),
           nextAppointment: _nextAppointment,
+          consentFormPath: _consentFormPath,
         );
       case TreatmentType.orthodontic:
         return TreatmentSession(
@@ -2588,6 +2786,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           orthoDoctorInCharge: _selectedOrthoDoctor,
           orthoSteps: List.from(_orthoSteps),
           nextAppointment: _nextAppointment,
+          consentFormPath: _consentFormPath,
         );
       case TreatmentType.rootCanal:
         return TreatmentSession(
@@ -2603,6 +2802,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           // Allow prescription captured from RCT form as well
           prescription: List.from(_prescription),
           nextAppointment: _nextAppointment,
+          consentFormPath: _consentFormPath,
         );
       case TreatmentType.prosthodontic:
         return TreatmentSession(
@@ -2616,6 +2816,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           prosthodonticPlans: List.from(_prosthoPlans),
           prosthodonticDoctorInCharge: _selectedProsthoDoctor,
           nextAppointment: _nextAppointment,
+          consentFormPath: _consentFormPath,
         );
       case TreatmentType.labWork:
         return TreatmentSession(
@@ -2998,31 +3199,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
 
   
 
-  void _addInlineOralFinding() {
-    if (_selectedOralFindingOptions.isEmpty) {
-      // Fallback: if user typed manual finding text in old field (still present logically)
-      final manual = _inlineFindingController.text.trim();
-      if (manual.isEmpty) return;
-      final tooth = _inlineToothController.text.trim();
-      setState(() {
-        _oralFindings.add(OralExamFinding(toothNumber: tooth, finding: manual));
-        _sortByTooth(_oralFindings, (f) => f.toothNumber);
-        _inlineFindingController.clear();
-        _inlineToothController.clear();
-      });
-      return;
-    }
-    final tooth = _inlineToothController.text.trim();
-    setState(() {
-      for (final f in _selectedOralFindingOptions) {
-        _oralFindings.add(OralExamFinding(toothNumber: tooth, finding: f));
-      }
-      _sortByTooth(_oralFindings, (f) => f.toothNumber);
-      _selectedOralFindingOptions.clear();
-      _inlineToothController.clear();
-      _inlineFindingController.clear();
-    });
-  }
+  // Removed deprecated inline oral finding aggregator (unused)
 
   Future<void> _attachMediaToInvestigation(int index) async {
     final res = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false);
@@ -3121,6 +3298,32 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         }
       });
     }
+  }
+
+  // Consent form helpers
+  Future<void> _pickConsentFormImage() async {
+    final res = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false);
+    if (res != null && res.files.isNotEmpty) {
+      final f = res.files.first;
+      if (f.path != null) {
+        setState(() => _consentFormPath = f.path);
+      }
+    }
+  }
+
+  void _viewConsentFormImage() {
+    final path = _consentFormPath;
+    if (path == null) return;
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        child: InteractiveViewer(
+          minScale: 0.5,
+          maxScale: 4.0,
+          child: Image.file(File(path), fit: BoxFit.contain),
+        ),
+      ),
+    );
   }
 
   void _addPrescriptionItem() {
@@ -5211,6 +5414,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       _followUpParentId = s.parentSessionId; // retain linkage if it was a follow-up
       _selectedType = s.type;
       _showRxForm = true;
+      _consentFormPath = s.consentFormPath;
 
       // Clear all form collections first
       _selectedComplaints.clear();
@@ -5318,6 +5522,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     _selectedTreatmentDoneOptions.clear();
     _mediaPaths.clear();
     _rvgImages.clear();
+  _consentFormPath = null;
     _nextAppointment = null;
     _notes.clear();
     _prescription.clear();

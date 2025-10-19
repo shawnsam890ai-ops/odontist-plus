@@ -466,6 +466,7 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
     );
   }
 
+  // ignore: unused_element
   Future<void> _showHolidayDialog() async {
     final holidays = context.read<HolidaysProvider>();
     final year = _month.year;
@@ -542,6 +543,7 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
     setState(() {});
   }
 
+  // ignore: unused_element
   Future<void> _showSetSalaryDialog(String staffName) async {
     final provider = context.read<StaffAttendanceProvider>();
     final existing = provider.getSalaryRecord(staffName, _month.year, _month.month);
@@ -906,6 +908,7 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
   }
 
   // (old _detailRow helper removed; replaced by localized _row in dialog widget)
+  // ignore: unused_element
   Future<bool?> _confirmMarkPaid(String staff, double amount) async {
     return showDialog<bool>(
       context: context,
@@ -920,6 +923,7 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
     );
   }
 
+  // ignore: unused_element
   Future<bool?> _confirmUnmarkPaid(String staff) async {
     return showDialog<bool>(
       context: context,
@@ -934,6 +938,7 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
     );
   }
 
+  // ignore: unused_element
   bool _matchesPhone(StaffAttendanceProvider provider, String staffName, String query) {
     if (query.isEmpty) return true;
     final m = provider.staffMembers.firstWhere((s) => s.name == staffName, orElse: () => StaffMember(id: '', name: staffName));
