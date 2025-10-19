@@ -22,6 +22,33 @@
 				"$dart-cli"
 			],
 			"group": "build"
+		},
+		{
+			"label": "flutter pub get",
+			"type": "shell",
+			"command": "flutter",
+			"args": [
+				"pub",
+				"get"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$flutter-build"
+			],
+			"group": "build"
+		},
+		{
+			"label": "flutter analyze",
+			"type": "shell",
+			"command": "flutter",
+			"args": [
+				"analyze"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$flutter-build"
+			],
+			"group": "build"
 		}
 	]
 }

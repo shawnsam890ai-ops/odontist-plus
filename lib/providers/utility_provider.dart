@@ -86,16 +86,38 @@ class UtilityProvider with ChangeNotifier {
   }
 
   Future<void> deleteBill(String id) async {
+    // Remove matching revenue entry before deleting
+    try {
+      final existing = bills.firstWhere((e) => e.id == id);
+      final oldDesc = 'Bill: ${existing.itemName} ${existing.date.year}-${existing.date.month.toString().padLeft(2, '0')}-${existing.date.day.toString().padLeft(2, '0')}';
+      await revenue.removeByDescription(oldDesc);
+    } catch (_) {}
     await _repo.deleteBill(id);
     notifyListeners();
   }
 
   Future<void> updateBill(BillEntry updated) async {
+    // Remove old revenue entry (based on existing record), then add for updated.
+    try {
+      final existing = bills.firstWhere((e) => e.id == updated.id);
+      final oldDesc = 'Bill: ${existing.itemName} ${existing.date.year}-${existing.date.month.toString().padLeft(2, '0')}-${existing.date.day.toString().padLeft(2, '0')}';
+      await revenue.removeByDescription(oldDesc);
+    } catch (_) {}
     await _repo.updateBill(updated);
+    final newDesc = 'Bill: ${updated.itemName} ${updated.date.year}-${updated.date.month.toString().padLeft(2, '0')}-${updated.date.day.toString().padLeft(2, '0')}';
+    await revenue.removeByDescription(newDesc); // dedupe just in case
+    await revenue.addRevenue(patientId: 'bill', description: newDesc, amount: -updated.amount);
     notifyListeners();
   }
 
   Future<void> deleteBills(List<String> ids) async {
+    for (final id in ids) {
+      try {
+        final existing = bills.firstWhere((e) => e.id == id);
+        final oldDesc = 'Bill: ${existing.itemName} ${existing.date.year}-${existing.date.month.toString().padLeft(2, '0')}-${existing.date.day.toString().padLeft(2, '0')}';
+        await revenue.removeByDescription(oldDesc);
+      } catch (_) {}
+    }
     await _repo.deleteBills(ids);
     notifyListeners();
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui' show FontFeature;
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import '../../providers/patient_provider.dart';
@@ -15,7 +16,11 @@ import '../../models/medicine.dart';
 import '../../providers/utility_provider.dart';
 import '../../models/bill_entry.dart';
 import 'package:printing/printing.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:flutter/services.dart' show MissingPluginException;
+import 'dart:io' show File;
 import '../../models/revenue_entry.dart';
 // Removed fl_chart and revenue_entry imports after chart removal
 import '../../providers/auth_provider.dart';
@@ -916,7 +921,7 @@ class _DashboardPageState extends State<DashboardPage> {
   void _showAddBillDialog() {
     final itemCtrl = TextEditingController();
     final amountCtrl = TextEditingController(text: '0');
-    final receiptCtrl = TextEditingController();
+  final receiptCtrl = TextEditingController();
     DateTime date = DateTime.now();
     String category = 'Consumables';
     showDialog(
@@ -956,7 +961,34 @@ class _DashboardPageState extends State<DashboardPage> {
               const SizedBox(height: 8),
               TextField(controller: amountCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Cost of purchase')),
               const SizedBox(height: 8),
-              TextField(controller: receiptCtrl, decoration: const InputDecoration(labelText: 'Attach receipt (path or note)')),
+              Row(children: [
+                Expanded(child: TextField(controller: receiptCtrl, decoration: const InputDecoration(labelText: 'Receipt (path or note)'))),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Pick file',
+                  icon: const Icon(Icons.attach_file),
+                  onPressed: () async {
+                    final res = await FilePicker.platform.pickFiles(withReadStream: false);
+                    if (res != null && res.files.isNotEmpty) {
+                      final path = res.files.single.path;
+                      if (path != null) {
+                        setSt(() => receiptCtrl.text = path);
+                      }
+                    }
+                  },
+                ),
+                if (receiptCtrl.text.isNotEmpty) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    tooltip: 'Open receipt',
+                    icon: const Icon(Icons.visibility),
+                    onPressed: () async {
+                      final path = receiptCtrl.text;
+                      await openReceiptWithFallback(context, path);
+                    },
+                  )
+                ]
+              ]),
             ]),
           ),
           actions: [
@@ -2717,6 +2749,10 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
   String _mode = 'recent';
   final Set<String> _selected = {};
   String _categoryFilter = 'all';
+  // Analytics controls
+  String _analyticsPeriod = 'month'; // 'month' | 'year'
+  int _analyticsYear = DateTime.now().year;
+  int _analyticsMonth = DateTime.now().month;
 
   List<int> _years(List bills) {
     final st = <int>{};
@@ -2738,97 +2774,185 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
     } else {
       list = list.take(12).toList();
     }
-    return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-        child: Row(children: [
-          const Text('Bills History', style: TextStyle(fontWeight: FontWeight.w600)),
-          const Spacer(),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _categoryFilter,
-              items: const [
-                DropdownMenuItem(value: 'all', child: Text('All Categories')),
-                DropdownMenuItem(value: 'Consumables', child: Text('Consumables')),
-                DropdownMenuItem(value: 'Equipment', child: Text('Equipment')),
-                DropdownMenuItem(value: 'Maintenance', child: Text('Maintenance')),
-                DropdownMenuItem(value: 'Other', child: Text('Other')),
-              ],
-              onChanged: (v) => setState(() => _categoryFilter = v ?? 'all'),
+    // Analytics compute
+    Map<String, double> analyticsTotals = {
+      'Consumables': 0,
+      'Equipment': 0,
+      'Maintenance': 0,
+      'Other': 0,
+    };
+    Iterable billsForAnalytics = util.bills;
+    if (_analyticsPeriod == 'year') {
+      billsForAnalytics = billsForAnalytics.where((b) => b.date.year == _analyticsYear);
+    } else {
+      billsForAnalytics = billsForAnalytics.where((b) => b.date.year == _analyticsYear && b.date.month == _analyticsMonth);
+    }
+    for (final b in billsForAnalytics) {
+      final key = analyticsTotals.containsKey(b.category) ? b.category : 'Other';
+      analyticsTotals[key] = (analyticsTotals[key] ?? 0) + (b.amount as double);
+    }
+
+    return SingleChildScrollView(
+      child: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          child: Row(children: [
+            const Text('Bills History', style: TextStyle(fontWeight: FontWeight.w600)),
+            const Spacer(),
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _categoryFilter,
+                items: const [
+                  DropdownMenuItem(value: 'all', child: Text('All Categories')),
+                  DropdownMenuItem(value: 'Consumables', child: Text('Consumables')),
+                  DropdownMenuItem(value: 'Equipment', child: Text('Equipment')),
+                  DropdownMenuItem(value: 'Maintenance', child: Text('Maintenance')),
+                  DropdownMenuItem(value: 'Other', child: Text('Other')),
+                ],
+                onChanged: (v) => setState(() => _categoryFilter = v ?? 'all'),
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _mode,
-              items: [
-                const DropdownMenuItem(value: 'recent', child: Text('Recent 12 months')),
-                ...years.map((y) => DropdownMenuItem(value: y.toString(), child: Text(y.toString())))
-              ],
-              onChanged: (v) => setState(() => _mode = v ?? 'recent'),
+            const SizedBox(width: 8),
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _mode,
+                items: [
+                  const DropdownMenuItem(value: 'recent', child: Text('Recent 12 months')),
+                  ...years.map((y) => DropdownMenuItem(value: y.toString(), child: Text(y.toString())))
+                ],
+                onChanged: (v) => setState(() => _mode = v ?? 'recent'),
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          FilledButton.tonalIcon(
-            onPressed: _selected.isEmpty ? null : () async {
-              await context.read<UtilityProvider>().deleteBills(_selected.toList());
-              setState(() => _selected.clear());
-            },
-            icon: const Icon(Icons.delete_sweep),
-            label: const Text('Delete Selected'),
-          ),
-        ]),
-      ),
-      const Divider(height: 1),
-      Expanded(
-        child: list.isEmpty
-            ? const Center(child: Text('No bills'))
-            : ListView.separated(
-                itemCount: list.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, i) {
-                  final b = list[i];
-                  final dateStr = '${b.date.year}-${b.date.month.toString().padLeft(2, '0')}-${b.date.day.toString().padLeft(2, '0')}';
-                  return ListTile(
-                    dense: true,
-                    leading: Checkbox(
-                      value: _selected.contains(b.id),
-                      onChanged: (v) {
-                        setState(() {
-                          if (v == true) {
-                            _selected.add(b.id);
-                          } else {
-                            _selected.remove(b.id);
+            const SizedBox(width: 8),
+            FilledButton.tonalIcon(
+              onPressed: _selected.isEmpty ? null : () async {
+                await context.read<UtilityProvider>().deleteBills(_selected.toList());
+                setState(() => _selected.clear());
+              },
+              icon: const Icon(Icons.delete_sweep),
+              label: const Text('Delete Selected'),
+            ),
+          ]),
+        ),
+        // Analytics bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Text('Category analytics:'),
+              const SizedBox(width: 8),
+              DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _analyticsPeriod,
+                  items: const [
+                    DropdownMenuItem(value: 'month', child: Text('Month')),
+                    DropdownMenuItem(value: 'year', child: Text('Year')),
+                  ],
+                  onChanged: (v) => setState(() => _analyticsPeriod = v ?? 'month'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (_analyticsPeriod == 'month') ...[
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: _analyticsMonth,
+                    items: List.generate(12, (i) => i + 1).map((m) => DropdownMenuItem(value: m, child: Text('M$m'))).toList(),
+                    onChanged: (v) => setState(() => _analyticsMonth = v ?? DateTime.now().month),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: _analyticsYear,
+                  items: (years.isEmpty ? [DateTime.now().year] : years).map((y) => DropdownMenuItem(value: y, child: Text(y.toString()))).toList(),
+                  onChanged: (v) => setState(() => _analyticsYear = v ?? DateTime.now().year),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              _CategoryTotalChip(label: 'Consumables', amount: analyticsTotals['Consumables'] ?? 0),
+              _CategoryTotalChip(label: 'Equipment', amount: analyticsTotals['Equipment'] ?? 0),
+              _CategoryTotalChip(label: 'Maintenance', amount: analyticsTotals['Maintenance'] ?? 0),
+              _CategoryTotalChip(label: 'Other', amount: analyticsTotals['Other'] ?? 0),
+              _CategoryTotalChip(label: 'Total', amount: analyticsTotals.values.fold<double>(0, (a, b) => a + b)),
+            ])
+          ]),
+        ),
+        const Divider(height: 1),
+        if (list.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(child: Text('No bills')),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: list.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, i) {
+              final b = list[i];
+              final dateStr = '${b.date.year}-${b.date.month.toString().padLeft(2, '0')}-${b.date.day.toString().padLeft(2, '0')}';
+              return ListTile(
+                dense: true,
+                leading: Checkbox(
+                  value: _selected.contains(b.id),
+                  onChanged: (v) {
+                    setState(() {
+                      if (v == true) {
+                        _selected.add(b.id);
+                      } else {
+                        _selected.remove(b.id);
+                      }
+                    });
+                  },
+                ),
+                title: Text('${b.itemName} • ₹${b.amount.toStringAsFixed(0)}'),
+                subtitle: Text('Date: $dateStr • Category: ${b.category}${b.receiptPath != null ? ' • Receipt: ${b.receiptPath}' : ''}'),
+                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (b.receiptPath != null && b.receiptPath!.isNotEmpty)
+                    IconButton(
+                      tooltip: 'Open receipt',
+                      icon: const Icon(Icons.visibility),
+                      onPressed: () async {
+                        try {
+                          await OpenFilex.open(b.receiptPath!);
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Could not open receipt: $e')),
+                            );
                           }
-                        });
-                      },
-                    ),
-                    title: Text('${b.itemName} • ₹${b.amount.toStringAsFixed(0)}'),
-                    subtitle: Text('Date: $dateStr • Category: ${b.category}${b.receiptPath != null ? ' • Receipt: ${b.receiptPath}' : ''}'),
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (v) async {
-                        if (v == 'edit') {
-                          await _showEditBillDialog(b);
-                        } else if (v == 'delete') {
-                          await context.read<UtilityProvider>().deleteBill(b.id);
                         }
                       },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'edit', child: Text('Edit')),
-                        PopupMenuItem(value: 'delete', child: Text('Delete')),
-                      ],
                     ),
-                  );
-                },
-              ),
-      ),
-    ]);
+                  PopupMenuButton<String>(
+                    onSelected: (v) async {
+                      if (v == 'edit') {
+                        await _showEditBillDialog(b);
+                      } else if (v == 'delete') {
+                        await context.read<UtilityProvider>().deleteBill(b.id);
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'edit', child: Text('Edit')),
+                      PopupMenuItem(value: 'delete', child: Text('Delete')),
+                    ],
+                  ),
+                ]),
+              );
+            },
+          ),
+      ]),
+    );
   }
 
   Future<void> _showEditBillDialog(b) async {
     final itemCtrl = TextEditingController(text: b.itemName);
     final amountCtrl = TextEditingController(text: b.amount.toStringAsFixed(0));
-    final receiptCtrl = TextEditingController(text: b.receiptPath ?? '');
+  final receiptCtrl = TextEditingController(text: b.receiptPath ?? '');
     DateTime date = b.date;
     String category = b.category;
     await showDialog(
@@ -2868,7 +2992,32 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
               const SizedBox(height: 8),
               TextField(controller: amountCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Cost of purchase')),
               const SizedBox(height: 8),
-              TextField(controller: receiptCtrl, decoration: const InputDecoration(labelText: 'Attach receipt (path or note)')),
+              Row(children: [
+                Expanded(child: TextField(controller: receiptCtrl, decoration: const InputDecoration(labelText: 'Receipt (path or note)'))),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Pick file',
+                  icon: const Icon(Icons.attach_file),
+                  onPressed: () async {
+                    final res = await FilePicker.platform.pickFiles(withReadStream: false);
+                    if (res != null && res.files.isNotEmpty) {
+                      final path = res.files.single.path;
+                      if (path != null) setSt(() => receiptCtrl.text = path);
+                    }
+                  },
+                ),
+                if (receiptCtrl.text.isNotEmpty) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    tooltip: 'Open receipt',
+                    icon: const Icon(Icons.visibility),
+                    onPressed: () async {
+                      final path = receiptCtrl.text;
+                      await openReceiptWithFallback(context, path);
+                    },
+                  )
+                ]
+              ]),
             ]),
           ),
           actions: [
@@ -2887,6 +3036,95 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
           ],
         ),
       ),
+    );
+  }
+
+}
+
+class _CategoryTotalChip extends StatelessWidget {
+  final String label;
+  final double amount;
+  const _CategoryTotalChip({required this.label, required this.amount});
+
+  @override
+  Widget build(BuildContext context) {
+    final text = '₹${amount.toStringAsFixed(0)}';
+    return Chip(
+      label: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(label),
+        const SizedBox(width: 6),
+        Text(text, style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()])),
+      ]),
+      avatar: const Icon(Icons.category, size: 18),
+    );
+  }
+}
+
+// Opens a receipt file path using OpenFilex; if the platform plugin isn't available
+// or opening fails, falls back to a simple in-app preview for images/PDFs when possible.
+Future<void> openReceiptWithFallback(BuildContext context, String path) async {
+  try {
+    await OpenFilex.open(path);
+    return;
+  } on MissingPluginException catch (_) {
+    // Fall through to preview
+  } catch (e) {
+    // Try preview if supported
+  }
+
+  final lower = path.toLowerCase();
+  if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.gif') || lower.endsWith('.bmp') || lower.endsWith('.webp')) {
+    await showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: InteractiveViewer(
+          child: Image.file(
+            // ignore: deprecated_member_use
+            File(path),
+            errorBuilder: (_, __, ___) => const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Could not load image.'),
+            ),
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+    );
+    return;
+  }
+
+  if (lower.endsWith('.pdf')) {
+    // Use printing's built-in PdfPreview via a minimal wrapper
+    await showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: SizedBox(
+          width: 800,
+          height: 600,
+          child: PdfPreview(
+            allowPrinting: false,
+            allowSharing: false,
+            build: (format) async {
+              try {
+                // ignore: deprecated_member_use
+                final bytes = await File(path).readAsBytes();
+                return bytes;
+              } catch (_) {
+                return Uint8List(0);
+              }
+            },
+          ),
+        ),
+      ),
+    );
+    return;
+  }
+
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open receipt on this device.')),
     );
   }
 }
