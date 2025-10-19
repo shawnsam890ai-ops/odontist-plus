@@ -12,6 +12,7 @@ import '../../models/procedures.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import '../../providers/patient_provider.dart';
@@ -770,21 +771,31 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           DataCell(Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              IconButton(
-                                icon: Icon(
-                                  _investigationFindings[i].imagePath == null ? Icons.attach_file : Icons.visibility,
-                                  color: _investigationFindings[i].imagePath == null ? null : Colors.teal,
+                              if (_investigationFindings[i].imagePath != null) ...[
+                                IconButton(
+                                  icon: const Icon(Icons.visibility, color: Colors.teal),
+                                  tooltip: 'View Attachment',
+                                  onPressed: () async {
+                                    final p = _investigationFindings[i].imagePath!;
+                                    await _viewFileWithFallback(p);
+                                  },
                                 ),
-                                tooltip: _investigationFindings[i].imagePath == null ? 'Attach Media' : 'View Attachment',
-                                onPressed: () async {
-                                  if (_investigationFindings[i].imagePath == null) {
+                                IconButton(
+                                  icon: const Icon(Icons.attach_file),
+                                  tooltip: 'Change Media',
+                                  onPressed: () async {
                                     await _attachMediaToInvestigation(i);
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('File: ${_investigationFindings[i].imagePath}')));
-                                  }
-                                },
-                              ),
+                                  },
+                                ),
+                              ] else ...[
+                                IconButton(
+                                  icon: const Icon(Icons.attach_file),
+                                  tooltip: 'Attach Media',
+                                  onPressed: () async {
+                                    await _attachMediaToInvestigation(i);
+                                  },
+                                ),
+                              ],
                             ],
                           )),
                           DataCell(Row(
@@ -826,12 +837,21 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                               icon: Icon(_invPickedPath == null ? Icons.attach_file : Icons.image, color: _invPickedPath == null ? null : Colors.teal),
                               onPressed: _pickInvestigationMedia,
                             ),
-                            if (_invPickedPath != null)
+                            if (_invPickedPath != null) ...[
+                              IconButton(
+                                tooltip: 'Preview',
+                                icon: const Icon(Icons.visibility, size: 18, color: Colors.teal),
+                                onPressed: () async {
+                                  final p = _invPickedPath;
+                                  if (p != null) await _viewFileWithFallback(p);
+                                },
+                              ),
                               IconButton(
                                 tooltip: 'Clear',
                                 icon: const Icon(Icons.close, size: 18),
                                 onPressed: () => setState(() => _invPickedPath = null),
-                              )
+                              ),
+                            ]
                           ],
                         )),
                         DataCell(Row(
@@ -848,43 +868,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                     ],
                   ),
                 ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add Finding'),
-                        onPressed: _addInvestigationFindingInline,
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.upload_file),
-                        label: const Text('Upload RVG Image'),
-                        onPressed: () async {
-                          final res = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: true);
-                          if (res != null) {
-                            setState(() {
-                              for (final f in res.files) {
-                                if (f.path != null) _rvgImages.add(f.path!);
-                              }
-                            });
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                  if (_rvgImages.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      children: _rvgImages
-                          .map((p) => Chip(
-                                label: Text(p.split('/').last),
-                                onDeleted: () => setState(() => _rvgImages.remove(p)),
-                              ))
-                          .toList(),
-                    ),
-                  ],
+                  // Removed duplicate Add/Upload buttons to avoid redundancy with inline row controls
               ],
             ]),
           ),
@@ -1145,7 +1129,21 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               leading: const Icon(Icons.insert_drive_file, size: 18),
               title: Text(p.split('/').last),
               subtitle: Text(p),
-              trailing: IconButton(icon: const Icon(Icons.delete, size: 18), onPressed: () => setState(() => _mediaPaths.remove(p))),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'View',
+                    icon: const Icon(Icons.visibility, size: 18, color: Colors.teal),
+                    onPressed: () => _viewFileWithFallback(p),
+                  ),
+                  IconButton(
+                    tooltip: 'Delete',
+                    icon: const Icon(Icons.delete, size: 18),
+                    onPressed: () => setState(() => _mediaPaths.remove(p)),
+                  ),
+                ],
+              ),
             )),
             ]),
           ),
@@ -3219,6 +3217,51 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     final res = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false);
     if (res != null && res.files.isNotEmpty) {
       setState(() => _invPickedPath = res.files.single.path);
+    }
+  }
+
+  // Generic viewer with OS-open then in-app fallback for image/PDF
+  Future<void> _viewFileWithFallback(String path) async {
+    try {
+      final result = await OpenFilex.open(path);
+      if (result.type == ResultType.done) return;
+    } catch (_) {}
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.gif') || lower.endsWith('.bmp') || lower.endsWith('.webp')) {
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (_) => Dialog(
+          child: InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 4.0,
+            child: Image.file(File(path), fit: BoxFit.contain),
+          ),
+        ),
+      );
+      return;
+    }
+    if (lower.endsWith('.pdf')) {
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (_) => Dialog(
+          child: SizedBox(
+            width: 720,
+            height: 520,
+            child: PdfPreview(
+              build: (format) async => await File(path).readAsBytes(),
+              canChangePageFormat: false,
+              canChangeOrientation: false,
+              allowSharing: false,
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Cannot preview this file type: ${path.split('/').last}')));
     }
   }
 
@@ -5443,6 +5486,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           _selectedTreatmentDoneOptions = List.from(s.treatmentDoneOptions);
           _toothPlans.addAll(s.toothPlans);
             _treatmentsDone.addAll(s.treatmentsDone);
+          _mediaPaths
+            ..clear()
+            ..addAll(s.mediaPaths);
           _prescription.addAll(s.prescription);
           _generalPayments.addAll(s.payments);
           _notes.text = s.notes;
