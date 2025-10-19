@@ -93,7 +93,18 @@ class StaffAttendanceProvider with ChangeNotifier {
   MonthlySalaryRecord ensureSalaryRecord(String staffName, int year, int month) {
   final key = '$year-${month.toString().padLeft(2,'0')}';
     _salaryRecords.putIfAbsent(staffName, () => {});
-    _salaryRecords[staffName]!.putIfAbsent(key, () => MonthlySalaryRecord(year: year, month: month));
+    _salaryRecords[staffName]!.putIfAbsent(key, () {
+      final rec = MonthlySalaryRecord(year: year, month: month);
+      // Default payment date based on staff preferred day, if available
+      final staff = staffByName(staffName);
+      final day = staff?.preferredPaymentDay;
+      if (day != null && day > 0) {
+        final lastDay = DateTime(year, month + 1, 0).day;
+        final finalDay = day > lastDay ? lastDay : day;
+        rec.paymentDate = DateTime(year, month, finalDay);
+      }
+      return rec;
+    });
     return _salaryRecords[staffName]![key]!;
   }
 
@@ -144,6 +155,12 @@ class StaffAttendanceProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void setMonthlyDeduction(String staffName, int year, int month, double deduction) {
+    final rec = ensureSalaryRecord(staffName, year, month);
+    rec.deduction = deduction;
+    notifyListeners();
+  }
+
   void markSalaryPaid(String staffName, int year, int month, {double? amount, String? mode, DateTime? date}) {
     final rec = ensureSalaryRecord(staffName, year, month);
     if (amount != null) rec.paidAmount = amount;
@@ -153,7 +170,9 @@ class StaffAttendanceProvider with ChangeNotifier {
     // Post negative revenue entry for salary payout
     // Remove unnecessary braces around simple identifier (year)
     final desc = 'Staff Salary: $staffName $year-${month.toString().padLeft(2,'0')}';
-    final amt = amount ?? rec.totalSalary;
+    // Use net amount (salary - deduction). If explicit amount provided, prefer it.
+    final computedNet = (rec.totalSalary - (rec.deduction));
+    final amt = amount ?? computedNet;
     if (_revenue != null && amt != 0) {
       _revenue!.removeByDescription(desc);
       _revenue!.addRevenue(patientId: 'staff', description: desc, amount: -amt);
@@ -251,7 +270,8 @@ class MonthlySalaryRecord {
   double totalSalary; // decided externally (fixed or computed)
   bool paid;
   double paidAmount;
+  double deduction; // any deduction to apply for this month
   DateTime? paymentDate;
   String? paymentMode; // Cash / UPI / Bank / Other
-  MonthlySalaryRecord({required this.year, required this.month, this.totalSalary = 0, this.paid = false, this.paidAmount = 0, this.paymentDate, this.paymentMode});
+  MonthlySalaryRecord({required this.year, required this.month, this.totalSalary = 0, this.paid = false, this.paidAmount = 0, this.deduction = 0, this.paymentDate, this.paymentMode});
 }

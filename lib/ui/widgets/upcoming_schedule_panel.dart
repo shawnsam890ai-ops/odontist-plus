@@ -551,6 +551,18 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
             ),
           ),
           Tooltip(
+            message: 'Attended + Reschedule',
+            child: IconButton(
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: () async {
+                appts.markAttended(e.apptId!);
+                await _rescheduleAppt(e.apptId!, e.time);
+              },
+              icon: const Icon(Icons.event_available, color: Colors.teal),
+            ),
+          ),
+          Tooltip(
             message: 'Mark missed',
             child: IconButton(
               visualDensity: VisualDensity.compact,

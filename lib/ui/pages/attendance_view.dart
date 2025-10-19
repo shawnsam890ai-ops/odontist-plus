@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/staff_attendance_provider.dart';
 import '../../models/staff_member.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../services/notification_service.dart';
 import '../../core/upi_launcher.dart' as upi;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -25,6 +26,12 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
   bool _staffCollapsed = false;
   int _staffIdx = 0;
   bool _staffToggleMode = true; // false = list (scroll), true = single with chevrons (default)
+
+  int _salaryNotifId(String staffName, int year, int month) {
+    // Simple deterministic hash: year*100 + month plus staff hashCode
+    final base = year * 100 + month;
+    return base ^ staffName.hashCode;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -277,6 +284,8 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
     final emgPhoneCtrl = TextEditingController();
     final emgAddressCtrl = TextEditingController();
     final monthlySalaryCtrl = TextEditingController();
+  DateTime? paymentDueDate;
+  final preferredDayCtrl = TextEditingController();
     // Medical information
     final medAllergyCtrl = TextEditingController();
     final medConditionsCtrl = TextEditingController();
@@ -404,13 +413,43 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                           decoration: const InputDecoration(labelText: 'Monthly Salary Allowance'),
                           keyboardType: TextInputType.number,
                         ),
+                        const SizedBox(height: 12),
+                        Row(children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: preferredDayCtrl,
+                              decoration: const InputDecoration(labelText: 'Preferred Payment Day (1-31)'),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Row(children: [
+                              const Text('Payment Date: '),
+                              TextButton(
+                                onPressed: () async {
+                                  final now = DateTime.now();
+                                  final picked = await showDatePicker(context: ctx, initialDate: paymentDueDate ?? now, firstDate: DateTime(now.year - 1), lastDate: DateTime(now.year + 2));
+                                  if (picked != null) {
+                                    paymentDueDate = picked;
+                                    (ctx as Element).markNeedsBuild();
+                                  }
+                                },
+                                child: Text(paymentDueDate == null
+                                    ? 'Select date'
+                                    : '${paymentDueDate!.day.toString().padLeft(2, '0')}/${paymentDueDate!.month.toString().padLeft(2, '0')}/${paymentDueDate!.year}'),
+                              )
+                            ]),
+                          )
+                        ]),
                         const SizedBox(height: 28),
                         Row(children: [
                           Expanded(
                             child: ElevatedButton.icon(
                               icon: const Icon(Icons.save),
                               label: const Text('Save'),
-                              onPressed: () {
+                              onPressed: () async {
                                 if (!formKey.currentState!.validate()) return;
                                 final member = StaffMember(
                                   id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -434,11 +473,44 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                                   foodAllergy: medAllergyCtrl.text.trim().isEmpty ? null : medAllergyCtrl.text.trim(),
                                   medicalConditions: medConditionsCtrl.text.trim().isEmpty ? null : medConditionsCtrl.text.trim(),
                                   medications: medicationsCtrl.text.trim().isEmpty ? null : medicationsCtrl.text.trim(),
+                                  preferredPaymentDay: int.tryParse(preferredDayCtrl.text),
                                 );
                                 provider.addStaffDetailed(member);
                                 final salary = double.tryParse(monthlySalaryCtrl.text) ?? 0;
                                 if (salary > 0) {
                                   provider.setMonthlySalary(member.name, _month.year, _month.month, salary);
+                                  // Derive default payment date: chosen date else preferred day for current month
+                                  DateTime derive(int year, int month, int? day) {
+                                    final lastDay = DateTime(year, month + 1, 0).day;
+                                    final d = (day == null || day < 1) ? DateTime.now().day : day;
+                                    final finalDay = d > lastDay ? lastDay : d;
+                                    return DateTime(year, month, finalDay);
+                                  }
+                                  final currentDefault = paymentDueDate ?? derive(_month.year, _month.month, member.preferredPaymentDay);
+                                  provider.setPaymentDate(member.name, _month.year, _month.month, currentDefault);
+                                  // Schedule current month reminder @10AM
+                                  final sched = DateTime(currentDefault.year, currentDefault.month, currentDefault.day, 10, 0);
+                                  final id = _salaryNotifId(member.name, _month.year, _month.month);
+                                  await NotificationService.instance.scheduleAppointmentNotification(
+                                    id: id,
+                                    title: 'Salary payment due',
+                                    body: 'Pay salary to ${member.name} (₹${salary.toStringAsFixed(0)})',
+                                    scheduledTime: sched,
+                                  );
+                                  // Also schedule next month if preferred day exists
+                                  if (member.preferredPaymentDay != null) {
+                                    final nextMonth = _month.month == 12 ? 1 : _month.month + 1;
+                                    final nextYear = _month.month == 12 ? _month.year + 1 : _month.year;
+                                    final nextDefault = derive(nextYear, nextMonth, member.preferredPaymentDay);
+                                    final nextSched = DateTime(nextDefault.year, nextDefault.month, nextDefault.day, 10, 0);
+                                    final nextId = _salaryNotifId(member.name, nextYear, nextMonth);
+                                    await NotificationService.instance.scheduleAppointmentNotification(
+                                      id: nextId,
+                                      title: 'Salary payment due',
+                                      body: 'Pay salary to ${member.name} (₹${salary.toStringAsFixed(0)})',
+                                      scheduledTime: nextSched,
+                                    );
+                                  }
                                 }
                                 setState(() => _staff = member.name);
                                 Navigator.pop(ctx);
@@ -790,7 +862,9 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
   Future<void> _showRecordPaymentDialog(String staffName) async {
     final provider = context.read<StaffAttendanceProvider>();
     final rec = provider.ensureSalaryRecord(staffName, _month.year, _month.month);
-    final amount = rec.totalSalary;
+  final formKey = GlobalKey<FormState>();
+  final deductionCtrl = TextEditingController(text: rec.deduction == 0 ? '' : rec.deduction.toStringAsFixed(0));
+  double amount = rec.totalSalary;
     DateTime date = rec.paymentDate ?? DateTime.now();
     String mode = rec.paymentMode ?? 'Cash';
     await showDialog(
@@ -799,11 +873,27 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
         title: Text('Record Payment - $staffName'),
         content: SizedBox(
           width: 320,
-          child: Column(
+          child: Form(
+            key: formKey,
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Amount: ₹${amount.toStringAsFixed(0)}'),
+              Text('Salary: ₹${amount.toStringAsFixed(0)}'),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: deductionCtrl,
+                decoration: const InputDecoration(labelText: 'Deduction (optional)', prefixText: '₹'),
+                keyboardType: TextInputType.number,
+                onChanged: (v) {
+                  (ctx as Element).markNeedsBuild();
+                },
+              ),
+              const SizedBox(height: 6),
+              Builder(builder: (_) {
+                final net = (amount - (double.tryParse(deductionCtrl.text) ?? 0)).clamp(0, double.infinity);
+                return Text('Net to pay: ₹${net.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w600));
+              }),
               const SizedBox(height: 12),
               Row(children: [
                 const Text('Date: '),
@@ -837,28 +927,52 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                 },
               ),
             ],
-          ),
+          )),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           if (mode == 'UPI')
-            TextButton.icon(
+              TextButton.icon(
               icon: const Icon(Icons.account_balance_wallet_outlined),
               label: const Text('Pay via UPI'),
               onPressed: () async {
-                await _launchUPIPayment(staffName: staffName, amount: amount, date: date);
+                final double net = (amount - (double.tryParse(deductionCtrl.text) ?? 0)).clamp(0, double.infinity).toDouble();
+                await _launchUPIPayment(staffName: staffName, amount: net, date: date);
               },
             ),
+          TextButton.icon(
+            icon: const Icon(Icons.event_outlined),
+            label: const Text('Add to Calendar'),
+            onPressed: () async {
+              // Best-effort: open Google Calendar event creation with prefilled fields
+              final title = Uri.encodeComponent('Salary payment — $staffName');
+              final details = Uri.encodeComponent('Salary: ₹${amount.toStringAsFixed(0)}\nDeduction: ₹${(double.tryParse(deductionCtrl.text) ?? 0).toStringAsFixed(0)}');
+              final start = DateTime(date.year, date.month, date.day, 10, 0);
+              final end = start.add(const Duration(hours: 1));
+              String fmt(DateTime d) => d.toUtc().toIso8601String().replaceAll('-', '').replaceAll(':', '').split('.').first + 'Z';
+              final url = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=$title&details=$details&dates=${fmt(start)}/${fmt(end)}';
+              final uri = Uri.parse(url);
+              if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to open Calendar')));
+                }
+              }
+            },
+          ),
           FilledButton.icon(
             icon: const Icon(Icons.check),
             label: const Text('Mark Paid'),
             onPressed: () async {
+              // Persist deduction
+              final dedVal = double.tryParse(deductionCtrl.text) ?? 0;
+              provider.setMonthlyDeduction(staffName, _month.year, _month.month, dedVal);
+              final net = (amount - dedVal).clamp(0, double.infinity);
               if (mode == 'UPI') {
                 final completed = await showDialog<bool>(
                   context: context,
                   builder: (_) => AlertDialog(
                     title: const Text('UPI Payment Completed?'),
-                    content: Text('Did the UPI payment of ₹${amount.toStringAsFixed(0)} to $staffName on ${date.day.toString().padLeft(2,'0')}/${date.month.toString().padLeft(2,'0')}/${date.year} complete successfully?'),
+                    content: Text('Did the UPI payment of ₹${net.toStringAsFixed(0)} to $staffName on ${date.day.toString().padLeft(2,'0')}/${date.month.toString().padLeft(2,'0')}/${date.year} complete successfully?'),
                     actions: [
                       TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Not yet')),
                       ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes, Completed')),
@@ -867,7 +981,7 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                 );
                 if (completed != true) return;
               }
-              provider.markSalaryPaid(staffName, _month.year, _month.month, amount: amount, mode: mode, date: date);
+              provider.markSalaryPaid(staffName, _month.year, _month.month, amount: net.toDouble(), mode: mode, date: date);
               Navigator.pop(ctx);
               setState(() {});
             },
@@ -1186,6 +1300,8 @@ class _StaffViewContentState extends State<_StaffViewContent> {
               _row('Medical Conditions', (member.medicalConditions == null || member.medicalConditions!.trim().isEmpty) ? 'NIL' : member.medicalConditions!),
               _row('Medications', (member.medications == null || member.medications!.trim().isEmpty) ? 'NIL' : member.medications!),
               _row('Salary (This Month)', salaryRec == null ? '—' : '₹${salaryRec.totalSalary.toStringAsFixed(0)}'),
+              if (salaryRec != null) _row('Deduction', '₹${salaryRec.deduction.toStringAsFixed(0)}'),
+              if (salaryRec != null) _row('Net', '₹${(salaryRec.totalSalary - salaryRec.deduction).clamp(0, double.infinity).toStringAsFixed(0)}'),
               _row('Paid', salaryRec == null ? '—' : (salaryRec.paid ? 'Yes' : 'No')),
               if (salaryRec != null) _paymentDateRow(salaryRec),
               _row('Present Days', widget.present.toString()),
@@ -1334,7 +1450,11 @@ class _StaffViewContentState extends State<_StaffViewContent> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(children: [
         SizedBox(width: 90, child: Text('${rec.month.toString().padLeft(2,'0')}/${rec.year}')),
-        Expanded(child: Text('₹${rec.totalSalary.toStringAsFixed(0)}${rec.paid ? ' • Paid' : ''}', style: TextStyle(color: rec.paid ? Colors.green.shade700 : null))),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('₹${rec.totalSalary.toStringAsFixed(0)}${rec.paid ? ' • Paid' : ''}', style: TextStyle(color: rec.paid ? Colors.green.shade700 : null)),
+          if (rec.deduction != 0)
+            Text('Deduction: ₹${rec.deduction.toStringAsFixed(0)} • Net: ₹${(rec.totalSalary - rec.deduction).clamp(0, double.infinity).toStringAsFixed(0)}', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+        ])),
         SizedBox(width: 54, child: Text('P:$present', style: const TextStyle(fontSize: 12))),
         SizedBox(width: 54, child: Text('A:$absent', style: const TextStyle(fontSize: 12))),
         SizedBox(width: 90, child: Text(_formatDate(rec.paymentDate), style: const TextStyle(fontSize: 12))),

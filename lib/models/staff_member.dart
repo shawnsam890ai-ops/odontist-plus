@@ -11,6 +11,7 @@ class StaffMember {
   String? medicalConditions;
   String? medications;
   String? bloodGroup; // e.g., A+, O-, etc.
+  int? preferredPaymentDay; // Day of month to pay salary (1-31)
 
   StaffMember({
     required this.id,
@@ -24,6 +25,7 @@ class StaffMember {
     this.medicalConditions,
     this.medications,
     this.bloodGroup,
+    this.preferredPaymentDay,
   }) : phoneNumbers = phoneNumbers ?? [];
 }
 

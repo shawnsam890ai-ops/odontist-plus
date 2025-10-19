@@ -384,31 +384,96 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
             ),
           ),
           const SizedBox(width: 6),
-          // Right: Patient name (clickable)
+          // Right: Patient name (clickable) + actions (if provider-backed)
           Flexible(
             flex: 3,
             fit: FlexFit.tight,
             child: Align(
               alignment: Alignment.centerRight,
-              child: GestureDetector(
-                onTap: () => Navigator.of(context).pushNamed(
-                  PatientDetailPage.routeName,
-                  arguments: {'patientId': e.patient.id},
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pushNamed(
+                    PatientDetailPage.routeName,
+                    arguments: {'patientId': e.patient.id},
+                  ),
+                  child: Text(
+                    e.patient.name,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: false,
+                  ),
                 ),
-                child: Text(
-                  e.patient.name,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  softWrap: false,
-                ),
-              ),
+                if (e.apptId != null) ...[
+                  const SizedBox(width: 6),
+                  Tooltip(
+                    message: 'Attended + Reschedule',
+                    child: IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(width: 24, height: 24),
+                      iconSize: 16,
+                      onPressed: () async {
+                        context.read<AppointmentProvider>().markAttended(e.apptId!);
+                        await _rescheduleAppt(e.apptId!, e.time);
+                      },
+                      icon: const Icon(Icons.event_available, color: Colors.teal),
+                    ),
+                  ),
+                  Tooltip(
+                    message: 'Delete appointment',
+                    child: IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(width: 24, height: 24),
+                      iconSize: 16,
+                      onPressed: () => _confirmDeleteAppt(e.apptId!),
+                      icon: const Icon(Icons.delete_outline, color: Colors.grey),
+                    ),
+                  ),
+                ]
+              ]),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _rescheduleAppt(String apptId, DateTime current) async {
+    DateTime? date = current;
+    TimeOfDay? time = TimeOfDay(hour: current.hour, minute: current.minute);
+    final now = DateTime.now();
+    final pickedDate = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(now.year - 1), lastDate: DateTime(now.year + 2));
+    if (pickedDate == null) return;
+  final pickedTime = await showTimePicker(context: context, initialTime: time);
+    if (pickedTime == null) return;
+    final dt = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
+    context.read<AppointmentProvider>().reschedule(apptId, dt);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Appointment rescheduled')));
+    }
+  }
+
+  Future<void> _confirmDeleteAppt(String apptId) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete appointment?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok == true) {
+      context.read<AppointmentProvider>().remove(apptId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Appointment deleted')));
+      }
+    }
   }
 
   String? _purposeForNextAppointment(TreatmentSession s) {
