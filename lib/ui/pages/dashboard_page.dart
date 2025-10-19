@@ -705,10 +705,12 @@ class _DashboardPageState extends State<DashboardPage> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Utility', style: Theme.of(context).textTheme.headlineSmall),
+  Text('Utility & Bills', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 12),
         Row(children: [
           ElevatedButton.icon(onPressed: _showAddUtilityDialog, icon: const Icon(Icons.add), label: const Text('Add Utility')),
+          const SizedBox(width: 12),
+          FilledButton.tonalIcon(onPressed: _showAddBillDialog, icon: const Icon(Icons.shopping_cart_checkout), label: const Text('Add Bill')),
           const SizedBox(width: 12),
           Text('Services: ${services.length}')
         ]),
@@ -755,6 +757,14 @@ class _DashboardPageState extends State<DashboardPage> {
           child: Card(
             clipBehavior: Clip.antiAlias,
             child: _UtilityPaymentsHistoryPanel(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Bills history
+        Expanded(
+          child: Card(
+            clipBehavior: Clip.antiAlias,
+            child: _BillsHistoryPanel(),
           ),
         ),
       ]),
@@ -892,6 +902,57 @@ class _DashboardPageState extends State<DashboardPage> {
                       paid: paid,
                       receiptPath: receiptCtrl.text.trim().isEmpty ? null : receiptCtrl.text.trim(),
                     );
+                if (context.mounted) Navigator.pop(context);
+              },
+              child: const Text('Add'),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddBillDialog() {
+    final itemCtrl = TextEditingController();
+    final amountCtrl = TextEditingController(text: '0');
+    final receiptCtrl = TextEditingController();
+    DateTime date = DateTime.now();
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSt) => AlertDialog(
+          title: const Text('Add Bill'),
+          content: SizedBox(
+            width: 420,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Row(children: [
+                const Text('Purchase date:'),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: () async {
+                    final now = DateTime.now();
+                    final picked = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(now.year - 1), lastDate: DateTime(now.year + 1));
+                    if (picked != null) setSt(() => date = picked);
+                  },
+                  child: Text('${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'),
+                )
+              ]),
+              const SizedBox(height: 8),
+              TextField(controller: itemCtrl, decoration: const InputDecoration(labelText: 'Item name / purpose')),
+              const SizedBox(height: 8),
+              TextField(controller: amountCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Cost of purchase')),
+              const SizedBox(height: 8),
+              TextField(controller: receiptCtrl, decoration: const InputDecoration(labelText: 'Attach receipt (path or note)')),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                final name = itemCtrl.text.trim();
+                final amt = double.tryParse(amountCtrl.text) ?? 0;
+                if (name.isEmpty || amt <= 0) return;
+                await context.read<UtilityProvider>().addBill(date: date, itemName: name, amount: amt, receiptPath: receiptCtrl.text.trim().isEmpty ? null : receiptCtrl.text.trim());
                 if (context.mounted) Navigator.pop(context);
               },
               child: const Text('Add'),
@@ -2630,6 +2691,79 @@ class _StaggeredAppearState extends State<_StaggeredAppear> with SingleTickerPro
 class _UtilityPaymentsHistoryPanel extends StatefulWidget {
   @override
   State<_UtilityPaymentsHistoryPanel> createState() => _UtilityPaymentsHistoryPanelState();
+}
+
+// ================= Bills history panel =================
+class _BillsHistoryPanel extends StatefulWidget {
+  @override
+  State<_BillsHistoryPanel> createState() => _BillsHistoryPanelState();
+}
+
+class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
+  String _mode = 'recent';
+
+  List<int> _years(List bills) {
+    final st = <int>{};
+    for (final b in bills) st.add(b.date.year as int);
+    final list = st.toList();
+    list.sort((a, b) => b.compareTo(a));
+    return list;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final util = context.watch<UtilityProvider>();
+    var list = util.bills.toList()..sort((a, b) => b.date.compareTo(a.date));
+    final years = _years(list);
+    if (_mode != 'recent') {
+      final y = int.tryParse(_mode);
+      if (y != null) list = list.where((e) => e.date.year == y).toList();
+    } else {
+      list = list.take(12).toList();
+    }
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+        child: Row(children: [
+          const Text('Bills History', style: TextStyle(fontWeight: FontWeight.w600)),
+          const Spacer(),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _mode,
+              items: [
+                const DropdownMenuItem(value: 'recent', child: Text('Recent 12 months')),
+                ...years.map((y) => DropdownMenuItem(value: y.toString(), child: Text(y.toString())))
+              ],
+              onChanged: (v) => setState(() => _mode = v ?? 'recent'),
+            ),
+          ),
+        ]),
+      ),
+      const Divider(height: 1),
+      Expanded(
+        child: list.isEmpty
+            ? const Center(child: Text('No bills'))
+            : ListView.separated(
+                itemCount: list.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, i) {
+                  final b = list[i];
+                  final dateStr = '${b.date.year}-${b.date.month.toString().padLeft(2, '0')}-${b.date.day.toString().padLeft(2, '0')}';
+                  return ListTile(
+                    dense: true,
+                    title: Text('${b.itemName} • ₹${b.amount.toStringAsFixed(0)}'),
+                    subtitle: Text('Date: $dateStr${b.receiptPath != null ? ' • Receipt: ${b.receiptPath}' : ''}'),
+                    trailing: IconButton(
+                      tooltip: 'Delete bill',
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => context.read<UtilityProvider>().deleteBill(b.id),
+                    ),
+                  );
+                },
+              ),
+      ),
+    ]);
+  }
 }
 
 class _UtilityPaymentsHistoryPanelState extends State<_UtilityPaymentsHistoryPanel> {

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../repositories/utility_repository.dart';
 import '../models/utility_service.dart';
 import '../models/utility_payment.dart';
+import '../models/bill_entry.dart';
 import 'revenue_provider.dart';
 
 class UtilityProvider with ChangeNotifier {
@@ -13,6 +14,7 @@ class UtilityProvider with ChangeNotifier {
 
   List<UtilityService> get services => _repo.services;
   List<UtilityPayment> get payments => _repo.payments;
+  List<BillEntry> get bills => _repo.bills;
   bool get isLoaded => _loaded;
 
   Future<void> ensureLoaded() async {
@@ -70,6 +72,21 @@ class UtilityProvider with ChangeNotifier {
 
   Future<void> deletePayment(String paymentId) async {
     await _repo.deletePayment(paymentId);
+    notifyListeners();
+  }
+
+  // Bills
+  Future<void> addBill({required DateTime date, required String itemName, required double amount, String? receiptPath}) async {
+    final b = BillEntry(date: date, itemName: itemName, amount: amount, receiptPath: receiptPath);
+    await _repo.addBill(b);
+    // Reflect as negative in revenue
+    final desc = 'Bill: $itemName ${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    await revenue.addRevenue(patientId: 'bill', description: desc, amount: -amount);
+    notifyListeners();
+  }
+
+  Future<void> deleteBill(String id) async {
+    await _repo.deleteBill(id);
     notifyListeners();
   }
 }

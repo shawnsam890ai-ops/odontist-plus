@@ -2,16 +2,20 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/utility_service.dart';
 import '../models/utility_payment.dart';
+import '../models/bill_entry.dart';
 
 class UtilityRepository {
   static const _kServices = 'utility_services_v1';
   static const _kPayments = 'utility_payments_v1';
+  static const _kBills = 'utility_bills_v1';
 
   final List<UtilityService> _services = [];
   final List<UtilityPayment> _payments = [];
+  final List<BillEntry> _bills = [];
 
   List<UtilityService> get services => List.unmodifiable(_services);
   List<UtilityPayment> get payments => List.unmodifiable(_payments);
+  List<BillEntry> get bills => List.unmodifiable(_bills);
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -33,12 +37,22 @@ class UtilityRepository {
         _payments.add(UtilityPayment.fromJson(Map<String, dynamic>.from(m as Map)));
       }
     }
+    // Bills
+    _bills.clear();
+    final b = prefs.getString(_kBills);
+    if (b != null && b.isNotEmpty) {
+      final list = List<dynamic>.from(jsonDecode(b));
+      for (final m in list) {
+        _bills.add(BillEntry.fromJson(Map<String, dynamic>.from(m as Map)));
+      }
+    }
   }
 
   Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kServices, jsonEncode(_services.map((e) => e.toJson()).toList()));
     await prefs.setString(_kPayments, jsonEncode(_payments.map((e) => e.toJson()).toList()));
+    await prefs.setString(_kBills, jsonEncode(_bills.map((e) => e.toJson()).toList()));
   }
 
   Future<void> addService(UtilityService s) async {
@@ -76,6 +90,17 @@ class UtilityRepository {
 
   Future<void> deletePayment(String id) async {
     _payments.removeWhere((e) => e.id == id);
+    await _persist();
+  }
+
+  // Bills CRUD
+  Future<void> addBill(BillEntry b) async {
+    _bills.add(b);
+    await _persist();
+  }
+
+  Future<void> deleteBill(String id) async {
+    _bills.removeWhere((e) => e.id == id);
     await _persist();
   }
 }
