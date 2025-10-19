@@ -136,6 +136,7 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                   name: member.name,
                   age: member.age?.toString(),
                   sex: member.sex,
+                  bloodGroup: member.bloodGroup,
                   address: member.address,
                   phoneNumber: member.phoneNumbers.isNotEmpty ? member.phoneNumbers.first : null,
                   emergencyContactNumber: member.emergencyContact?.phone,
@@ -276,6 +277,11 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
     final emgPhoneCtrl = TextEditingController();
     final emgAddressCtrl = TextEditingController();
     final monthlySalaryCtrl = TextEditingController();
+    // Medical information
+    final medAllergyCtrl = TextEditingController();
+    final medConditionsCtrl = TextEditingController();
+    final medicationsCtrl = TextEditingController();
+    String? bloodGroup;
     String? sex;
 
     await showDialog(
@@ -366,6 +372,33 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                         const SizedBox(height: 12),
                         TextFormField(controller: emgAddressCtrl, decoration: const InputDecoration(labelText: 'Emergency Address')),
                         const SizedBox(height: 20),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('Medical Information', style: Theme.of(context).textTheme.titleSmall),
+                        ),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          value: bloodGroup,
+                          decoration: const InputDecoration(labelText: 'Blood Group'),
+                          items: const [
+                            DropdownMenuItem(value: 'A+', child: Text('A+')),
+                            DropdownMenuItem(value: 'A-', child: Text('A-')),
+                            DropdownMenuItem(value: 'B+', child: Text('B+')),
+                            DropdownMenuItem(value: 'B-', child: Text('B-')),
+                            DropdownMenuItem(value: 'AB+', child: Text('AB+')),
+                            DropdownMenuItem(value: 'AB-', child: Text('AB-')),
+                            DropdownMenuItem(value: 'O+', child: Text('O+')),
+                            DropdownMenuItem(value: 'O-', child: Text('O-')),
+                          ],
+                          onChanged: (v) => bloodGroup = v,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(controller: medAllergyCtrl, decoration: const InputDecoration(labelText: 'Any Food Allergy?')),
+                        const SizedBox(height: 12),
+                        TextFormField(controller: medConditionsCtrl, decoration: const InputDecoration(labelText: 'Any Medical Conditions?')),
+                        const SizedBox(height: 12),
+                        TextFormField(controller: medicationsCtrl, decoration: const InputDecoration(labelText: 'Currently Under Any Medications?')),
+                        const SizedBox(height: 20),
                         TextFormField(
                           controller: monthlySalaryCtrl,
                           decoration: const InputDecoration(labelText: 'Monthly Salary Allowance'),
@@ -397,6 +430,10 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                                           phone: emgPhoneCtrl.text.trim(),
                                           address: emgAddressCtrl.text.trim().isEmpty ? null : emgAddressCtrl.text.trim(),
                                         ),
+                                  bloodGroup: bloodGroup,
+                                  foodAllergy: medAllergyCtrl.text.trim().isEmpty ? null : medAllergyCtrl.text.trim(),
+                                  medicalConditions: medConditionsCtrl.text.trim().isEmpty ? null : medConditionsCtrl.text.trim(),
+                                  medications: medicationsCtrl.text.trim().isEmpty ? null : medicationsCtrl.text.trim(),
                                 );
                                 provider.addStaffDetailed(member);
                                 final salary = double.tryParse(monthlySalaryCtrl.text) ?? 0;
@@ -566,7 +603,8 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
     if (salaryRec != null && salaryRec.totalSalary > 0) {
       monthlySalaryCtrl.text = salaryRec.totalSalary.toStringAsFixed(0);
     }
-    String? sex = member.sex;
+  String? sex = member.sex;
+  String? bloodGroup = member.bloodGroup;
     // Medical info controllers
     final medAllergyCtrl = TextEditingController(text: member.foodAllergy ?? '');
     final medConditionsCtrl = TextEditingController(text: member.medicalConditions ?? '');
@@ -664,6 +702,22 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
             alignment: Alignment.centerLeft,
             child: Text('Medical Information', style: Theme.of(context).textTheme.titleSmall)),
           const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: bloodGroup,
+            decoration: const InputDecoration(labelText: 'Blood Group'),
+            items: const [
+              DropdownMenuItem(value: 'A+', child: Text('A+')),
+              DropdownMenuItem(value: 'A-', child: Text('A-')),
+              DropdownMenuItem(value: 'B+', child: Text('B+')),
+              DropdownMenuItem(value: 'B-', child: Text('B-')),
+              DropdownMenuItem(value: 'AB+', child: Text('AB+')),
+              DropdownMenuItem(value: 'AB-', child: Text('AB-')),
+              DropdownMenuItem(value: 'O+', child: Text('O+')),
+              DropdownMenuItem(value: 'O-', child: Text('O-')),
+            ],
+            onChanged: (v) => bloodGroup = v,
+          ),
+          const SizedBox(height: 12),
           TextFormField(controller: medAllergyCtrl, decoration: const InputDecoration(labelText: 'Any Food Allergy?')),
           const SizedBox(height: 12),
           TextFormField(controller: medConditionsCtrl, decoration: const InputDecoration(labelText: 'Any Medical Conditions?')),
@@ -698,6 +752,7 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                               foodAllergy: medAllergyCtrl.text.trim().isEmpty ? null : medAllergyCtrl.text.trim(),
                               medicalConditions: medConditionsCtrl.text.trim().isEmpty ? null : medConditionsCtrl.text.trim(),
                               medications: medicationsCtrl.text.trim().isEmpty ? null : medicationsCtrl.text.trim(),
+                              bloodGroup: bloodGroup,
                             );
                             provider.updateStaff(updated);
                             final salary = double.tryParse(monthlySalaryCtrl.text) ?? 0;
@@ -1121,6 +1176,7 @@ class _StaffViewContentState extends State<_StaffViewContent> {
               _row('Phone', member.phoneNumbers.isEmpty ? '—' : member.phoneNumbers.first),
               if (member.phoneNumbers.length > 1) _row('Alt Phone', member.phoneNumbers[1]),
               _row('Address', member.address ?? '—'),
+              _row('Blood Group', (member.bloodGroup == null || member.bloodGroup!.trim().isEmpty) ? '—' : member.bloodGroup!),
               _row('Food Allergy', (member.foodAllergy == null || member.foodAllergy!.trim().isEmpty) ? 'NIL' : member.foodAllergy!),
               _row('Medical Conditions', (member.medicalConditions == null || member.medicalConditions!.trim().isEmpty) ? 'NIL' : member.medicalConditions!),
               _row('Medications', (member.medications == null || member.medications!.trim().isEmpty) ? 'NIL' : member.medications!),

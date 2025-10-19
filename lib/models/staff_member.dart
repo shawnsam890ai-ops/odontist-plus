@@ -10,6 +10,7 @@ class StaffMember {
   String? foodAllergy;
   String? medicalConditions;
   String? medications;
+  String? bloodGroup; // e.g., A+, O-, etc.
 
   StaffMember({
     required this.id,
@@ -22,6 +23,7 @@ class StaffMember {
     this.foodAllergy,
     this.medicalConditions,
     this.medications,
+    this.bloodGroup,
   }) : phoneNumbers = phoneNumbers ?? [];
 }
 

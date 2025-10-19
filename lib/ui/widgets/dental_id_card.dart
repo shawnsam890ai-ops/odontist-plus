@@ -5,6 +5,7 @@ class DentalIdCard extends StatelessWidget {
   final String name;
   final String? age;
   final String? sex;
+  final String? bloodGroup;
   final String? address;
   final String? phoneNumber;
   final String? emergencyContactNumber;
@@ -18,6 +19,7 @@ class DentalIdCard extends StatelessWidget {
     required this.name,
     this.age,
     this.sex,
+    this.bloodGroup,
     this.address,
     this.phoneNumber,
     this.emergencyContactNumber,
@@ -164,7 +166,7 @@ class DentalIdCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   // Staff details
-                  if (age != null || sex != null) ...[
+                  if (age != null || sex != null || bloodGroup != null) ...[
                     Row(
                       children: [
                         if (age != null) ...[
@@ -177,6 +179,12 @@ class DentalIdCard extends StatelessWidget {
                           _detailLabel('SEX:'),
                           const SizedBox(width: 4),
                           _detailValue(sex!.toUpperCase()),
+                          const SizedBox(width: 12),
+                        ],
+                        if (bloodGroup != null && bloodGroup!.isNotEmpty) ...[
+                          _detailLabel('BLOOD:'),
+                          const SizedBox(width: 4),
+                          _detailValue(bloodGroup!.toUpperCase()),
                         ],
                       ],
                     ),
