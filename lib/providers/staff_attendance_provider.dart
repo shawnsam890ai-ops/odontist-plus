@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import '../models/staff_attendance.dart';
 import '../models/staff_member.dart';
 import 'revenue_provider.dart';
+import '../services/google_calendar_service.dart';
 
 class StaffAttendanceProvider with ChangeNotifier {
   final List<StaffAttendanceEntry> _entries = [];
@@ -212,6 +214,23 @@ class StaffAttendanceProvider with ChangeNotifier {
     final rec = ensureSalaryRecord(staffName, year, month);
     rec.paymentDate = date;
     notifyListeners();
+    // Best-effort background calendar update: if we're already signed in and
+    // have an event id, update the event time/details to match the new date.
+    // Do NOT auto-create events here to avoid surprises; creation happens from UI.
+    Future.microtask(() async {
+      // Try silent sign-in only; skip if not available
+      await GoogleCalendarService.instance.signInSilently();
+      if (!GoogleCalendarService.instance.isSignedIn) return;
+      final eventId = rec.calendarEventId;
+      if (eventId == null || eventId.isEmpty) return;
+      final start = DateTime(date.year, date.month, date.day, 10, 0);
+      await GoogleCalendarService.instance.updateSalaryEvent(
+        eventId: eventId,
+        start: start,
+        salary: rec.totalSalary,
+        deduction: rec.deduction,
+      );
+    });
   }
 
   void setPaymentMode(String staffName, int year, int month, String mode) {
@@ -273,5 +292,6 @@ class MonthlySalaryRecord {
   double deduction; // any deduction to apply for this month
   DateTime? paymentDate;
   String? paymentMode; // Cash / UPI / Bank / Other
-  MonthlySalaryRecord({required this.year, required this.month, this.totalSalary = 0, this.paid = false, this.paidAmount = 0, this.deduction = 0, this.paymentDate, this.paymentMode});
+  String? calendarEventId; // Google Calendar event id
+  MonthlySalaryRecord({required this.year, required this.month, this.totalSalary = 0, this.paid = false, this.paidAmount = 0, this.deduction = 0, this.paymentDate, this.paymentMode, this.calendarEventId});
 }

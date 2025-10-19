@@ -540,56 +540,98 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
 
       Widget _apptActions(_ApptEntry e) {
         final appts = context.read<AppointmentProvider>();
-        return Row(mainAxisSize: MainAxisSize.min, children: [
-          Tooltip(
-            message: 'Mark attended',
-            child: IconButton(
-              visualDensity: VisualDensity.compact,
-              iconSize: 18,
-              onPressed: () => appts.markAttended(e.apptId!),
-              icon: const Icon(Icons.check_circle_outline, color: Colors.green),
+        return LayoutBuilder(builder: (ctx, cons) {
+          final isNarrow = cons.maxWidth.isFinite && cons.maxWidth < 260;
+          if (isNarrow) {
+            // On very narrow layouts, show a compact overflow menu to avoid clipping.
+            return _moreMenu(e);
+          }
+          return Row(mainAxisSize: MainAxisSize.min, children: [
+            Tooltip(
+              message: 'Mark attended',
+              child: IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 18,
+                onPressed: () => appts.markAttended(e.apptId!),
+                icon: const Icon(Icons.check_circle_outline, color: Colors.green),
+              ),
             ),
-          ),
-          Tooltip(
-            message: 'Attended + Reschedule',
-            child: IconButton(
-              visualDensity: VisualDensity.compact,
-              iconSize: 18,
-              onPressed: () async {
+            Tooltip(
+              message: 'Attended + Reschedule',
+              child: IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 18,
+                onPressed: () async {
+                  appts.markAttended(e.apptId!);
+                  await _rescheduleAppt(e.apptId!, e.time);
+                },
+                icon: const Icon(Icons.event_available, color: Colors.teal),
+              ),
+            ),
+            Tooltip(
+              message: 'Mark missed',
+              child: IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 18,
+                onPressed: () => appts.markMissed(e.apptId!),
+                icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent),
+              ),
+            ),
+            Tooltip(
+              message: 'Reschedule',
+              child: IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 18,
+                onPressed: () => _rescheduleAppt(e.apptId!, e.time),
+                icon: const Icon(Icons.schedule, color: Colors.blueGrey),
+              ),
+            ),
+            Tooltip(
+              message: 'Delete appointment',
+              child: IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 18,
+                onPressed: () => _confirmDeleteAppt(e.apptId!),
+                icon: const Icon(Icons.delete_outline, color: Colors.grey),
+              ),
+            ),
+          ]);
+        });
+      }
+
+      Widget _moreMenu(_ApptEntry e) {
+        final appts = context.read<AppointmentProvider>();
+        return PopupMenuButton<String>(
+          tooltip: 'Actions',
+          icon: const Icon(Icons.more_horiz, size: 20),
+          onSelected: (value) async {
+            switch (value) {
+              case 'attended':
+                appts.markAttended(e.apptId!);
+                break;
+              case 'attended_reschedule':
                 appts.markAttended(e.apptId!);
                 await _rescheduleAppt(e.apptId!, e.time);
-              },
-              icon: const Icon(Icons.event_available, color: Colors.teal),
-            ),
-          ),
-          Tooltip(
-            message: 'Mark missed',
-            child: IconButton(
-              visualDensity: VisualDensity.compact,
-              iconSize: 18,
-              onPressed: () => appts.markMissed(e.apptId!),
-              icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent),
-            ),
-          ),
-          Tooltip(
-            message: 'Reschedule',
-            child: IconButton(
-              visualDensity: VisualDensity.compact,
-              iconSize: 18,
-              onPressed: () => _rescheduleAppt(e.apptId!, e.time),
-              icon: const Icon(Icons.schedule, color: Colors.blueGrey),
-            ),
-          ),
-          Tooltip(
-            message: 'Delete appointment',
-            child: IconButton(
-              visualDensity: VisualDensity.compact,
-              iconSize: 18,
-              onPressed: () => _confirmDeleteAppt(e.apptId!),
-              icon: const Icon(Icons.delete_outline, color: Colors.grey),
-            ),
-          ),
-        ]);
+                break;
+              case 'missed':
+                appts.markMissed(e.apptId!);
+                break;
+              case 'reschedule':
+                await _rescheduleAppt(e.apptId!, e.time);
+                break;
+              case 'delete':
+                await _confirmDeleteAppt(e.apptId!);
+                break;
+            }
+          },
+          itemBuilder: (ctx) => [
+            const PopupMenuItem(value: 'attended', child: ListTile(leading: Icon(Icons.check_circle_outline, color: Colors.green), title: Text('Mark attended'))),
+            const PopupMenuItem(value: 'attended_reschedule', child: ListTile(leading: Icon(Icons.event_available, color: Colors.teal), title: Text('Attended + Reschedule'))),
+            const PopupMenuItem(value: 'missed', child: ListTile(leading: Icon(Icons.cancel_outlined, color: Colors.redAccent), title: Text('Mark missed'))),
+            const PopupMenuItem(value: 'reschedule', child: ListTile(leading: Icon(Icons.schedule, color: Colors.blueGrey), title: Text('Reschedule'))),
+            const PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline, color: Colors.grey), title: Text('Delete'))),
+          ],
+        );
       }
 
       Future<void> _rescheduleAppt(String apptId, DateTime current) async {

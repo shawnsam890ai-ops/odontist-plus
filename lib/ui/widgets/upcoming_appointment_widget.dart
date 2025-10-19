@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:io';
 import '../../providers/appointment_provider.dart';
 import '../../providers/doctor_provider.dart';
 import '../../models/doctor.dart';
@@ -122,29 +123,30 @@ class UpcomingAppointmentWidget extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            // Right Column: Doctor image (full display with rounded corners)
+            // Right Column: Doctor image (prefer doctor's photo if set; fallback to asset/icon)
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Container(
                 width: 100,
                 height: 180,
-                decoration: const BoxDecoration(
-                  color: Colors.transparent,
-                ),
-                child: Image.asset(
-                  'assets/images/doctor_avatar.png',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.grey[200],
-                      child: Icon(
-                        Icons.person,
-                        size: 50,
-                        color: Colors.grey[400],
-                      ),
+                decoration: const BoxDecoration(color: Colors.transparent),
+                child: () {
+                  final path = doctor?.photoPath;
+                  if (path != null && path.isNotEmpty) {
+                    return Image.file(
+                      File(path),
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stack) {
+                        return _fallbackAvatar(context);
+                      },
                     );
-                  },
-                ),
+                  }
+                  return Image.asset(
+                    'assets/images/doctor_avatar.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => _fallbackAvatar(context),
+                  );
+                }(),
               ),
             ),
           ],
@@ -165,5 +167,16 @@ class UpcomingAppointmentWidget extends StatelessWidget {
   String _formatDate(DateTime dateTime) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${months[dateTime.month - 1]} ${dateTime.day}, ${dateTime.year}';
+  }
+
+  Widget _fallbackAvatar(BuildContext context) {
+    return Container(
+      color: Colors.grey[200],
+      child: Icon(
+        Icons.person,
+        size: 50,
+        color: Colors.grey[400],
+      ),
+    );
   }
 }

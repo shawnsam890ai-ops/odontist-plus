@@ -33,7 +33,7 @@ class _LoginPageState extends State<LoginPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(_isRegister ? 'Create your account' : 'Dental Clinic Login', style: Theme.of(context).textTheme.titleLarge),
+                    Text(_isRegister ? 'Create your account' : 'Odontist Plus Login', style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 24),
                     TextFormField(
                       controller: _userController,

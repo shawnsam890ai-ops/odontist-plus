@@ -27,11 +27,19 @@ class LabRegistryRepository {
     await _persist();
   }
 
-  Future<void> updateLab(String id, {String? name, String? address}) async {
+  Future<void> updateLab(String id, {String? name, String? address, String? labPhone, String? staffName, String? staffPhone}) async {
     final idx = _labs.indexWhere((l) => l.id == id);
     if (idx == -1) return;
     final l = _labs[idx];
-    _labs[idx] = LabVendor(id: l.id, name: name ?? l.name, address: address ?? l.address, products: l.products);
+    _labs[idx] = LabVendor(
+      id: l.id,
+      name: name ?? l.name,
+      address: address ?? l.address,
+      labPhone: labPhone ?? l.labPhone,
+      staffName: staffName ?? l.staffName,
+      staffPhone: staffPhone ?? l.staffPhone,
+      products: l.products,
+    );
     await _persist();
   }
 

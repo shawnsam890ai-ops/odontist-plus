@@ -189,14 +189,14 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-  const stripH = 44.0;
+  const stripH = 56.0; // taller for better legibility
   const arrowW = 18.0;
-  const gap = 1.0;
+  const gap = 0.0; // reduce gaps to avoid overflow
   const count = 4;
-  const minChip = 18.0;
-        const maxChip = 40.0;
-        const padL = 2.0;
-  const padR = 2.0;
+  const minChip = 22.0;
+    const maxChip = 48.0;
+    const padL = 1.0;
+  const padR = 1.0;
   const safeEpsilon = 2.0; // extra safety to avoid 1px overflow
 
         return Padding(
@@ -229,13 +229,11 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
                     return ClipRect(
                       child: SizedBox(
                         width: (centerW - 1).clamp(0.0, centerW),
-                        child: Row(
-                          children: [
-                            for (int i = 0; i < days.length; i++) Expanded(
-                              child: Center(child: _dayChip(days[i], selected, todayKey, chipW)),
-                            ),
-                          ],
-                        ),
+                        child: Row(children: [
+                          for (int i = 0; i < days.length; i++) Expanded(
+                            child: Center(child: _dayChip(days[i], selected, todayKey, chipW)),
+                          ),
+                        ]),
                       ),
                     );
                   },
@@ -265,7 +263,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         width: width,
-        margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 0),
+        margin: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
         decoration: BoxDecoration(
           color: isSel ? Theme.of(context).colorScheme.primary.withOpacity(.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
@@ -277,14 +275,14 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
             Text(
               _weekdayShort(d.weekday),
               style: TextStyle(
-                fontSize: 8,
+                fontSize: width <= 24 ? 9 : 11,
                 fontWeight: FontWeight.w600,
                 color: isSel ? Theme.of(context).colorScheme.primary : Colors.grey[600],
               ),
             ),
-            SizedBox(height: width <= 24 ? 1 : 2),
+            SizedBox(height: width <= 24 ? 1 : 3),
             Container(
-              padding: EdgeInsets.all(width <= 24 ? 3 : 4),
+              padding: EdgeInsets.all(width <= 24 ? 4 : 6),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isToday
@@ -294,7 +292,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
               child: Text(
                 '${d.day}',
                 style: TextStyle(
-                  fontSize: width <= 24 ? 8 : 9,
+                  fontSize: width <= 24 ? 10 : 12,
                   fontWeight: FontWeight.w600,
                   color: isToday ? Colors.white : (isSel ? Theme.of(context).colorScheme.primary : Colors.black87),
                 ),
@@ -310,7 +308,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
     if (entries.isEmpty) return _emptyBar();
     return ListView.separated(
       itemCount: entries.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 4),
+      separatorBuilder: (_, __) => const SizedBox(height: 2),
       itemBuilder: (_, i) => _appointmentCard(entries[i]),
     );
   }
@@ -390,50 +388,20 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
             fit: FlexFit.tight,
             child: Align(
               alignment: Alignment.centerRight,
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                GestureDetector(
-                  onTap: () => Navigator.of(context).pushNamed(
-                    PatientDetailPage.routeName,
-                    arguments: {'patientId': e.patient.id},
-                  ),
-                  child: Text(
-                    e.patient.name,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    softWrap: false,
-                  ),
+              child: GestureDetector(
+                onTap: () => Navigator.of(context).pushNamed(
+                  PatientDetailPage.routeName,
+                  arguments: {'patientId': e.patient.id},
                 ),
-                if (e.apptId != null) ...[
-                  const SizedBox(width: 6),
-                  Tooltip(
-                    message: 'Attended + Reschedule',
-                    child: IconButton(
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(width: 24, height: 24),
-                      iconSize: 16,
-                      onPressed: () async {
-                        context.read<AppointmentProvider>().markAttended(e.apptId!);
-                        await _rescheduleAppt(e.apptId!, e.time);
-                      },
-                      icon: const Icon(Icons.event_available, color: Colors.teal),
-                    ),
-                  ),
-                  Tooltip(
-                    message: 'Delete appointment',
-                    child: IconButton(
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(width: 24, height: 24),
-                      iconSize: 16,
-                      onPressed: () => _confirmDeleteAppt(e.apptId!),
-                      icon: const Icon(Icons.delete_outline, color: Colors.grey),
-                    ),
-                  ),
-                ]
-              ]),
+                child: Text(
+                  e.patient.name,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
+                ),
+              ),
             ),
           ),
         ],
@@ -441,40 +409,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
     );
   }
 
-  Future<void> _rescheduleAppt(String apptId, DateTime current) async {
-    DateTime? date = current;
-    TimeOfDay? time = TimeOfDay(hour: current.hour, minute: current.minute);
-    final now = DateTime.now();
-    final pickedDate = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(now.year - 1), lastDate: DateTime(now.year + 2));
-    if (pickedDate == null) return;
-  final pickedTime = await showTimePicker(context: context, initialTime: time);
-    if (pickedTime == null) return;
-    final dt = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
-    context.read<AppointmentProvider>().reschedule(apptId, dt);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Appointment rescheduled')));
-    }
-  }
-
-  Future<void> _confirmDeleteAppt(String apptId) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete appointment?'),
-        content: const Text('This cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-        ],
-      ),
-    );
-    if (ok == true) {
-      context.read<AppointmentProvider>().remove(apptId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Appointment deleted')));
-      }
-    }
-  }
+  // View-only mode: delete/reschedule actions are intentionally removed.
 
   String? _purposeForNextAppointment(TreatmentSession s) {
     switch (s.type) {

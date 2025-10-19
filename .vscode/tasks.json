@@ -49,6 +49,19 @@
 				"$flutter-build"
 			],
 			"group": "build"
+		},
+		{
+			"label": "flutter_analyze",
+			"type": "shell",
+			"command": "flutter",
+			"args": [
+				"analyze"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$dart"
+			],
+			"group": "build"
 		}
 	]
 }

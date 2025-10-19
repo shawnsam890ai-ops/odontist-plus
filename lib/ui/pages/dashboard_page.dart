@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'dart:ui' show FontFeature;
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../providers/patient_provider.dart';
 import '../../providers/revenue_provider.dart';
 import '../../models/treatment_session.dart';
@@ -24,12 +26,14 @@ import 'dart:io' show File;
 import '../../models/revenue_entry.dart';
 // Removed fl_chart and revenue_entry imports after chart removal
 import '../../providers/auth_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../widgets/cases_overview_chart.dart';
 import '../widgets/revenue_trend_card.dart';
 import '../widgets/patient_overview_card.dart';
 import '../widgets/upcoming_schedule_panel.dart';
 import '../widgets/upcoming_schedule_compact.dart';
 import '../widgets/upcoming_appointment_widget.dart';
+import '../widgets/app_logo.dart';
 import '../widgets/staff_attendance_overview_widget.dart';
 import 'attendance_view.dart';
 import '../widgets/halfday_tile.dart';
@@ -41,6 +45,7 @@ import '../../providers/appointment_provider.dart';
 import '../../models/appointment.dart' as appt;
 import 'add_patient_page.dart';
 import '../../providers/theme_provider.dart';
+import '../../models/lab_vendor.dart';
 
 /// Dashboard main page with side navigation and section placeholders.
 class DashboardPage extends StatefulWidget {
@@ -72,14 +77,25 @@ enum DashboardSection {
 class _DashboardPageState extends State<DashboardPage> {
   DashboardSection _section = DashboardSection.staffAttendance; // default to Staff view
   // Removed "Customize" mode; simplified static layout
+  bool _fullScreen = false;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(56),
-        child: _TopBar(),
-      ),
+  return Scaffold(
+      appBar: _fullScreen
+          ? null
+          : PreferredSize(
+              preferredSize: const Size.fromHeight(56),
+              child: _TopBar(
+                rightActions: [
+                  IconButton(
+                    tooltip: 'Full screen',
+                    icon: const Icon(Icons.fullscreen),
+                    onPressed: () => setState(() => _fullScreen = true),
+                  ),
+                ],
+              ),
+            ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -89,14 +105,44 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
         child: SafeArea(
-          child: Row(
-            children: [
-              const SizedBox(width: 8),
-              _buildSideMenu(),
-              const SizedBox(width: 12),
-              Expanded(child: _buildSectionContent()),
-            ],
-          ),
+          child: Stack(children: [
+            Row(
+              children: [
+                if (!_fullScreen) ...[
+                  const SizedBox(width: 8),
+                  _buildSideMenu(),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(child: _buildSectionContent()),
+              ],
+            ),
+            if (_fullScreen)
+              Positioned(
+                top: 12,
+                left: 12,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => setState(() => _fullScreen = false),
+                    child: Ink(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 10, offset: const Offset(0, 4)),
+                        ],
+                        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(.3)),
+                      ),
+                      child: const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Icon(Icons.fullscreen_exit),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ]),
         ),
       ),
     );
@@ -117,40 +163,22 @@ class _DashboardPageState extends State<DashboardPage> {
         ],
         border: Border.all(color: cs.outlineVariant.withOpacity(.25)),
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center, // center icons vertically
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         children: [
-          for (final s in DashboardSection.values) _iconOnlyMenuItem(s),
+          for (final s in DashboardSection.values)
+            _SideMenuItem(
+              section: s,
+              selected: s == _section,
+              expanded: false,
+              onTap: () => setState(() => _section = s),
+            ),
         ],
       ),
     );
   }
 
-  Widget _iconOnlyMenuItem(DashboardSection s) {
-    final selected = s == _section;
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-      child: Tooltip(
-        message: s.label,
-        waitDuration: const Duration(milliseconds: 400),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => setState(() => _section = s),
-          child: Container(
-            decoration: BoxDecoration(
-              color: selected ? cs.primary.withOpacity(.12) : Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: selected ? cs.primary.withOpacity(.35) : Colors.transparent),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            alignment: Alignment.center,
-            child: Icon(s.icon, color: selected ? cs.primary : cs.onSurfaceVariant),
-          ),
-        ),
-      ),
-    );
-  }
+  // Removed old icon-only item; replaced by _SideMenuItem
 
   Widget _buildSectionContent() {
     switch (_section) {
@@ -1033,11 +1061,31 @@ class _DashboardPageState extends State<DashboardPage> {
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, i) {
                       final lab = labs[i];
+                      final String? _phone = (lab.labPhone != null && lab.labPhone!.trim().isNotEmpty)
+                          ? lab.labPhone!.trim()
+                          : ((lab.staffPhone != null && lab.staffPhone!.trim().isNotEmpty) ? lab.staffPhone!.trim() : null);
                       return ExpansionTile(
                         tilePadding: const EdgeInsets.symmetric(horizontal: 16),
                         title: Text(lab.name),
                         subtitle: lab.address.isNotEmpty ? Text(lab.address) : null,
                         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                          if (_phone != null) ...[
+                            Tooltip(
+                              message: 'WhatsApp',
+                              child: IconButton(
+                                icon: Icon(Icons.chat, color: const Color(0xFF25D366)),
+                                onPressed: () => _launchWhatsApp(_phone),
+                              ),
+                            ),
+                            Tooltip(
+                              message: 'Call',
+                              child: IconButton(
+                                icon: const Icon(Icons.call_outlined),
+                                onPressed: () => _launchCall(_phone),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
                           IconButton(
                             icon: const Icon(Icons.add),
                             tooltip: 'Add product',
@@ -1046,7 +1094,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           PopupMenuButton<String>(
                             onSelected: (v) async {
                               if (v == 'edit') {
-                                _showEditLabDialog(lab.id, lab.name, lab.address);
+                                _showEditLabDialog(lab);
                               } else if (v == 'delete') {
                                 final confirm = await showDialog<bool>(
                                   context: context,
@@ -1283,16 +1331,35 @@ class _DashboardPageState extends State<DashboardPage> {
   void _showAddLabDialog() {
     final nameCtrl = TextEditingController();
     final addrCtrl = TextEditingController();
+    final labPhoneCtrl = TextEditingController();
+    final staffNameCtrl = TextEditingController();
+    final staffPhoneCtrl = TextEditingController();
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Register Lab'),
         content: SizedBox(
-          width: 360,
+          width: 420,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Lab name')),
             const SizedBox(height: 8),
             TextField(controller: addrCtrl, decoration: const InputDecoration(labelText: 'Lab address')),
+            const SizedBox(height: 8),
+            _PhoneField(
+              controller: labPhoneCtrl,
+              label: 'Lab phone (WhatsApp/Call)',
+              onWhatsApp: () => _launchWhatsApp(labPhoneCtrl.text),
+              onCall: () => _launchCall(labPhoneCtrl.text),
+            ),
+            const SizedBox(height: 8),
+            TextField(controller: staffNameCtrl, decoration: const InputDecoration(labelText: 'Staff contact name')),
+            const SizedBox(height: 8),
+            _PhoneField(
+              controller: staffPhoneCtrl,
+              label: 'Staff phone',
+              onWhatsApp: () => _launchWhatsApp(staffPhoneCtrl.text),
+              onCall: () => _launchCall(staffPhoneCtrl.text),
+            ),
           ]),
         ),
         actions: [
@@ -1301,7 +1368,13 @@ class _DashboardPageState extends State<DashboardPage> {
             onPressed: () async {
               final name = nameCtrl.text.trim();
               if (name.isEmpty) return;
-              await context.read<LabRegistryProvider>().addLab(name, addrCtrl.text.trim());
+              await context.read<LabRegistryProvider>().addLab(
+                    name,
+                    addrCtrl.text.trim(),
+                    labPhone: labPhoneCtrl.text.trim().isEmpty ? null : labPhoneCtrl.text.trim(),
+                    staffName: staffNameCtrl.text.trim().isEmpty ? null : staffNameCtrl.text.trim(),
+                    staffPhone: staffPhoneCtrl.text.trim().isEmpty ? null : staffPhoneCtrl.text.trim(),
+                  );
               if (context.mounted) Navigator.pop(context);
             },
             child: const Text('Register'),
@@ -1311,26 +1384,52 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  void _showEditLabDialog(String id, String name, String address) {
-    final nameCtrl = TextEditingController(text: name);
-    final addrCtrl = TextEditingController(text: address);
+  void _showEditLabDialog(LabVendor lab) {
+    final nameCtrl = TextEditingController(text: lab.name);
+    final addrCtrl = TextEditingController(text: lab.address);
+    final labPhoneCtrl = TextEditingController(text: lab.labPhone ?? '');
+    final staffNameCtrl = TextEditingController(text: lab.staffName ?? '');
+    final staffPhoneCtrl = TextEditingController(text: lab.staffPhone ?? '');
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Edit Lab'),
         content: SizedBox(
-          width: 360,
+          width: 420,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Lab name')),
             const SizedBox(height: 8),
             TextField(controller: addrCtrl, decoration: const InputDecoration(labelText: 'Lab address')),
+            const SizedBox(height: 8),
+            _PhoneField(
+              controller: labPhoneCtrl,
+              label: 'Lab phone (WhatsApp/Call)',
+              onWhatsApp: () => _launchWhatsApp(labPhoneCtrl.text),
+              onCall: () => _launchCall(labPhoneCtrl.text),
+            ),
+            const SizedBox(height: 8),
+            TextField(controller: staffNameCtrl, decoration: const InputDecoration(labelText: 'Staff contact name')),
+            const SizedBox(height: 8),
+            _PhoneField(
+              controller: staffPhoneCtrl,
+              label: 'Staff phone',
+              onWhatsApp: () => _launchWhatsApp(staffPhoneCtrl.text),
+              onCall: () => _launchCall(staffPhoneCtrl.text),
+            ),
           ]),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
-              await context.read<LabRegistryProvider>().updateLab(id, name: nameCtrl.text.trim(), address: addrCtrl.text.trim());
+              await context.read<LabRegistryProvider>().updateLab(
+                    lab.id,
+                    name: nameCtrl.text.trim(),
+                    address: addrCtrl.text.trim(),
+                    labPhone: labPhoneCtrl.text.trim().isEmpty ? null : labPhoneCtrl.text.trim(),
+                    staffName: staffNameCtrl.text.trim().isEmpty ? null : staffNameCtrl.text.trim(),
+                    staffPhone: staffPhoneCtrl.text.trim().isEmpty ? null : staffPhoneCtrl.text.trim(),
+                  );
               if (context.mounted) Navigator.pop(context);
             },
             child: const Text('Save'),
@@ -1338,6 +1437,35 @@ class _DashboardPageState extends State<DashboardPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _launchWhatsApp(String rawNumber) async {
+    final number = _normalizePhone(rawNumber, forWhatsApp: true);
+    if (number.isEmpty) return;
+    final uri = Uri.parse('https://wa.me/$number');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _launchCall(String rawNumber) async {
+    final number = _normalizePhone(rawNumber);
+    if (number.isEmpty) return;
+    final uri = Uri(scheme: 'tel', path: number);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
+  String _normalizePhone(String input, {bool forWhatsApp = false}) {
+    // Keep digits and leading +, strip spaces/dashes/others
+    final digits = input.replaceAll(RegExp(r'[^+0-9]'), '');
+    if (digits.isEmpty) return '';
+    if (forWhatsApp) {
+      // wa.me expects international format without +
+      return digits.startsWith('+') ? digits.substring(1) : digits;
+    }
+    return digits;
   }
 
   void _showAddLabProductDialog(String labId) {
@@ -1622,7 +1750,83 @@ class _DashboardPageState extends State<DashboardPage> {
   // ========= Reusable Dashboard Widgets =========
 }
 
+class _SideMenuItem extends StatefulWidget {
+  final DashboardSection section;
+  final bool selected;
+  final bool expanded;
+  final VoidCallback onTap;
+  const _SideMenuItem({required this.section, required this.selected, required this.expanded, required this.onTap});
+  @override
+  State<_SideMenuItem> createState() => _SideMenuItemState();
+}
+
+class _SideMenuItemState extends State<_SideMenuItem> with SingleTickerProviderStateMixin {
+  bool _hover = false;
+  late final AnimationController _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 180));
+  late final Animation<double> _scale = Tween<double>(begin: 1.0, end: 1.1).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final selected = widget.selected;
+    return MouseRegion(
+      onEnter: (_) {
+        setState(() => _hover = true);
+        _ctrl.forward();
+      },
+      onExit: (_) {
+        setState(() => _hover = false);
+        _ctrl.reverse();
+      },
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+          decoration: BoxDecoration(
+            color: selected ? cs.primary.withOpacity(.12) : (_hover ? cs.surfaceVariant.withOpacity(.35) : Colors.transparent),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: selected ? cs.primary.withOpacity(.35) : Colors.transparent),
+          ),
+          child: Row(
+            children: [
+              Tooltip(
+                message: widget.section.label,
+                waitDuration: const Duration(milliseconds: 250),
+                child: ScaleTransition(
+                  scale: _scale,
+                  child: Icon(widget.section.icon, color: selected ? cs.primary : cs.onSurfaceVariant),
+                ),
+              ),
+              if (widget.expanded) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    widget.section.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: FontWeight.w600, color: selected ? cs.primary : null),
+                  ),
+                ),
+              ]
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TopBar extends StatelessWidget {
+  final List<Widget>? rightActions;
+  const _TopBar({this.rightActions});
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -1633,7 +1837,17 @@ class _TopBar extends StatelessWidget {
     return AppBar(
       elevation: 0,
       backgroundColor: cs.surface,
-      title: const Text('Dental Clinic'),
+      title: Row(children: [
+        const AppLogo(size: 28),
+        const SizedBox(width: 10),
+        Text(
+          'Odontist Plus',
+          style: GoogleFonts.cinzel(
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ]),
       actions: [
         // Notification bell
         Padding(
@@ -1656,6 +1870,7 @@ class _TopBar extends StatelessWidget {
               ),
           ]),
         ),
+        if (rightActions != null) ...rightActions!,
       ],
     );
   }
@@ -2623,54 +2838,105 @@ class _LargePanel extends StatefulWidget {
 class _LargePanelState extends State<_LargePanel> {
   bool _hovered = false;
   bool _pressed = false;
+  double _tiltX = 0; // rotation around X (looking up/down)
+  double _tiltY = 0; // rotation around Y (looking left/right)
+
+  void _updateTilt(PointerHoverEvent e) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final size = box.size;
+    final pos = box.globalToLocal(e.position);
+    // Normalize to -1..1 around center
+    final dx = (pos.dx / size.width) * 2 - 1; // left -1, right +1
+    final dy = (pos.dy / size.height) * 2 - 1; // top -1, bottom +1
+    // Limit and invert dy for natural tilt
+    const maxTilt = 0.08; // radians (~4.5 deg)
+    setState(() {
+      _tiltY = (dx.clamp(-1.0, 1.0)) * maxTilt;
+      _tiltX = (-dy.clamp(-1.0, 1.0)) * maxTilt;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final surface = cs.surface;
     final translateY = _pressed ? 0.0 : (_hovered ? -2.0 : 0.0);
-    final shadowOpacity = _pressed ? .02 : (_hovered ? .10 : .05);
+    final shadowOpacity = _pressed ? .02 : (_hovered ? .14 : .06);
+    final Matrix4 mtx = Matrix4.identity()
+      ..setEntry(3, 2, 0.0015) // perspective
+      ..rotateX(_pressed ? 0 : _tiltX)
+      ..rotateY(_pressed ? 0 : _tiltY)
+      ..translate(0.0, translateY);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() { _hovered = false; _pressed = false; }),
+      onExit: (_) => setState(() { _hovered = false; _pressed = false; _tiltX = 0; _tiltY = 0; }),
+      onHover: _updateTilt,
       child: GestureDetector(
         onTapDown: (_) => setState(() => _pressed = true),
         onTapUp: (_) => setState(() => _pressed = false),
         onTapCancel: () => setState(() => _pressed = false),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
-          transform: Matrix4.identity()..translate(0.0, translateY),
-          width: double.infinity,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(widget is _RadiusLargePanel ? (widget as _RadiusLargePanel).radius : 20),
-            gradient: LinearGradient(
-              colors: [surface, surface.withOpacity(.96)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+        child: Transform(
+          alignment: Alignment.center,
+          transform: mtx,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(widget is _RadiusLargePanel ? (widget as _RadiusLargePanel).radius : 20),
+              gradient: LinearGradient(
+                colors: [surface, surface.withOpacity(.96)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                // Stronger elevation when hovered
+                BoxShadow(color: Colors.black.withOpacity(shadowOpacity), blurRadius: 22, offset: const Offset(0, 14)),
+                BoxShadow(color: cs.primary.withOpacity(_hovered ? .08 : .04), blurRadius: 8, offset: const Offset(0, 3)),
+              ],
+              border: Border.all(color: cs.outlineVariant.withOpacity(.25)),
             ),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(shadowOpacity), blurRadius: 18, offset: const Offset(0,10)),
-              BoxShadow(color: cs.primary.withOpacity(_hovered ? .06 : .03), blurRadius: 6, offset: const Offset(0,2)),
-            ],
-            border: Border.all(color: cs.outlineVariant.withOpacity(.25)),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+            child: Stack(children: [
+              // Content
+              LayoutBuilder(builder: (context, c) {
+                final hasHeader = widget.title.trim().isNotEmpty;
+                final header = hasHeader
+                    ? Row(children: [
+                        Expanded(child: Text(widget.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis)),
+                      ])
+                    : const SizedBox.shrink();
+                final body = ClipRect(child: widget.child);
+                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  if (hasHeader) header,
+                  if (hasHeader) const SizedBox(height: 8),
+                  body,
+                ]);
+              }),
+              // Specular highlight overlay on hover for 3D sheen
+              if (_hovered)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(widget is _RadiusLargePanel ? (widget as _RadiusLargePanel).radius : 20),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white.withOpacity(0.08),
+                            Colors.transparent,
+                            Colors.transparent,
+                          ],
+                          stops: const [0.0, 0.4, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ]),
           ),
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-          child: LayoutBuilder(builder: (context, c) {
-            final hasHeader = widget.title.trim().isNotEmpty;
-            final header = hasHeader
-                ? Row(children: [
-                    Expanded(child: Text(widget.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis)),
-                  ])
-                : const SizedBox.shrink();
-            // If child might overflow, wrap in SingleChildScrollView to be safe.
-            final body = ClipRect(child: widget.child);
-            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (hasHeader) header,
-              if (hasHeader) const SizedBox(height: 8),
-              body,
-            ]);
-          }),
         ),
       ),
     );
@@ -3226,6 +3492,43 @@ class _UtilityPaymentsHistoryPanelState extends State<_UtilityPaymentsHistoryPan
                 },
               ),
       )
+    ]);
+  }
+}
+
+// Reusable phone field with WhatsApp and Call actions
+class _PhoneField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final VoidCallback onWhatsApp;
+  final VoidCallback onCall;
+  const _PhoneField({required this.controller, required this.label, required this.onWhatsApp, required this.onCall});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Expanded(
+        child: TextField(
+          controller: controller,
+          keyboardType: TextInputType.phone,
+          decoration: InputDecoration(labelText: label),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Tooltip(
+        message: 'WhatsApp',
+        child: IconButton(
+          icon: Icon(Icons.chat, color: const Color(0xFF25D366)),
+          onPressed: onWhatsApp,
+        ),
+      ),
+      Tooltip(
+        message: 'Call',
+        child: IconButton(
+          icon: const Icon(Icons.call_outlined),
+          onPressed: onCall,
+        ),
+      ),
     ]);
   }
 }

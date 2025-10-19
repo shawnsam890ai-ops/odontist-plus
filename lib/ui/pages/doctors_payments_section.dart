@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
 import '../../providers/doctor_provider.dart';
 import '../../providers/doctor_attendance_provider.dart';
 import '../../models/doctor.dart';
@@ -78,6 +80,7 @@ class DoctorsPaymentsSection extends StatelessWidget {
   void _showAddDoctorDialog(BuildContext context) {
     final nameCtrl = TextEditingController();
   DoctorRole role = DoctorRole.endodontist;
+    String? photoPath;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -97,6 +100,38 @@ class DoctorsPaymentsSection extends StatelessWidget {
                 onChanged: (v) => setSt(() => role = v ?? role),
               );
             }),
+            const SizedBox(height: 12),
+            StatefulBuilder(builder: (context, setSt) {
+              return Row(children: [
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final res = await FilePicker.platform.pickFiles(type: FileType.image);
+                    if (res != null && res.files.single.path != null) {
+                      setSt(() => photoPath = res.files.single.path);
+                    }
+                  },
+                  icon: const Icon(Icons.photo),
+                  label: const Text('Choose Photo'),
+                ),
+                const SizedBox(width: 8),
+                if (photoPath != null)
+                  Expanded(
+                    child: Row(children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.file(File(photoPath!), width: 32, height: 32, fit: BoxFit.cover),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(File(photoPath!).path.split(Platform.pathSeparator).last, overflow: TextOverflow.ellipsis)),
+                      IconButton(
+                        tooltip: 'Clear',
+                        onPressed: () => setSt(() => photoPath = null),
+                        icon: const Icon(Icons.clear, size: 18),
+                      )
+                    ]),
+                  ),
+              ]);
+            }),
           ]),
         ),
         actions: [
@@ -106,7 +141,7 @@ class DoctorsPaymentsSection extends StatelessWidget {
               final name = nameCtrl.text.trim();
               if (name.isEmpty) return;
               final id = DateTime.now().microsecondsSinceEpoch.toString();
-              context.read<DoctorProvider>().addDoctor(Doctor(id: id, name: name, role: role));
+              context.read<DoctorProvider>().addDoctor(Doctor(id: id, name: name, role: role, photoPath: photoPath));
               Navigator.pop(context);
             },
             child: const Text('Add'),
@@ -148,7 +183,17 @@ class _DoctorTile extends StatelessWidget {
     final s = provider.summaryFor(d.id);
     return ExpansionTile(
       title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-  Text('${d.name} • ${d.role.label()}'),
+        Row(children: [
+          if ((d.photoPath ?? '').isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.file(File(d.photoPath!), width: 32, height: 32, fit: BoxFit.cover),
+              ),
+            ),
+          Expanded(child: Text('${d.name} • ${d.role.label()}')),
+        ]),
         const SizedBox(height: 4),
         Text('Doctor: ₹${s.doctorEarned.toStringAsFixed(0)}  •  Payouts: ₹${s.payouts.toStringAsFixed(0)}  •  Outstanding: ₹${s.outstanding.toStringAsFixed(0)}',
             style: const TextStyle(fontSize: 12, color: Colors.black54)),
@@ -207,6 +252,7 @@ class _DoctorTile extends StatelessWidget {
   void _showEditDoctorDialog(BuildContext context, Doctor d) {
     final nameCtrl = TextEditingController(text: d.name);
     DoctorRole role = d.role;
+    String? photoPath = d.photoPath;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -226,6 +272,38 @@ class _DoctorTile extends StatelessWidget {
                 onChanged: (v) => setSt(() => role = v ?? role),
               );
             }),
+            const SizedBox(height: 12),
+            StatefulBuilder(builder: (context, setSt) {
+              return Row(children: [
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final res = await FilePicker.platform.pickFiles(type: FileType.image);
+                    if (res != null && res.files.single.path != null) {
+                      setSt(() => photoPath = res.files.single.path);
+                    }
+                  },
+                  icon: const Icon(Icons.photo),
+                  label: const Text('Choose Photo'),
+                ),
+                const SizedBox(width: 8),
+                if (photoPath != null)
+                  Expanded(
+                    child: Row(children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.file(File(photoPath!), width: 32, height: 32, fit: BoxFit.cover),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(File(photoPath!).path.split(Platform.pathSeparator).last, overflow: TextOverflow.ellipsis)),
+                      IconButton(
+                        tooltip: 'Remove',
+                        onPressed: () => setSt(() => photoPath = ''),
+                        icon: const Icon(Icons.clear, size: 18),
+                      )
+                    ]),
+                  ),
+              ]);
+            }),
           ]),
         ),
         actions: [
@@ -234,7 +312,7 @@ class _DoctorTile extends StatelessWidget {
             onPressed: () {
               final name = nameCtrl.text.trim();
               if (name.isEmpty) return;
-              context.read<DoctorProvider>().updateDoctor(d.id, name: name, role: role);
+              context.read<DoctorProvider>().updateDoctor(d.id, name: name, role: role, photoPath: photoPath);
               Navigator.pop(context);
             },
             child: const Text('Save'),

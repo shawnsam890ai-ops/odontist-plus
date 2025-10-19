@@ -39,12 +39,13 @@ class DoctorProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void updateDoctor(String id, {String? name, DoctorRole? role, bool? active}) {
+  void updateDoctor(String id, {String? name, DoctorRole? role, bool? active, String? photoPath}) {
     final d = _doctors[id];
     if (d == null) return;
     if (name != null) d.name = name;
     if (role != null) d.role = role;
     if (active != null) d.active = active;
+    if (photoPath != null) d.photoPath = photoPath;
     notifyListeners();
   }
 
@@ -268,7 +269,8 @@ class DoctorProvider with ChangeNotifier {
         final id = map['id'] as String;
         final name = map['name'] as String;
         final roleIndex = map['role'] as int;
-        final active = map['active'] as bool;
+  final active = map['active'] as bool;
+  final photoPath = map['photoPath'] as String?;
         final rawRules = Map<String, dynamic>.from(map['rules'] as Map);
         final rules = <String, PaymentRule>{};
         rawRules.forEach((k, v) {
@@ -278,7 +280,7 @@ class DoctorProvider with ChangeNotifier {
           final price = mv['clinicPrice'] == null ? null : (mv['clinicPrice'] as num).toDouble();
           rules[k] = (mode == 'fixed') ? PaymentRule.fixed(value, clinicPrice: price) : PaymentRule.percent(value, clinicPrice: price);
         });
-        _doctors[id] = Doctor(id: id, name: name, role: DoctorRole.values[roleIndex], rules: rules, active: active);
+        _doctors[id] = Doctor(id: id, name: name, role: DoctorRole.values[roleIndex], rules: rules, active: active, photoPath: photoPath);
       }
     }
     final ledStr = prefs.getString(_kLedger);
@@ -306,6 +308,7 @@ class DoctorProvider with ChangeNotifier {
           'name': d.name,
           'role': d.role.index,
           'active': d.active,
+      'photoPath': d.photoPath,
           'rules': d.rules.map((key, r) => MapEntry(key, {
                 'mode': r.mode == PaymentMode.fixed ? 'fixed' : 'percent',
                 'value': r.value,

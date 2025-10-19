@@ -73,7 +73,7 @@ class _SplashPageState extends State<SplashPage> {
                   .then()
                   .shake(duration: 500.ms, hz: 2, curve: Curves.easeOut),
               const SizedBox(height: 18),
-              Text('Dental Clinic', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800))
+              Text('Odontist Plus', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800))
                   .animate()
                   .fadeIn(duration: 600.ms)
                   .move(begin: const Offset(0, 8), end: Offset.zero, curve: Curves.easeOutCubic),

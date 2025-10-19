@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/staff_attendance_provider.dart';
 import '../../models/staff_member.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../services/google_calendar_service.dart';
 import '../../services/notification_service.dart';
 import '../../core/upi_launcher.dart' as upi;
 import 'package:pdf/widgets.dart' as pw;
@@ -931,6 +932,34 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          if ((provider.getSalaryRecord(staffName, _month.year, _month.month)?.calendarEventId ?? '').isNotEmpty)
+            TextButton.icon(
+              icon: const Icon(Icons.event_busy_outlined),
+              label: const Text('Remove from Calendar'),
+              onPressed: () async {
+                final rec = provider.ensureSalaryRecord(staffName, _month.year, _month.month);
+                final id = rec.calendarEventId;
+                if (id == null || id.isEmpty) return;
+                final ok = await GoogleCalendarService.instance.ensureSignedIn();
+                if (!ok) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Google sign-in required to remove')));
+                  }
+                  return;
+                }
+                final removed = await GoogleCalendarService.instance.deleteEvent(id);
+                if (removed) {
+                  rec.calendarEventId = null;
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Calendar event removed')));
+                  }
+                } else {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not remove event')));
+                  }
+                }
+              },
+            ),
           if (mode == 'UPI')
               TextButton.icon(
               icon: const Icon(Icons.account_balance_wallet_outlined),
@@ -942,20 +971,48 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
             ),
           TextButton.icon(
             icon: const Icon(Icons.event_outlined),
-            label: const Text('Add to Calendar'),
+            label: const Text('Add/Update Calendar'),
             onPressed: () async {
-              // Best-effort: open Google Calendar event creation with prefilled fields
-              final title = Uri.encodeComponent('Salary payment — $staffName');
-              final details = Uri.encodeComponent('Salary: ₹${amount.toStringAsFixed(0)}\nDeduction: ₹${(double.tryParse(deductionCtrl.text) ?? 0).toStringAsFixed(0)}');
+              final rec = provider.ensureSalaryRecord(staffName, _month.year, _month.month);
               final start = DateTime(date.year, date.month, date.day, 10, 0);
-              final end = start.add(const Duration(hours: 1));
-              String fmt(DateTime d) => d.toUtc().toIso8601String().replaceAll('-', '').replaceAll(':', '').split('.').first + 'Z';
-              final url = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=$title&details=$details&dates=${fmt(start)}/${fmt(end)}';
-              final uri = Uri.parse(url);
-              if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+              final deduction = double.tryParse(deductionCtrl.text) ?? rec.deduction;
+              final ok = await GoogleCalendarService.instance.ensureSignedIn();
+              if (!ok) {
+                // Fallback: open Calendar template in browser
+                String fmt(DateTime d) => d.toUtc().toIso8601String().replaceAll('-', '').replaceAll(':', '').split('.').first + 'Z';
+                final title = Uri.encodeComponent('Salary payment — $staffName');
+                final details = Uri.encodeComponent('Salary: ₹${amount.toStringAsFixed(0)}\nDeduction: ₹${deduction.toStringAsFixed(0)}');
+                final end = start.add(const Duration(hours: 1));
+                final url = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=$title&details=$details&dates=${fmt(start)}/${fmt(end)}';
+                final uri = Uri.parse(url);
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to open Calendar')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Opened Calendar (no Google sign-in)')));
                 }
+                return;
+              }
+              String? eventId = rec.calendarEventId;
+              if (eventId == null || eventId.isEmpty) {
+                eventId = await GoogleCalendarService.instance.createSalaryEvent(
+                  staffName: staffName,
+                  start: start,
+                  salary: amount,
+                  deduction: deduction,
+                );
+                if (eventId != null) {
+                  // store on record
+                  rec.calendarEventId = eventId;
+                }
+              } else {
+                await GoogleCalendarService.instance.updateSalaryEvent(
+                  eventId: eventId,
+                  start: start,
+                  salary: amount,
+                  deduction: deduction,
+                );
+              }
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(eventId == null ? 'Calendar event not created' : 'Calendar event saved')));
               }
             },
           ),

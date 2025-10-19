@@ -24,9 +24,12 @@ class LabVendor {
   final String id;
   String name;
   String address;
+  String? labPhone;
+  String? staffName;
+  String? staffPhone;
   final List<LabProduct> products;
 
-  LabVendor({String? id, required this.name, required this.address, List<LabProduct>? products})
+  LabVendor({String? id, required this.name, required this.address, this.labPhone, this.staffName, this.staffPhone, List<LabProduct>? products})
       : id = id ?? const Uuid().v4(),
         products = products ?? [];
 
@@ -34,6 +37,9 @@ class LabVendor {
         'id': id,
         'name': name,
         'address': address,
+        'labPhone': labPhone,
+        'staffName': staffName,
+        'staffPhone': staffPhone,
         'products': products.map((e) => e.toJson()).toList(),
       };
 
@@ -41,6 +47,9 @@ class LabVendor {
         id: j['id'] as String?,
         name: j['name'] as String,
         address: j['address'] as String,
+        labPhone: j['labPhone'] as String?,
+        staffName: j['staffName'] as String?,
+        staffPhone: j['staffPhone'] as String?,
         products: (j['products'] as List<dynamic>? ?? []).map((e) => LabProduct.fromJson(e as Map<String, dynamic>)).toList(),
       );
 }

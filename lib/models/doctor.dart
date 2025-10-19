@@ -17,6 +17,8 @@ class Doctor {
   // Payment rules per procedure id (e.g., 'rct', 'ortho')
   final Map<String, PaymentRule> rules;
   bool active;
+  // Optional local file path to a photo/avatar for this doctor
+  String? photoPath;
 
   Doctor({
     required this.id,
@@ -24,6 +26,7 @@ class Doctor {
     required this.role,
     Map<String, PaymentRule>? rules,
     this.active = true,
+    this.photoPath,
   }) : rules = rules ?? {};
 }
 

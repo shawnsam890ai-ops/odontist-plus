@@ -29,6 +29,9 @@ dependencies:
   google_fonts: ^6.2.1
   flutter_animate: ^4.5.0
   open_filex: ^4.3.4
+  google_sign_in: ^6.2.1
+  googleapis: ^13.1.0
+  http: ^1.2.2
 
   # For local persistence (simple) - using shared_preferences for prototype
   shared_preferences: ^2.3.2

@@ -86,7 +86,7 @@ class DentalClinicApp extends StatelessWidget {
           });
           final theme = ctx.watch<ThemeProvider>();
           return MaterialApp(
-            title: 'Dental Clinic',
+            title: 'Odontist Plus',
             theme: theme.lightTheme,
             darkTheme: theme.darkTheme,
             themeMode: ThemeMode.system,

@@ -15,13 +15,13 @@ class LabRegistryProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addLab(String name, String address) async {
-    await _repo.addLab(LabVendor(name: name, address: address));
+  Future<void> addLab(String name, String address, {String? labPhone, String? staffName, String? staffPhone}) async {
+    await _repo.addLab(LabVendor(name: name, address: address, labPhone: labPhone, staffName: staffName, staffPhone: staffPhone));
     notifyListeners();
   }
 
-  Future<void> updateLab(String id, {String? name, String? address}) async {
-    await _repo.updateLab(id, name: name, address: address);
+  Future<void> updateLab(String id, {String? name, String? address, String? labPhone, String? staffName, String? staffPhone}) async {
+    await _repo.updateLab(id, name: name, address: address, labPhone: labPhone, staffName: staffName, staffPhone: staffPhone);
     notifyListeners();
   }
 
