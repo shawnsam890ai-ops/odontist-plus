@@ -31,7 +31,9 @@ class HolidaysProvider with ChangeNotifier {
 
   void setHolidays(List<DateTime> dates) {
     _holidays.clear();
-    for (final d in dates) _holidays.add(_key(d));
+    for (final d in dates) {
+      _holidays.add(_key(d));
+    }
     notifyListeners();
   }
 

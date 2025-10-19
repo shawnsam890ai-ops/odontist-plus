@@ -2,18 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  static ThemeData light() {
+  // Default light theme (green) preserved for callers that still use AppTheme.light()
+  static ThemeData light() => lightFrom(primary: const Color(0xFF28A745));
+
+  static ThemeData lightFrom({required Color primary, Color? primaryContainer}) {
     // Palette
     const scaffoldBg = Color(0xFFF5F7FA);
-    const primaryGreen = Color(0xFF28A745);
     const textPrimary = Color(0xFF333333);
     const textSecondary = Color(0xFF757575);
     const dividerColor = Color(0xFFEEEEEE);
 
+    final seed = primary;
     final base = ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: primaryGreen, brightness: Brightness.light).copyWith(
-        primary: primaryGreen,
+      colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.light).copyWith(
+        primary: primary,
+        primaryContainer: primaryContainer ?? HSLColor.fromColor(primary).withLightness(0.9).toColor(),
         surface: Colors.white,
         onSurface: textPrimary,
         outlineVariant: dividerColor,
@@ -52,18 +56,25 @@ class AppTheme {
         hintStyle: const TextStyle(color: textSecondary),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: const BorderSide(color: dividerColor)),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: const BorderSide(color: dividerColor)),
-        focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: primaryGreen)),
+        focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: primary)),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(backgroundColor: primaryGreen, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+        style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
       ),
-      chipTheme: const ChipThemeData(
+      chipTheme: ChipThemeData(
         backgroundColor: Colors.white,
-        selectedColor: primaryGreen,
-        secondarySelectedColor: primaryGreen,
-        labelStyle: TextStyle(color: textSecondary),
-        secondaryLabelStyle: TextStyle(color: Colors.white),
-        side: BorderSide(color: dividerColor),
+        selectedColor: primary,
+        secondarySelectedColor: primary,
+        labelStyle: const TextStyle(color: textSecondary),
+        secondaryLabelStyle: const TextStyle(color: Colors.white),
+        side: const BorderSide(color: dividerColor),
+        iconTheme: IconThemeData(color: primary),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+      ),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: primary,
+        selectionColor: (primaryContainer ?? HSLColor.fromColor(primary).withLightness(0.9).toColor()).withOpacity(0.6),
+        selectionHandleColor: primary,
       ),
       iconTheme: const IconThemeData(color: textSecondary),
       listTileTheme: const ListTileThemeData(iconColor: textSecondary, textColor: textPrimary),
@@ -76,12 +87,12 @@ class AppTheme {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: dividerColor)),
         ),
       ),
-      datePickerTheme: const DatePickerThemeData(
+      datePickerTheme: DatePickerThemeData(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
-        headerHeadlineStyle: TextStyle(color: textPrimary, fontWeight: FontWeight.w700),
-        dayOverlayColor: WidgetStatePropertyAll(Colors.transparent),
-        todayBackgroundColor: WidgetStatePropertyAll(Color(0x1A28A745)),
+        headerHeadlineStyle: const TextStyle(color: textPrimary, fontWeight: FontWeight.w700),
+        dayOverlayColor: const WidgetStatePropertyAll(Colors.transparent),
+        todayBackgroundColor: WidgetStatePropertyAll(primary.withOpacity(0.1)),
         rangePickerBackgroundColor: Colors.white,
       ),
       timePickerTheme: const TimePickerThemeData(
@@ -89,10 +100,10 @@ class AppTheme {
         hourMinuteTextColor: textPrimary,
         dialTextColor: textPrimary,
       ),
-      textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: primaryGreen)),
+      textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: primary)),
       outlinedButtonTheme: OutlinedButtonThemeData(style: OutlinedButton.styleFrom(foregroundColor: textPrimary, side: const BorderSide(color: dividerColor))),
       scrollbarTheme: ScrollbarThemeData(thumbColor: WidgetStateProperty.all(Colors.black.withOpacity(0.12))),
-      navigationBarTheme: const NavigationBarThemeData(backgroundColor: Colors.white, indicatorColor: Color(0x1A28A745)),
+      navigationBarTheme: NavigationBarThemeData(backgroundColor: Colors.white, indicatorColor: primary.withOpacity(0.1)),
       pageTransitionsTheme: const PageTransitionsTheme(builders: {
         TargetPlatform.android: ZoomPageTransitionsBuilder(),
         TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
@@ -104,8 +115,12 @@ class AppTheme {
   }
 
   static ThemeData dark() {
+    return darkFrom(primary: const Color(0xFF28A745));
+  }
+
+  static ThemeData darkFrom({required Color primary}) {
     // Keep a complementary dark theme without strict palette enforcement
-    final base = ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF28A745), brightness: Brightness.dark));
+    final base = ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: primary, brightness: Brightness.dark));
     return base.copyWith(
       textTheme: GoogleFonts.interTextTheme(base.textTheme),
       appBarTheme: AppBarTheme(

@@ -9,12 +9,20 @@ import '../../providers/appointment_provider.dart';
 import '../../models/appointment.dart' as appt;
 import '../pages/patient_detail_page.dart';
 
+class _StatusItem {
+  final String label;
+  final appt.AppointmentStatus? value;
+  const _StatusItem(this.label, this.value);
+}
+
 class _ApptEntry {
-  _ApptEntry(this.patient, this.time, this.complaint, this.doctor);
+  _ApptEntry(this.patient, this.time, this.complaint, this.doctor, {this.apptId, this.status});
   final Patient patient;
   final DateTime time;
   final String? complaint;
   final String? doctor;
+  final String? apptId; // present only for provider-backed appointments
+  final appt.AppointmentStatus? status;
 }
 
 /// Compact Upcoming Schedule panel for the dashboard Overview.
@@ -33,6 +41,8 @@ class UpcomingSchedulePanel extends StatefulWidget {
 class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
   DateTime _selectedDay = DateTime.now();
   String? _doctorId;
+  // Status filter: null -> All
+  appt.AppointmentStatus? _statusFilter;
 
   @override
   Widget build(BuildContext context) {
@@ -41,10 +51,14 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
     final dayKey = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
     final entries = <_ApptEntry>[];
     // Appointments provider entries
-    for (final appt.Appointment a in apptProvider.forDay(dayKey)) {
+    var apptsForDay = apptProvider.forDay(dayKey);
+    if (_statusFilter != null) {
+      apptsForDay = apptsForDay.where((a) => a.status == _statusFilter).toList();
+    }
+    for (final appt.Appointment a in apptsForDay) {
       if (_doctorId != null && a.doctorId != _doctorId) continue;
       final p = patientProvider.byId(a.patientId);
-      if (p != null) entries.add(_ApptEntry(p, a.dateTime, a.reason, a.doctorName));
+      if (p != null) entries.add(_ApptEntry(p, a.dateTime, a.reason, a.doctorName, apptId: a.id, status: a.status));
     }
     // Sessions and next appointments
     for (final Patient p in patientProvider.patients) {
@@ -77,6 +91,8 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
           if (widget.showDoctorFilter) const SizedBox(height: 4),
           _sevenDayStrip(),
           const SizedBox(height: 8),
+          _statusFilters(),
+          const SizedBox(height: 8),
           if (widget.showTitle)
             Text('Upcoming Schedule', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
           if (widget.showTitle) const SizedBox(height: 6),
@@ -87,6 +103,32 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
       ),
     );
   }
+
+      Widget _statusFilters() {
+        final List<_StatusItem> items = [
+          _StatusItem('All', null),
+          _StatusItem('Scheduled', appt.AppointmentStatus.scheduled),
+          _StatusItem('Attended', appt.AppointmentStatus.attended),
+          _StatusItem('Missed', appt.AppointmentStatus.missed),
+        ];
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: [
+            for (final it in items) ...[
+              Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: ChoiceChip(
+                  label: Text(it.label),
+                  selected: _statusFilter == it.value,
+                  onSelected: (_) => setState(() => _statusFilter = it.value),
+                ),
+              ),
+            ],
+          ]),
+        );
+      }
+
+      
 
       Widget _monthHeader() {
         final m = _selectedDay;
@@ -389,6 +431,8 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
         final hour12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
         final period = hour >= 12 ? 'PM' : 'AM';
         final time = '${hour12.toString().padLeft(2, '0')}:${e.time.minute.toString().padLeft(2, '0')} $period';
+        final isAttended = e.status == appt.AppointmentStatus.attended;
+        final isMissed = e.status == appt.AppointmentStatus.missed;
         return Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -424,6 +468,24 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                         overflow: TextOverflow.ellipsis,
                         softWrap: false,
                       ),
+                    if (isAttended || isMissed)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2.0),
+                        child: Row(children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isAttended ? Colors.green.withOpacity(.12) : Colors.red.withOpacity(.12),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: (isAttended ? Colors.green : Colors.red).withOpacity(.4)),
+                            ),
+                            child: Text(
+                              isAttended ? 'Attended' : 'Missed',
+                              style: TextStyle(fontSize: 11, color: isAttended ? Colors.green[800] : Colors.red[700], fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ]),
+                      ),
                   ],
                 ),
               ),
@@ -440,31 +502,117 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                 ),
               ),
               const SizedBox(width: 8),
-              // Right: Patient name (clickable to open patient detail)
+              // Right: Patient name (clickable) and actions for provider appointments
               Flexible(
-                flex: 5,
+                flex: 6,
                 fit: FlexFit.tight,
                 child: Align(
                   alignment: Alignment.centerRight,
-                  child: GestureDetector(
-                    onTap: () => Navigator.of(context).pushNamed(
-                      PatientDetailPage.routeName,
-                      arguments: {'patientId': e.patient.id},
-                    ),
-                    child: Text(
-                      e.patient.name,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      softWrap: false,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).pushNamed(
+                          PatientDetailPage.routeName,
+                          arguments: {'patientId': e.patient.id},
+                        ),
+                        child: Text(
+                          e.patient.name,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: false,
+                        ),
+                      ),
+                      if (e.apptId != null) ...[
+                        const SizedBox(width: 8),
+                        _apptActions(e),
+                      ],
+                    ],
                   ),
                 ),
               ),
             ],
           ),
         );
+      }
+
+      Widget _apptActions(_ApptEntry e) {
+        final appts = context.read<AppointmentProvider>();
+        return Row(mainAxisSize: MainAxisSize.min, children: [
+          Tooltip(
+            message: 'Mark attended',
+            child: IconButton(
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: () => appts.markAttended(e.apptId!),
+              icon: const Icon(Icons.check_circle_outline, color: Colors.green),
+            ),
+          ),
+          Tooltip(
+            message: 'Mark missed',
+            child: IconButton(
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: () => appts.markMissed(e.apptId!),
+              icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent),
+            ),
+          ),
+          Tooltip(
+            message: 'Reschedule',
+            child: IconButton(
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: () => _rescheduleAppt(e.apptId!, e.time),
+              icon: const Icon(Icons.schedule, color: Colors.blueGrey),
+            ),
+          ),
+          Tooltip(
+            message: 'Delete appointment',
+            child: IconButton(
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: () => _confirmDeleteAppt(e.apptId!),
+              icon: const Icon(Icons.delete_outline, color: Colors.grey),
+            ),
+          ),
+        ]);
+      }
+
+      Future<void> _rescheduleAppt(String apptId, DateTime current) async {
+        DateTime? date = current;
+        TimeOfDay? time = TimeOfDay(hour: current.hour, minute: current.minute);
+        final now = DateTime.now();
+        final pickedDate = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(now.year - 1), lastDate: DateTime(now.year + 2));
+        if (pickedDate == null) return;
+  final pickedTime = await showTimePicker(context: context, initialTime: time);
+        if (pickedTime == null) return;
+        final dt = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
+        context.read<AppointmentProvider>().reschedule(apptId, dt);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Appointment rescheduled')));
+        }
+      }
+
+      Future<void> _confirmDeleteAppt(String apptId) async {
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Delete appointment?'),
+            content: const Text('This cannot be undone.'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+            ],
+          ),
+        );
+        if (ok == true) {
+          context.read<AppointmentProvider>().remove(apptId);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Appointment deleted')));
+          }
+        }
       }
 
       bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;

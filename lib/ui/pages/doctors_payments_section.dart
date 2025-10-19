@@ -6,6 +6,7 @@ import '../../models/doctor.dart';
 import '../../models/payment_rule.dart';
 import '../../models/procedures.dart';
 import '../../models/payment_entry.dart';
+import '../../core/upi_launcher.dart' as upi;
 
 class DoctorsPaymentsSection extends StatelessWidget {
   const DoctorsPaymentsSection({super.key});
@@ -635,25 +636,72 @@ void _showMakePayoutDialog(BuildContext context) {
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        // Show Pay via UPI when selected
+        ValueListenableBuilder<String>(
+          valueListenable: modeCtrl,
+          builder: (ctx, mode, _) {
+            if (mode != 'UPI') return const SizedBox.shrink();
+            return TextButton.icon(
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              label: const Text('Pay via UPI'),
+              onPressed: () async {
+                final amt = double.tryParse(amountCtrl.text) ?? 0;
+                final doctorName = provider.byId(doctorId)?.name ?? 'Doctor';
+                final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+                final extra = noteCtrl.text.trim();
+                final note = 'Doctor payout — $doctorName — $dateStr' + (extra.isEmpty ? '' : ' — $extra');
+                await upi.launchUPIPayment(
+                  context: context,
+                  amount: amt > 0 ? amt : null,
+                  note: note,
+                );
+              },
+            );
+          },
+        ),
         ElevatedButton(
           onPressed: () async {
             final amt = double.tryParse(amountCtrl.text) ?? 0;
             if (amt <= 0) return;
-            final confirm = await showDialog<bool>(
-              context: context,
-              builder: (_) => AlertDialog(
-                title: const Text('Confirm Payment'),
-                content: Text('Pay ₹${amt.toStringAsFixed(0)} to ${provider.byId(doctorId)?.name ?? 'doctor'}?'),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
-                  ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes')),
-                ],
-              ),
-            );
-            if (confirm == true) {
-              provider.recordPayoutWithMode(doctorId: doctorId, amount: amt, date: date, note: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(), mode: modeCtrl.value);
-              Navigator.pop(context);
+            // For UPI, ask if the payment completed to keep ledger consistent.
+            if (modeCtrl.value == 'UPI') {
+              final doctorName = provider.byId(doctorId)?.name ?? 'doctor';
+              final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+              final completed = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('UPI Payment Completed?'),
+                  content: Text('Did the UPI payment of ₹${amt.toStringAsFixed(0)} to $doctorName on $dateStr complete successfully?'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Not yet')),
+                    ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes, Completed')),
+                  ],
+                ),
+              );
+              if (completed != true) return; // Don't record unless confirmed completed
+            } else {
+              // Non-UPI modes: regular confirmation
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Confirm Payment'),
+                  content: Text('Pay ₹${amt.toStringAsFixed(0)} to ${provider.byId(doctorId)?.name ?? 'doctor'}?'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
+                    ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes')),
+                  ],
+                ),
+              );
+              if (confirm != true) return;
             }
+            provider.recordPayoutWithMode(
+              doctorId: doctorId,
+              amount: amt,
+              date: date,
+              note: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
+              mode: modeCtrl.value,
+            );
+            Navigator.pop(context);
           },
           child: const Text('Done'),
         )

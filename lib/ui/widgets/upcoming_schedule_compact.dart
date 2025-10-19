@@ -9,11 +9,12 @@ import '../../models/appointment.dart' as appt;
 import '../pages/patient_detail_page.dart';
 
 class _ApptEntry {
-  _ApptEntry(this.patient, this.time, this.complaint, this.doctor);
+  _ApptEntry(this.patient, this.time, this.complaint, this.doctor, {this.apptId});
   final Patient patient;
   final DateTime time;
   final String? complaint;
   final String? doctor;
+  final String? apptId;
 }
 
 /// Compact Upcoming Schedule widget for the dashboard Overview tile.
@@ -44,7 +45,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
     // Appointments provider entries
     for (final appt.Appointment a in apptProvider.forDay(dayKey)) {
       final p = patientProvider.byId(a.patientId);
-      if (p != null) entries.add(_ApptEntry(p, a.dateTime, a.reason, a.doctorName));
+      if (p != null) entries.add(_ApptEntry(p, a.dateTime, a.reason, a.doctorName, apptId: a.id));
     }
 
     // Sessions and next appointments

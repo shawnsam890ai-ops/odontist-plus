@@ -16,8 +16,9 @@ import 'providers/lab_registry_provider.dart';
 import 'providers/medicine_provider.dart';
 import 'providers/utility_provider.dart';
 import 'ui/pages/splash_page.dart';
-import 'core/app_theme.dart';
 import 'providers/auth_provider.dart';
+import 'providers/theme_provider.dart';
+import 'services/notification_service.dart';
 // Firebase initialization will be added after FlutterFire configure.
 
 void main() {
@@ -29,7 +30,7 @@ class DentalClinicApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
+  return MultiProvider(
     providers: [
   // To enable Firebase auth, replace the line below with:
   // ChangeNotifierProvider(create: (_) => AuthProvider(backend: FirebaseAuthBackend())),
@@ -47,6 +48,7 @@ class DentalClinicApp extends StatelessWidget {
   ChangeNotifierProvider(create: (_) => DoctorProvider()),
     ChangeNotifierProvider(create: (_) => LabRegistryProvider()),
     ChangeNotifierProvider(create: (_) => MedicineProvider()),
+    ChangeNotifierProvider(create: (_) => ThemeProvider()),
     // Utility depends on RevenueProvider instance
     ChangeNotifierProxyProvider<RevenueProvider, UtilityProvider>(
       create: (ctx) => UtilityProvider(revenue: ctx.read<RevenueProvider>()),
@@ -59,6 +61,8 @@ class DentalClinicApp extends StatelessWidget {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             // Auth first
             ctx.read<AuthProvider>().ensureLoaded();
+            // Load theme choice
+            ctx.read<ThemeProvider>().ensureLoaded();
             final opt = ctx.read<OptionsProvider>();
             final pats = ctx.read<PatientProvider>();
             opt.registerPatientProvider(pats);
@@ -77,11 +81,14 @@ class DentalClinicApp extends StatelessWidget {
             ctx.read<MedicineProvider>().ensureLoaded();
             // Load utilities
             ctx.read<UtilityProvider>().ensureLoaded();
+            // Initialize local notifications
+            NotificationService.instance.init();
           });
+          final theme = ctx.watch<ThemeProvider>();
           return MaterialApp(
             title: 'Dental Clinic',
-            theme: AppTheme.light(),
-            darkTheme: AppTheme.dark(),
+            theme: theme.lightTheme,
+            darkTheme: theme.darkTheme,
             themeMode: ThemeMode.system,
             onGenerateRoute: AppRouter.generate,
             initialRoute: SplashPage.routeName,

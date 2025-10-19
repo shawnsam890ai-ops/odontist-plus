@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/staff_attendance_provider.dart';
 import '../../models/staff_member.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/upi_launcher.dart' as upi;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../widgets/staff_attendance_widget.dart';
@@ -252,22 +253,14 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
 
   // Removed: appointment schedule helper widgets and state since schedule moved out
     
-    Future<void> _launchUPIPayment() async {
-    const dummyUrl = 'upi://pay?pa=dentist@upi&pn=Dental%20Clinic&am=0&cu=INR';
-    try {
-      final uri = Uri.parse(dummyUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No UPI app available')));
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('UPI launch failed: $e')));
-      }
-    }
+  Future<void> _launchUPIPayment({required String staffName, required double amount, required DateTime date, String? extraNote}) async {
+    final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final note = 'Staff salary — $staffName — $dateStr' + ((extraNote == null || extraNote.trim().isEmpty) ? '' : ' — ${extraNote.trim()}');
+    await upi.launchUPIPayment(
+      context: context,
+      amount: amount > 0 ? amount : null,
+      note: note,
+    );
   }
 
   Future<void> _showAddStaffDialog() async {
@@ -471,7 +464,11 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                       final isSel = selected.contains(d.day);
                       return GestureDetector(
                         onTap: () => setState(() {
-                          if (isSel) selected.remove(d.day); else selected.add(d.day);
+                          if (isSel) {
+                            selected.remove(d.day);
+                          } else {
+                            selected.add(d.day);
+                          }
                         }),
                         child: Container(
                           decoration: BoxDecoration(
@@ -774,17 +771,45 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                   DropdownMenuItem(value: 'Bank', child: Text('Bank Transfer')),
                   DropdownMenuItem(value: 'Other', child: Text('Other')),
                 ],
-                onChanged: (v) { if (v != null) mode = v; },
+                onChanged: (v) {
+                  if (v != null) {
+                    mode = v;
+                    // Rebuild the dialog to reflect action button changes
+                    (ctx as Element).markNeedsBuild();
+                  }
+                },
               ),
             ],
           ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          if (mode == 'UPI')
+            TextButton.icon(
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              label: const Text('Pay via UPI'),
+              onPressed: () async {
+                await _launchUPIPayment(staffName: staffName, amount: amount, date: date);
+              },
+            ),
           FilledButton.icon(
             icon: const Icon(Icons.check),
             label: const Text('Mark Paid'),
             onPressed: () async {
+              if (mode == 'UPI') {
+                final completed = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('UPI Payment Completed?'),
+                    content: Text('Did the UPI payment of ₹${amount.toStringAsFixed(0)} to $staffName on ${date.day.toString().padLeft(2,'0')}/${date.month.toString().padLeft(2,'0')}/${date.year} complete successfully?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Not yet')),
+                      ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes, Completed')),
+                    ],
+                  ),
+                );
+                if (completed != true) return;
+              }
               provider.markSalaryPaid(staffName, _month.year, _month.month, amount: amount, mode: mode, date: date);
               Navigator.pop(ctx);
               setState(() {});

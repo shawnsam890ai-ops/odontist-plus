@@ -34,6 +34,7 @@ import '../../providers/doctor_provider.dart';
 import '../../providers/appointment_provider.dart';
 import '../../models/appointment.dart' as appt;
 import 'add_patient_page.dart';
+import '../../providers/theme_provider.dart';
 
 /// Dashboard main page with side navigation and section placeholders.
 class DashboardPage extends StatefulWidget {
@@ -69,6 +70,10 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(56),
+        child: _TopBar(),
+      ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -1292,12 +1297,26 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // ============== Settings ==============
   Widget _settingsSection() {
+    final themeProv = context.watch<ThemeProvider>();
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 16),
         const Text('General configuration placeholders will appear here.'),
+        const SizedBox(height: 12),
+        Text('Theme', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          _themeChoiceChip('Green', ThemePreset.green, themeProv),
+          _themeChoiceChip('Purple', ThemePreset.purple, themeProv),
+          _themeChoiceChip('Red', ThemePreset.red, themeProv),
+          ActionChip(
+            label: const Text('Custom…'),
+            avatar: const Icon(Icons.color_lens_outlined),
+            onPressed: () => _showCustomThemeDialog(themeProv),
+          ),
+        ]),
         const SizedBox(height: 24),
         Wrap(spacing: 12, runSpacing: 12, children: [
           const Chip(label: Text('Theme: Light/Dark')),
@@ -1328,6 +1347,97 @@ class _DashboardPageState extends State<DashboardPage> {
           ],
         )
       ]),
+    );
+  }
+
+  Widget _themeChoiceChip(String label, ThemePreset preset, ThemeProvider themeProv) {
+    final selected = themeProv.preset == preset;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => themeProv.setPreset(preset),
+    );
+  }
+
+  void _showCustomThemeDialog(ThemeProvider themeProv) {
+    String _toRgbHex(Color c) => '#${c.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+    final hexCtrl = TextEditingController(text: _toRgbHex(themeProv.customPrimary));
+    final hexLightCtrl = TextEditingController(text: _toRgbHex(themeProv.customPrimaryContainer));
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Custom Theme Color'),
+        content: SizedBox(
+          width: 360,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Align(alignment: Alignment.centerLeft, child: Text('Primary color (HEX)')),
+            const SizedBox(height: 8),
+            TextField(
+              controller: hexCtrl,
+              decoration: const InputDecoration(
+                prefixText: '',
+                hintText: '#8B27E2',
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Align(alignment: Alignment.centerLeft, child: Text('Light/Container color (HEX)')),
+            const SizedBox(height: 8),
+            TextField(
+              controller: hexLightCtrl,
+              decoration: const InputDecoration(
+                prefixText: '',
+                hintText: '#D9B6FF',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text('Tip: icopurple = #8B27E2, light = #D9B6FF', style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 12),
+            Row(children: [
+              const Text('Preview:'),
+              const SizedBox(width: 8),
+              _colorSwatch(hexCtrl.text),
+              const SizedBox(width: 6),
+              _colorSwatch(hexLightCtrl.text),
+            ]),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              final color = _parseHexColor(hexCtrl.text.trim());
+              final light = _parseHexColor(hexLightCtrl.text.trim());
+              if (color != null) {
+                themeProv.setCustomColors(color, primaryContainer: light);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Apply'),
+          )
+        ],
+      ),
+    );
+  }
+
+  Color? _parseHexColor(String input) {
+    var v = input.toUpperCase().replaceAll('#', '').replaceAll('0X', '');
+    if (v.length == 6) v = 'FF$v';
+    if (v.length != 8) return null;
+    final intVal = int.tryParse(v, radix: 16);
+    if (intVal == null) return null;
+    return Color(intVal);
+  }
+
+  Widget _colorSwatch(String hex) {
+    final c = _parseHexColor(hex);
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        color: c ?? Colors.transparent,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.black12),
+      ),
     );
   }
 
@@ -1403,6 +1513,144 @@ class _DashboardPageState extends State<DashboardPage> {
   // removed legacy Lab Cost dialogs (moved to Labs registry UI)
 
   // ========= Reusable Dashboard Widgets =========
+}
+
+class _TopBar extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final appts = context.watch<AppointmentProvider>();
+    final due = appts.dueNow(graceMinutes: 10);
+    final upcoming = appts.upcomingWithin(withinMinutes: 60);
+    final hasAlerts = due.isNotEmpty || upcoming.isNotEmpty;
+    return AppBar(
+      elevation: 0,
+      backgroundColor: cs.surface,
+      title: const Text('Dental Clinic'),
+      actions: [
+        // Notification bell
+        Padding(
+          padding: const EdgeInsets.only(right: 8.0),
+          child: Stack(children: [
+            IconButton(
+              tooltip: 'Appointments',
+              onPressed: () => _showApptSheet(context),
+              icon: const Icon(Icons.notifications_none),
+            ),
+            if (hasAlerts)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+                ),
+              ),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  void _showApptSheet(BuildContext context) {
+    final appts = context.read<AppointmentProvider>();
+    final patients = context.read<PatientProvider>();
+    final due = appts.dueNow(graceMinutes: 10);
+    final upcoming = appts.upcomingWithin(withinMinutes: 60);
+    final missed = appts.missed();
+
+    String fmt(DateTime t) {
+      final h = t.hour == 0 ? 12 : (t.hour > 12 ? t.hour - 12 : t.hour);
+      final p = t.hour >= 12 ? 'PM' : 'AM';
+      return '${h.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')} $p';
+    }
+
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.7,
+            minChildSize: 0.4,
+            maxChildSize: 0.9,
+            builder: (context, scrollController) {
+              return ListView(
+                controller: scrollController,
+                children: [
+                  Text('Due now', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  if (due.isEmpty) const Text('No appointments due now')
+                  else ...due.map((a) {
+                    final p = patients.byId(a.patientId);
+                    return ListTile(
+                      leading: const Icon(Icons.alarm),
+                      title: Text('${p?.name ?? 'Patient'} • ${fmt(a.dateTime)}'),
+                      subtitle: Text(a.reason ?? ''),
+                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                        IconButton(tooltip: 'Attended', icon: const Icon(Icons.check_circle_outline, color: Colors.green), onPressed: () { context.read<AppointmentProvider>().markAttended(a.id); }),
+                        IconButton(tooltip: 'Missed', icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent), onPressed: () { context.read<AppointmentProvider>().markMissed(a.id); }),
+                        IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline), onPressed: () { context.read<AppointmentProvider>().remove(a.id); }),
+                      ]),
+                    );
+                  }),
+                  const Divider(height: 24),
+                  Text('Upcoming (next 60 min)', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  if (upcoming.isEmpty) const Text('No upcoming appointments')
+                  else ...upcoming.map((a) {
+                    final p = patients.byId(a.patientId);
+                    return ListTile(
+                      leading: const Icon(Icons.schedule),
+                      title: Text('${p?.name ?? 'Patient'} • ${fmt(a.dateTime)}'),
+                      subtitle: Text(a.reason ?? ''),
+                    );
+                  }),
+                  const Divider(height: 24),
+                  Text('Missed', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  if (missed.isEmpty) const Text('No missed appointments')
+                  else ...missed.map((a) {
+                    final p = patients.byId(a.patientId);
+                    return ListTile(
+                      leading: const Icon(Icons.history),
+                      title: Text('${p?.name ?? 'Patient'} • ${fmt(a.dateTime)}'),
+                      subtitle: Text(a.reason ?? ''),
+                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                        IconButton(
+                          tooltip: 'Reschedule',
+                          icon: const Icon(Icons.calendar_month),
+                          onPressed: () async {
+                          Navigator.pop(context);
+                          // reuse reschedule flow
+                          final current = a.dateTime;
+                          DateTime? d = current;
+                          TimeOfDay? t = TimeOfDay(hour: current.hour, minute: current.minute);
+                          final now = DateTime.now();
+                          final pd = await showDatePicker(context: context, initialDate: d, firstDate: DateTime(now.year - 1), lastDate: DateTime(now.year + 2));
+                          if (pd == null) return;
+                          final pt = await showTimePicker(context: context, initialTime: t);
+                          if (pt == null) return;
+                          final dt = DateTime(pd.year, pd.month, pd.day, pt.hour, pt.minute);
+                          context.read<AppointmentProvider>().reschedule(a.id, dt);
+                          },
+                        ),
+                        IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline), onPressed: () { context.read<AppointmentProvider>().remove(a.id); }),
+                      ]),
+                    );
+                  }),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
 }
 
 // ================= Revenue & Expenses Panel =================

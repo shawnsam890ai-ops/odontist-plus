@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import '../../providers/doctor_provider.dart';
+import '../../models/doctor.dart';
 import '../../providers/doctor_attendance_provider.dart';
 import '../../models/procedures.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -657,49 +658,13 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                   ),
                 ),
                 const SizedBox(height: 8),
-                Builder(builder: (ctx){
-                  final opt = ctx.watch<OptionsProvider>();
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SearchEditableMultiSelect(
-                        label: 'Select / Add Findings',
-                        options: opt.oralFindingsOptions,
-                        initial: _selectedOralFindingOptions,
-                        onChanged: (vals)=> setState(()=> _selectedOralFindingOptions = vals),
-                        onAdd: (v)=> opt.addValue('oralFindings', v),
-                        onDelete: (v) async {
-                          final ok = await opt.removeValue('oralFindings', v);
-                          if (!ok && mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: finding in use.')));
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _inlineToothController,
-                              decoration: const InputDecoration(labelText: 'Tooth (optional, FDI)'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.add),
-                            onPressed: _addInlineOralFinding,
-                            label: const Text('Add'),
-                          )
-                        ],
-                      ),
-                      if (_selectedOralFindingOptions.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top:6),
-                          child: Text('Press Add to append selected findings with ${_inlineToothController.text.isEmpty ? 'no tooth' : 'tooth ${_inlineToothController.text}'}'),
-                        )
-                    ],
-                  );
-                })
+                if (_selectedOralFindingOptions.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Press Add to append selected findings with ${_inlineToothController.text.isEmpty ? 'no tooth' : 'tooth ${_inlineToothController.text}'}',
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1191,71 +1156,16 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 ),
                 const SizedBox(height: 12),
                 Builder(builder: (ctx){
-                  final opt = ctx.watch<OptionsProvider>();
-                  final doctors = opt.orthoDoctors;
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedOrthoDoctor,
-                          decoration: const InputDecoration(labelText: 'Doctor in Charge'),
-                          items: doctors.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                          onChanged: (v)=> setState(()=> _selectedOrthoDoctor = v),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: 'Add Doctor',
-                        icon: const Icon(Icons.add),
-                        onPressed: () async {
-                          final controller = TextEditingController();
-                          final val = await showDialog<String>(
-                              context: context,
-                              builder: (_) => AlertDialog(
-                                title: const Text('Add Doctor'),
-                                content: TextField(
-                                  controller: controller,
-                                  decoration: const InputDecoration(labelText: 'Doctor Name'),
-                                  autofocus: true,
-                                ),
-                                actions: [
-                                  TextButton(onPressed: ()=> Navigator.pop(context), child: const Text('Cancel')),
-                                  ElevatedButton(onPressed: ()=> Navigator.pop(context, controller.text.trim()), child: const Text('Add')),
-                                ],
-                              ));
-                          if (val != null && val.isNotEmpty) {
-                            await opt.addValue('orthoDoctors', val);
-                            if (mounted) setState(()=> _selectedOrthoDoctor = val);
-                          }
-                        },
-                      ),
-                      IconButton(
-                        tooltip: 'Delete Selected Doctor',
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: _selectedOrthoDoctor == null ? null : () async {
-                          final target = _selectedOrthoDoctor!;
-                          final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (_) => AlertDialog(
-                                title: const Text('Delete Doctor'),
-                                content: Text('Delete "$target"? This cannot be undone.'),
-                                actions: [
-                                  TextButton(onPressed: ()=> Navigator.pop(context, false), child: const Text('Cancel')),
-                                  ElevatedButton(onPressed: ()=> Navigator.pop(context, true), child: const Text('Delete')),
-                                ],
-                              ));
-                          if (confirm == true) {
-                            final ok = await opt.removeValue('orthoDoctors', target);
-                            if (!ok && mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: doctor referenced in a session.')));
-                            } else if (ok && mounted) {
-                              setState(()=> _selectedOrthoDoctor = null);
-                            }
-                          }
-                        },
-                      ),
-                    ],
+                  final all = ctx.watch<DoctorProvider>().doctors.where((d)=> d.active).toList();
+                  final filtered = all.where((d)=> d.role == DoctorRole.orthodontist).toList();
+                  final source = filtered.isEmpty ? all : filtered;
+                  final names = source.map((d)=> d.name).toList();
+                  final value = names.contains(_selectedOrthoDoctor) ? _selectedOrthoDoctor : null;
+                  return DropdownButtonFormField<String>(
+                    value: value,
+                    decoration: const InputDecoration(labelText: 'Doctor in Charge'),
+                    items: names.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(),
+                    onChanged: (v)=> setState(()=> _selectedOrthoDoctor = v),
                   );
                 }),
               ],
@@ -1616,34 +1526,17 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 ],
                 const Divider(height: 32),
                 Builder(builder: (ctx){
-                  final opt = ctx.watch<OptionsProvider>();
-                  return Row(children:[
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedRcDoctor,
-                        decoration: const InputDecoration(labelText: 'Doctor In Charge'),
-                        items: opt.rcDoctors.map((d)=> DropdownMenuItem(value:d, child: Text(d))).toList(),
-                        onChanged: (v)=> setState(()=> _selectedRcDoctor = v),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add),
-                      tooltip: 'Add Doctor',
-                      onPressed: () async {
-                        final ctrl = TextEditingController();
-                        final name = await showDialog<String>(context: context, builder: (_)=> AlertDialog(title: const Text('Add Doctor'), content: TextField(controller: ctrl, decoration: const InputDecoration(labelText: 'Name')), actions:[
-                          TextButton(onPressed: ()=> Navigator.pop(context), child: const Text('Cancel')),
-                          ElevatedButton(onPressed: ()=> Navigator.pop(context, ctrl.text.trim()), child: const Text('Add'))
-                        ],));
-                        if (name!=null && name.isNotEmpty) opt.addValue('rcDoctors', name);
-                      },
-                    ),
-                    if (_selectedRcDoctor != null) IconButton(
-                      icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
-                      tooltip: 'Delete Doctor',
-                      onPressed: () async { await ctx.read<OptionsProvider>().removeValue('rcDoctors', _selectedRcDoctor!); setState(()=> _selectedRcDoctor=null); },
-                    )
-                  ]);
+                  final all = ctx.watch<DoctorProvider>().doctors.where((d)=> d.active).toList();
+                  final filtered = all.where((d)=> d.role == DoctorRole.endodontist).toList();
+                  final source = filtered.isEmpty ? all : filtered;
+                  final names = source.map((d)=> d.name).toList();
+                  final value = names.contains(_selectedRcDoctor) ? _selectedRcDoctor : null;
+                  return DropdownButtonFormField<String>(
+                    value: value,
+                    decoration: const InputDecoration(labelText: 'Doctor In Charge'),
+                    items: names.map((n)=> DropdownMenuItem(value:n, child: Text(n))).toList(),
+                    onChanged: (v)=> setState(()=> _selectedRcDoctor = v),
+                  );
                 }),
                 const SizedBox(height: 12),
                 TextField(
@@ -4187,25 +4080,26 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               // Removed separate subtitle & trailing; integrated into custom title Column (Option B)
               children: [
                 // Removed expanded Add Follow-Up button (only trailing icon now)
-                if (!isFollowUp && s.type == TreatmentType.orthodontic && s.orthoOralFindings.isNotEmpty) ...[
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: _typeColor(s).withValues(alpha: .18),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: _typeColor(s).withValues(alpha: .30), width: .9),
-                    ),
-                    child: Text(
-                      'Ortho Findings: ${s.orthoOralFindings}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .80),
-                        height: 1.2,
+                if (!isFollowUp && s.type == TreatmentType.orthodontic) ...[
+                  if (s.orthoOralFindings.isNotEmpty)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _typeColor(s).withValues(alpha: .18),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: _typeColor(s).withValues(alpha: .30), width: .9),
+                      ),
+                      child: Text(
+                        'Ortho Findings: ${s.orthoOralFindings}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .80),
+                          height: 1.2,
+                        ),
                       ),
                     ),
-                  ),
                   // Monthly treatment sessions summary list
                   Builder(builder: (_) {
                     final steps = s.orthoSteps;
