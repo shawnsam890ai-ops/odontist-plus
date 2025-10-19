@@ -76,8 +76,8 @@ class UtilityProvider with ChangeNotifier {
   }
 
   // Bills
-  Future<void> addBill({required DateTime date, required String itemName, required double amount, String? receiptPath}) async {
-    final b = BillEntry(date: date, itemName: itemName, amount: amount, receiptPath: receiptPath);
+  Future<void> addBill({required DateTime date, required String itemName, required double amount, String? receiptPath, String category = 'Other'}) async {
+    final b = BillEntry(date: date, itemName: itemName, amount: amount, receiptPath: receiptPath, category: category);
     await _repo.addBill(b);
     // Reflect as negative in revenue
     final desc = 'Bill: $itemName ${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -87,6 +87,16 @@ class UtilityProvider with ChangeNotifier {
 
   Future<void> deleteBill(String id) async {
     await _repo.deleteBill(id);
+    notifyListeners();
+  }
+
+  Future<void> updateBill(BillEntry updated) async {
+    await _repo.updateBill(updated);
+    notifyListeners();
+  }
+
+  Future<void> deleteBills(List<String> ids) async {
+    await _repo.deleteBills(ids);
     notifyListeners();
   }
 }

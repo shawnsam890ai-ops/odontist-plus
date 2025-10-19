@@ -6,8 +6,9 @@ class BillEntry {
   String itemName;
   double amount;
   String? receiptPath; // optional attachment path or note
+  String category; // e.g., Consumables, Equipment, Maintenance, Other
 
-  BillEntry({String? id, required this.date, required this.itemName, required this.amount, this.receiptPath})
+  BillEntry({String? id, required this.date, required this.itemName, required this.amount, this.receiptPath, this.category = 'Other'})
       : id = id ?? const Uuid().v4();
 
   Map<String, dynamic> toJson() => {
@@ -16,6 +17,7 @@ class BillEntry {
         'itemName': itemName,
         'amount': amount,
         'receiptPath': receiptPath,
+        'category': category,
       };
 
   factory BillEntry.fromJson(Map<String, dynamic> j) => BillEntry(
@@ -24,5 +26,6 @@ class BillEntry {
         itemName: j['itemName'] as String,
         amount: (j['amount'] as num).toDouble(),
         receiptPath: j['receiptPath'] as String?,
+        category: (j['category'] as String?) ?? 'Other',
       );
 }

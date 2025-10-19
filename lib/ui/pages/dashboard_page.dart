@@ -13,6 +13,7 @@ import '../../providers/medicine_provider.dart';
 import '../../providers/options_provider.dart';
 import '../../models/medicine.dart';
 import '../../providers/utility_provider.dart';
+import '../../models/bill_entry.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../models/revenue_entry.dart';
@@ -917,6 +918,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final amountCtrl = TextEditingController(text: '0');
     final receiptCtrl = TextEditingController();
     DateTime date = DateTime.now();
+    String category = 'Consumables';
     showDialog(
       context: context,
       builder: (_) => StatefulBuilder(
@@ -938,6 +940,18 @@ class _DashboardPageState extends State<DashboardPage> {
                 )
               ]),
               const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: category,
+                decoration: const InputDecoration(labelText: 'Category'),
+                items: const [
+                  DropdownMenuItem(value: 'Consumables', child: Text('Consumables')),
+                  DropdownMenuItem(value: 'Equipment', child: Text('Equipment')),
+                  DropdownMenuItem(value: 'Maintenance', child: Text('Maintenance')),
+                  DropdownMenuItem(value: 'Other', child: Text('Other')),
+                ],
+                onChanged: (v) => setSt(() => category = v ?? 'Consumables'),
+              ),
+              const SizedBox(height: 8),
               TextField(controller: itemCtrl, decoration: const InputDecoration(labelText: 'Item name / purpose')),
               const SizedBox(height: 8),
               TextField(controller: amountCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Cost of purchase')),
@@ -952,7 +966,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 final name = itemCtrl.text.trim();
                 final amt = double.tryParse(amountCtrl.text) ?? 0;
                 if (name.isEmpty || amt <= 0) return;
-                await context.read<UtilityProvider>().addBill(date: date, itemName: name, amount: amt, receiptPath: receiptCtrl.text.trim().isEmpty ? null : receiptCtrl.text.trim());
+                await context.read<UtilityProvider>().addBill(date: date, itemName: name, amount: amt, receiptPath: receiptCtrl.text.trim().isEmpty ? null : receiptCtrl.text.trim(), category: category);
                 if (context.mounted) Navigator.pop(context);
               },
               child: const Text('Add'),
@@ -2701,6 +2715,8 @@ class _BillsHistoryPanel extends StatefulWidget {
 
 class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
   String _mode = 'recent';
+  final Set<String> _selected = {};
+  String _categoryFilter = 'all';
 
   List<int> _years(List bills) {
     final st = <int>{};
@@ -2714,6 +2730,7 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
   Widget build(BuildContext context) {
     final util = context.watch<UtilityProvider>();
     var list = util.bills.toList()..sort((a, b) => b.date.compareTo(a.date));
+    if (_categoryFilter != 'all') list = list.where((b) => b.category == _categoryFilter).toList();
     final years = _years(list);
     if (_mode != 'recent') {
       final y = int.tryParse(_mode);
@@ -2729,6 +2746,20 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
           const Spacer(),
           DropdownButtonHideUnderline(
             child: DropdownButton<String>(
+              value: _categoryFilter,
+              items: const [
+                DropdownMenuItem(value: 'all', child: Text('All Categories')),
+                DropdownMenuItem(value: 'Consumables', child: Text('Consumables')),
+                DropdownMenuItem(value: 'Equipment', child: Text('Equipment')),
+                DropdownMenuItem(value: 'Maintenance', child: Text('Maintenance')),
+                DropdownMenuItem(value: 'Other', child: Text('Other')),
+              ],
+              onChanged: (v) => setState(() => _categoryFilter = v ?? 'all'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
               value: _mode,
               items: [
                 const DropdownMenuItem(value: 'recent', child: Text('Recent 12 months')),
@@ -2736,6 +2767,15 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
               ],
               onChanged: (v) => setState(() => _mode = v ?? 'recent'),
             ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.tonalIcon(
+            onPressed: _selected.isEmpty ? null : () async {
+              await context.read<UtilityProvider>().deleteBills(_selected.toList());
+              setState(() => _selected.clear());
+            },
+            icon: const Icon(Icons.delete_sweep),
+            label: const Text('Delete Selected'),
           ),
         ]),
       ),
@@ -2751,18 +2791,103 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
                   final dateStr = '${b.date.year}-${b.date.month.toString().padLeft(2, '0')}-${b.date.day.toString().padLeft(2, '0')}';
                   return ListTile(
                     dense: true,
+                    leading: Checkbox(
+                      value: _selected.contains(b.id),
+                      onChanged: (v) {
+                        setState(() {
+                          if (v == true) {
+                            _selected.add(b.id);
+                          } else {
+                            _selected.remove(b.id);
+                          }
+                        });
+                      },
+                    ),
                     title: Text('${b.itemName} • ₹${b.amount.toStringAsFixed(0)}'),
-                    subtitle: Text('Date: $dateStr${b.receiptPath != null ? ' • Receipt: ${b.receiptPath}' : ''}'),
-                    trailing: IconButton(
-                      tooltip: 'Delete bill',
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => context.read<UtilityProvider>().deleteBill(b.id),
+                    subtitle: Text('Date: $dateStr • Category: ${b.category}${b.receiptPath != null ? ' • Receipt: ${b.receiptPath}' : ''}'),
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (v) async {
+                        if (v == 'edit') {
+                          await _showEditBillDialog(b);
+                        } else if (v == 'delete') {
+                          await context.read<UtilityProvider>().deleteBill(b.id);
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        PopupMenuItem(value: 'delete', child: Text('Delete')),
+                      ],
                     ),
                   );
                 },
               ),
       ),
     ]);
+  }
+
+  Future<void> _showEditBillDialog(b) async {
+    final itemCtrl = TextEditingController(text: b.itemName);
+    final amountCtrl = TextEditingController(text: b.amount.toStringAsFixed(0));
+    final receiptCtrl = TextEditingController(text: b.receiptPath ?? '');
+    DateTime date = b.date;
+    String category = b.category;
+    await showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSt) => AlertDialog(
+          title: const Text('Edit Bill'),
+          content: SizedBox(
+            width: 420,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Row(children: [
+                const Text('Purchase date:'),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: () async {
+                    final now = DateTime.now();
+                    final picked = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(now.year - 1), lastDate: DateTime(now.year + 1));
+                    if (picked != null) setSt(() => date = picked);
+                  },
+                  child: Text('${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'),
+                )
+              ]),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: category,
+                decoration: const InputDecoration(labelText: 'Category'),
+                items: const [
+                  DropdownMenuItem(value: 'Consumables', child: Text('Consumables')),
+                  DropdownMenuItem(value: 'Equipment', child: Text('Equipment')),
+                  DropdownMenuItem(value: 'Maintenance', child: Text('Maintenance')),
+                  DropdownMenuItem(value: 'Other', child: Text('Other')),
+                ],
+                onChanged: (v) => setSt(() => category = v ?? category),
+              ),
+              const SizedBox(height: 8),
+              TextField(controller: itemCtrl, decoration: const InputDecoration(labelText: 'Item name / purpose')),
+              const SizedBox(height: 8),
+              TextField(controller: amountCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Cost of purchase')),
+              const SizedBox(height: 8),
+              TextField(controller: receiptCtrl, decoration: const InputDecoration(labelText: 'Attach receipt (path or note)')),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                final name = itemCtrl.text.trim();
+                final amt = double.tryParse(amountCtrl.text) ?? 0;
+                if (name.isEmpty || amt <= 0) return;
+                final updated = BillEntry(id: b.id, date: date, itemName: name, amount: amt, receiptPath: receiptCtrl.text.trim().isEmpty ? null : receiptCtrl.text.trim(), category: category);
+                await context.read<UtilityProvider>().updateBill(updated);
+                if (context.mounted) Navigator.pop(context);
+              },
+              child: const Text('Save'),
+            )
+          ],
+        ),
+      ),
+    );
   }
 }
 

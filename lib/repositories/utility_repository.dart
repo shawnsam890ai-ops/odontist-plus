@@ -103,4 +103,16 @@ class UtilityRepository {
     _bills.removeWhere((e) => e.id == id);
     await _persist();
   }
+
+  Future<void> updateBill(BillEntry b) async {
+    final idx = _bills.indexWhere((e) => e.id == b.id);
+    if (idx == -1) return;
+    _bills[idx] = b;
+    await _persist();
+  }
+
+  Future<void> deleteBills(List<String> ids) async {
+    _bills.removeWhere((e) => ids.contains(e.id));
+    await _persist();
+  }
 }
