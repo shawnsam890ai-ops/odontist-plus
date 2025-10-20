@@ -36,6 +36,8 @@ class PatientRepository {
     List<String>? pastMedicalHistory,
     List<String>? currentMedications,
     List<String>? drugAllergies,
+    bool? pregnant,
+    bool? breastfeeding,
   }) async {
     final patient = Patient(
       id: _uuid.v4(),
@@ -50,6 +52,8 @@ class PatientRepository {
       pastMedicalHistory: pastMedicalHistory,
       currentMedications: currentMedications,
       drugAllergies: drugAllergies,
+      pregnant: pregnant,
+      breastfeeding: breastfeeding,
     );
     _patients.add(patient);
     await _persist();
@@ -74,6 +78,8 @@ class PatientRepository {
     List<String>? pastMedicalHistory,
     List<String>? currentMedications,
     List<String>? drugAllergies,
+    bool? pregnant,
+    bool? breastfeeding,
   }) async {
     final index = _patients.indexWhere((p) => p.id == patientId);
     if (index == -1) return;
@@ -88,6 +94,8 @@ class PatientRepository {
       pastMedicalHistory: pastMedicalHistory,
       currentMedications: currentMedications,
       drugAllergies: drugAllergies,
+      pregnant: pregnant,
+      breastfeeding: breastfeeding,
     );
     await _persist();
   }

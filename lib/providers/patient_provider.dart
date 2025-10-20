@@ -35,6 +35,8 @@ class PatientProvider extends ChangeNotifier {
     List<String>? pastMedicalHistory,
     List<String>? currentMedications,
     List<String>? drugAllergies,
+    bool? pregnant,
+    bool? breastfeeding,
   }) async {
     await _repo.addPatient(
       name: name,
@@ -46,6 +48,8 @@ class PatientProvider extends ChangeNotifier {
       pastMedicalHistory: pastMedicalHistory,
       currentMedications: currentMedications,
       drugAllergies: drugAllergies,
+      pregnant: pregnant,
+      breastfeeding: breastfeeding,
     );
     notifyListeners();
   }
@@ -68,6 +72,8 @@ class PatientProvider extends ChangeNotifier {
     List<String>? pastMedicalHistory,
     List<String>? currentMedications,
     List<String>? drugAllergies,
+    bool? pregnant,
+    bool? breastfeeding,
   }) async {
     await _repo.updatePatient(
       patientId: patientId,
@@ -80,6 +86,8 @@ class PatientProvider extends ChangeNotifier {
       pastMedicalHistory: pastMedicalHistory,
       currentMedications: currentMedications,
       drugAllergies: drugAllergies,
+      pregnant: pregnant,
+      breastfeeding: breastfeeding,
     );
     notifyListeners();
   }

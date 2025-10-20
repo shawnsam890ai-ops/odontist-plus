@@ -67,6 +67,7 @@ enum DashboardSection {
   utility('Utility', Icons.miscellaneous_services_outlined),
   labs('Labs', Icons.biotech_outlined),
   medicines('Medicines', Icons.medication_outlined),
+  aiInsights('AI Insights', Icons.psychology_outlined),
   settings('Settings', Icons.settings_outlined);
 
   final String label;
@@ -227,9 +228,104 @@ class _DashboardPageState extends State<DashboardPage> {
         return _labsSection();
       case DashboardSection.medicines:
         return _medicinesSection();
+      case DashboardSection.aiInsights:
+        return _aiInsightsSection();
       case DashboardSection.settings:
         return _settingsSection();
     }
+  }
+
+  Widget _aiInsightsSection() {
+    final patients = context.watch<PatientProvider>().patients;
+    // Aggregate last-30-day counts
+    final since = DateTime.now().subtract(const Duration(days: 30));
+    int rct = 0, extraction = 0, fillings = 0, ortho = 0, prostho = 0;
+    for (final p in patients) {
+      for (final s in p.sessions) {
+        if (s.date.isBefore(since)) continue;
+        switch (s.type) {
+          case TreatmentType.rootCanal:
+            rct++;
+            break;
+          case TreatmentType.orthodontic:
+            ortho++;
+            break;
+          case TreatmentType.prosthodontic:
+            prostho++;
+            break;
+          case TreatmentType.general:
+            if (s.treatmentDoneOptions.any((t) => t.toLowerCase().contains('extraction'))) extraction++;
+            if (s.treatmentDoneOptions.any((t) => t.toLowerCase().contains('filling'))) fillings++;
+            break;
+          case TreatmentType.labWork:
+            break;
+        }
+      }
+    }
+
+    // Simple AI tips
+    final tips = <String>[];
+    if (rct > 0 && fillings == 0) tips.add('High RCT volume but low fillings. Consider preventive care campaigns.');
+    if (extraction > rct) tips.add('More extractions than RCTs. Review case selection and patient counseling.');
+    if (ortho > 0 && prostho == 0) tips.add('Orthodontic cases active. Promote retention and follow-ups.');
+    if (patients.isEmpty) tips.add('No patients yet. Add patients to start seeing insights.');
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(DashboardSection.aiInsights.icon, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          Text('AI Insights', style: Theme.of(context).textTheme.headlineSmall),
+        ]),
+        const SizedBox(height: 12),
+        Wrap(spacing: 12, runSpacing: 12, children: [
+          _metricCard('RCTs', rct, Icons.biotech_outlined, Colors.orange),
+          _metricCard('Extractions', extraction, Icons.healing_outlined, Colors.redAccent),
+          _metricCard('Fillings', fillings, Icons.circle_outlined, Colors.teal),
+          _metricCard('Ortho', ortho, Icons.align_horizontal_center, Colors.indigo),
+          _metricCard('Prostho', prostho, Icons.architecture, Colors.brown),
+        ]),
+        const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('AI Tips', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              if (tips.isEmpty) const Text('No tips right now.') else ...[
+                for (final t in tips)
+                  Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(children: [
+                    const Icon(Icons.lightbulb, color: Colors.amber, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(t)),
+                  ])),
+              ]
+            ]),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _metricCard(String title, int value, IconData icon, Color color) {
+    return SizedBox(
+      width: 180,
+      child: Card(
+        color: Theme.of(context).colorScheme.surface,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(children: [
+            CircleAvatar(radius: 18, backgroundColor: color.withOpacity(.15), child: Icon(icon, color: color)),
+            const SizedBox(width: 12),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Text('$value', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            ])
+          ]),
+        ),
+      ),
+    );
   }
 
   // ================= Appointments =================

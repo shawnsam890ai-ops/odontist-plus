@@ -27,11 +27,13 @@ import '../../core/constants.dart';
 import '../../models/treatment_session.dart';
 import '../../models/patient.dart';
 import '../../providers/theme_provider.dart';
+import '../../services/ai_insights_service.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../widgets/multi_select_dropdown.dart';
 import '../widgets/search_editable_multi_select.dart';
 // import '../widgets/search_multi_select.dart'; // no longer needed here after moving to full-screen edit page
 import 'edit_patient_page.dart';
+import '../widgets/odontogram.dart';
 
 class PatientDetailPage extends StatefulWidget {
   static const routeName = '/patient-detail';
@@ -185,6 +187,9 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _basicInfoCard(patient),
+            const SizedBox(height: 12),
+            // Interactive Odontogram: fast insight of per-tooth treatments so far
+            Odontogram(patient: patient, padding: const EdgeInsets.fromLTRB(12, 12, 12, 8)),
             const SizedBox(height: 12),
             // Previous sessions container moved near top
             _sessionHistoryContainer(patient),
@@ -437,6 +442,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 padding: const EdgeInsets.only(top: 4),
                 child: Text('Allergies: ${patient.drugAllergies.join(', ')}', style: const TextStyle(color: Colors.redAccent)),
               ),
+            const SizedBox(height: 8),
+            _aiInsightsBanner(patient),
             if (patient.pastDentalHistory.isNotEmpty || patient.pastMedicalHistory.isNotEmpty || patient.currentMedications.isNotEmpty || patient.drugAllergies.isNotEmpty)
               const SizedBox(height: 8),
             Wrap(spacing: 8, children: [
@@ -469,6 +476,52 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             ])
           ],
         ),
+      ),
+    );
+  }
+  Widget _aiInsightsBanner(Patient patient) {
+    final ai = AiInsightsService();
+    // Build a temporary session snapshot from current UI selections for plan priority
+    final session = TreatmentSession(
+      id: 'preview',
+      type: _selectedType,
+      date: DateTime.now(),
+      oralExamFindings: _oralFindings,
+      rootCanalFindings: const [],
+      prosthodonticFindings: const [],
+    );
+    final safety = ai.checkPrescriptionSafety(patient, _prescription);
+    final plans = ai.prioritizePlans(session);
+    final analytics = ai.recentProcedureCounts(patient, days: 30);
+    final items = [
+      ...safety,
+      ...plans,
+      AiInsight('Last 30 days',
+          'RCT: ${analytics['rct']}, Fillings: ${analytics['fillings']}, Extractions: ${analytics['extraction']}, Ortho: ${analytics['orthodontic']}, Prostho: ${analytics['prosthodontic']}'),
+    ];
+    if (items.isEmpty) return const SizedBox.shrink();
+    Color colorFor(AiInsight i) => switch (i.severity) { 'critical' => Colors.redAccent, 'warn' => Colors.amber, _ => Colors.blueGrey };
+    return Card(
+      color: Theme.of(context).colorScheme.surface.withOpacity(.8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.auto_awesome, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 8),
+            Text('AI Insights', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 8),
+          ...items.map((i) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const SizedBox(width: 2),
+                  Icon(Icons.circle, size: 8, color: colorFor(i)),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('${i.title}: ${i.message}')),
+                ]),
+              )),
+        ]),
       ),
     );
   }
@@ -2862,10 +2915,13 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               child: TextField(
                 controller: _rxTiming,
                 decoration: const InputDecoration(labelText: 'Timing (e.g. 1-0-1)'),
+                onChanged: (_) => setState(() {}),
               ),
             ),
           ],
         ),
+        const SizedBox(height: 6),
+        _rxSafetyPreview(),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -2874,6 +2930,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 controller: _rxTablets,
                 decoration: const InputDecoration(labelText: 'Qty (Tabs/ml)'),
                 keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
               ),
             ),
             const SizedBox(width: 8),
@@ -2882,6 +2939,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 controller: _rxDays,
                 decoration: const InputDecoration(labelText: 'Days'),
                 keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
               ),
             ),
             const SizedBox(width: 8),
@@ -2891,6 +2949,32 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           ],
         )
       ],
+    );
+  }
+
+  Widget _rxSafetyPreview() {
+    final patient = widget.patientId == null ? null : context.read<PatientProvider>().byId(widget.patientId!);
+    if (patient == null) return const SizedBox.shrink();
+    final tempList = List<PrescriptionItem>.from(_prescription);
+    // Consider the currently selected (but not yet added) medicine as a preview item
+    if ((_rxSelectedMedicine ?? '').isNotEmpty && _rxTiming.text.trim().isNotEmpty) {
+      tempList.add(PrescriptionItem(serial: 0, medicine: _rxSelectedMedicine!, timing: _rxTiming.text.trim(), tablets: int.tryParse(_rxTablets.text.trim()) ?? 0, days: int.tryParse(_rxDays.text.trim()) ?? 0));
+    }
+    final insights = AiInsightsService().checkPrescriptionSafety(patient, tempList);
+    if (insights.isEmpty) return const SizedBox.shrink();
+    Color colorFor(String s) => s == 'critical' ? Colors.redAccent : s == 'warn' ? Colors.amber : Colors.blueGrey;
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [const Icon(Icons.shield_moon_outlined, size: 16), const SizedBox(width: 6), const Text('AI prescription safety', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600))]),
+        const SizedBox(height: 4),
+        ...insights.map((i) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Row(children: [
+                Icon(Icons.circle, size: 8, color: colorFor(i.severity)), const SizedBox(width: 6), Expanded(child: Text('${i.title}: ${i.message}', style: const TextStyle(fontSize: 12)))
+              ]),
+            )),
+      ]),
     );
   }
 
@@ -3470,6 +3554,34 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 ]);
               }),
               const SizedBox(height: 8),
+              // Inline safety preview for the editing row
+              Builder(builder: (ctx){
+                final patient = widget.patientId == null ? null : ctx.read<PatientProvider>().byId(widget.patientId!);
+                if (patient == null) return const SizedBox.shrink();
+                final temp = List<PrescriptionItem>.from(_prescription);
+                final med = _editRxSelectedMedicine ?? p.medicine;
+                final timing = _editRxTiming.text.trim().isEmpty ? p.timing : _editRxTiming.text.trim();
+                final tabs = int.tryParse(_editRxTablets.text.trim()) ?? p.tablets;
+                final days = int.tryParse(_editRxDays.text.trim()) ?? p.days;
+                temp[i] = PrescriptionItem(serial: p.serial, medicine: med, timing: timing, tablets: tabs, days: days);
+                final insights = AiInsightsService().checkPrescriptionSafety(patient, temp);
+                if (insights.isEmpty) return const SizedBox.shrink();
+                Color colorFor(String s) => s == 'critical' ? Colors.redAccent : s == 'warn' ? Colors.amber : Colors.blueGrey;
+                return Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 6),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [const Icon(Icons.shield_moon_outlined, size: 16), const SizedBox(width: 6), const Text('AI prescription safety', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600))]),
+                    const SizedBox(height: 4),
+                    ...insights.map((it) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 1),
+                          child: Row(children: [
+                            Icon(Icons.circle, size: 8, color: colorFor(it.severity)), const SizedBox(width: 6), Expanded(child: Text('${it.title}: ${it.message}', style: const TextStyle(fontSize: 12)))
+                          ]),
+                        )),
+                  ]),
+                );
+              }),
+              
               Row(children: [
                 Expanded(
                   child: TextField(

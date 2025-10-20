@@ -19,6 +19,9 @@ class Patient {
   final List<String> pastMedicalHistory;
   final List<String> currentMedications;
   final List<String> drugAllergies;
+  // AI-related flags
+  final bool pregnant;
+  final bool breastfeeding;
 
   Patient({
     required this.id,
@@ -36,12 +39,16 @@ class Patient {
   List<String>? pastMedicalHistory,
   List<String>? currentMedications,
   List<String>? drugAllergies,
+  bool? pregnant,
+  bool? breastfeeding,
   })  : sessions = sessions ?? [],
     labWorks = labWorks ?? [],
     pastDentalHistory = pastDentalHistory ?? [],
     pastMedicalHistory = pastMedicalHistory ?? [],
     currentMedications = currentMedications ?? [],
-    drugAllergies = drugAllergies ?? [];
+    drugAllergies = drugAllergies ?? [],
+    pregnant = pregnant ?? false,
+    breastfeeding = breastfeeding ?? false;
 
   Patient copyWith({
     String? id,
@@ -59,6 +66,8 @@ class Patient {
     List<String>? pastMedicalHistory,
     List<String>? currentMedications,
     List<String>? drugAllergies,
+    bool? pregnant,
+    bool? breastfeeding,
   }) => Patient(
         id: id ?? this.id,
         displayNumber: displayNumber ?? this.displayNumber,
@@ -75,6 +84,8 @@ class Patient {
         pastMedicalHistory: pastMedicalHistory ?? List.from(this.pastMedicalHistory),
         currentMedications: currentMedications ?? List.from(this.currentMedications),
         drugAllergies: drugAllergies ?? List.from(this.drugAllergies),
+        pregnant: pregnant ?? this.pregnant,
+        breastfeeding: breastfeeding ?? this.breastfeeding,
       );
 
   Map<String, dynamic> toJson() => {
@@ -93,6 +104,8 @@ class Patient {
         'pastMedicalHistory': pastMedicalHistory,
         'currentMedications': currentMedications,
         'drugAllergies': drugAllergies,
+        'pregnant': pregnant,
+        'breastfeeding': breastfeeding,
       };
 
   factory Patient.fromJson(Map<String, dynamic> json) => Patient(
@@ -111,5 +124,7 @@ class Patient {
         pastMedicalHistory: (json['pastMedicalHistory'] as List<dynamic>? ?? []).cast<String>(),
         currentMedications: (json['currentMedications'] as List<dynamic>? ?? []).cast<String>(),
         drugAllergies: (json['drugAllergies'] as List<dynamic>? ?? []).cast<String>(),
+        pregnant: json['pregnant'] as bool? ?? false,
+        breastfeeding: json['breastfeeding'] as bool? ?? false,
       );
 }

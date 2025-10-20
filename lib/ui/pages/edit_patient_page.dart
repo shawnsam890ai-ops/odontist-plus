@@ -27,6 +27,8 @@ class _EditPatientPageState extends State<EditPatientPage> {
   List<String> _currentMeds = [];
   List<String> _drugAllergies = [];
   bool _loaded = false;
+  bool _pregnant = false;
+  bool _breastfeeding = false;
 
   @override
   void didChangeDependencies() {
@@ -43,7 +45,9 @@ class _EditPatientPageState extends State<EditPatientPage> {
         _pastMedical = List.from(patient.pastMedicalHistory);
         _currentMeds = List.from(patient.currentMedications);
         _drugAllergies = List.from(patient.drugAllergies);
-        _loaded = true;
+  _pregnant = patient.pregnant;
+  _breastfeeding = patient.breastfeeding;
+  _loaded = true;
       } else {
         // Pop if patient missing
         WidgetsBinding.instance.addPostFrameCallback((_) => Navigator.pop(context));
@@ -115,6 +119,24 @@ class _EditPatientPageState extends State<EditPatientPage> {
               const SizedBox(height: 24),
               Text('Medical / Dental History', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
+              if (_sex == Sex.female) ...[
+                Row(children: [
+                  Expanded(child: CheckboxListTile(
+                    value: _pregnant,
+                    onChanged: (v)=> setState(()=> _pregnant = v ?? false),
+                    title: const Text('Pregnant'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                  )),
+                  const SizedBox(width: 8),
+                  Expanded(child: CheckboxListTile(
+                    value: _breastfeeding,
+                    onChanged: (v)=> setState(()=> _breastfeeding = v ?? false),
+                    title: const Text('Breastfeeding'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                  )),
+                ]),
+                const SizedBox(height: 12),
+              ],
               Builder(builder: (ctx){
                 final watch = ctx.watch<OptionsProvider>();
                 return SearchEditableMultiSelect(
@@ -207,6 +229,8 @@ class _EditPatientPageState extends State<EditPatientPage> {
                               pastMedicalHistory: _pastMedical,
                               currentMedications: _currentMeds,
                               drugAllergies: _drugAllergies,
+                              pregnant: _pregnant,
+                              breastfeeding: _breastfeeding,
                             );
                         if (!mounted) return;
                         Navigator.of(context).pop();
