@@ -96,15 +96,19 @@ class _DashboardPageState extends State<DashboardPage> {
                 ],
               ),
             ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFE0F7FA), Color(0xFFE8F5E9)],
-          ),
-        ),
-        child: SafeArea(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Container(decoration: _backgroundDecoration(context)),
+          // Optional dim overlay to improve readability on busy/dark backgrounds
+          Builder(builder: (context) {
+            final dim = context.watch<ThemeProvider>().backgroundDim;
+            return IgnorePointer(
+              ignoring: true,
+              child: Container(color: Colors.black.withOpacity(dim)),
+            );
+          }),
+          SafeArea(
           child: Stack(children: [
             Row(
               children: [
@@ -143,7 +147,27 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               ),
           ]),
-        ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  BoxDecoration _backgroundDecoration(BuildContext context) {
+    final themeProv = context.watch<ThemeProvider>();
+    final path = themeProv.backgroundImagePath;
+    if (path != null && path.isNotEmpty) {
+      final asset = path.startsWith('asset:') ? path.substring('asset:'.length) : path;
+      return BoxDecoration(
+        image: DecorationImage(image: AssetImage(asset), fit: BoxFit.cover),
+      );
+    }
+    // default gradient background
+    return const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFFE0F7FA), Color(0xFFE8F5E9)],
       ),
     );
   }
@@ -179,6 +203,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   // Removed old icon-only item; replaced by _SideMenuItem
+  
 
   Widget _buildSectionContent() {
     switch (_section) {
@@ -1533,7 +1558,28 @@ class _DashboardPageState extends State<DashboardPage> {
   // ============== Settings ==============
   Widget _settingsSection() {
     final themeProv = context.watch<ThemeProvider>();
-    return Padding(
+    // When forceWhiteText is ON, show white foreground for texts/icons in the
+    // Settings section (which is laid on the background image), while keeping
+    // text inside surfaced containers elsewhere black via their own theming.
+    final useWhite = themeProv.forceWhiteText;
+    final baseTheme = Theme.of(context);
+    final cs = baseTheme.colorScheme;
+    final whiteTextTheme = baseTheme.textTheme.apply(
+      bodyColor: Colors.white,
+      displayColor: Colors.white,
+      decorationColor: Colors.white70,
+    );
+    // Override ChipTheme so that chip labels remain dark on their surface.
+    final chipTheme = baseTheme.chipTheme.copyWith(
+      labelStyle: TextStyle(color: cs.onSurface),
+    );
+    return Theme(
+      data: useWhite ? baseTheme.copyWith(textTheme: whiteTextTheme, chipTheme: chipTheme) : baseTheme,
+      child: DefaultTextStyle.merge(
+        style: TextStyle(color: useWhite ? Colors.white : null),
+        child: IconTheme(
+          data: IconTheme.of(context).copyWith(color: useWhite ? Colors.white70 : null),
+          child: Padding(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
@@ -1550,6 +1596,37 @@ class _DashboardPageState extends State<DashboardPage> {
             label: const Text('Custom…'),
             avatar: const Icon(Icons.color_lens_outlined),
             onPressed: () => _showCustomThemeDialog(themeProv),
+          ),
+        ]),
+        const SizedBox(height: 24),
+        // Background image controls
+        Text('Background', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+            child: Text(themeProv.isDefaultBackground ? 'Default background selected' : 'Preset background selected'),
+          ),
+          TextButton.icon(
+            onPressed: () => _showBackgroundPicker(themeProv),
+            icon: const Icon(Icons.image_outlined),
+            label: const Text('Change'),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: () => themeProv.setBackgroundImageAsset(ThemeProvider.defaultBackgroundAsset),
+            icon: const Icon(Icons.restore),
+            label: const Text('Reset to default'),
+          ),
+        ]),
+        const SizedBox(height: 24),
+        // Contrast controls
+        Text('Contrast', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: Text('Force white text (useful for dark backgrounds)')),
+          Switch(
+            value: themeProv.forceWhiteText,
+            onChanged: (v) => themeProv.setForceWhiteText(v),
           ),
         ]),
         const SizedBox(height: 24),
@@ -1582,13 +1659,91 @@ class _DashboardPageState extends State<DashboardPage> {
           ],
         )
       ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showBackgroundPicker(ThemeProvider themeProv) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Choose Background'),
+        content: SizedBox(
+          width: 540,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Preset images'),
+              const SizedBox(height: 8),
+              Builder(
+                builder: (_) {
+                  final presets = ThemeProvider.allowedBackgroundAssets;
+                  return Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: presets.map((p) => _bgThumb(p, themeProv)).toList(),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  Widget _bgThumb(String asset, ThemeProvider themeProv) {
+    final selected = themeProv.backgroundImagePath == 'asset:$asset';
+    return InkWell(
+      onTap: () async {
+        await themeProv.setBackgroundImageAsset(asset);
+        if (mounted) Navigator.pop(context);
+      },
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              asset,
+              width: 90,
+              height: 60,
+              fit: BoxFit.cover,
+              errorBuilder: (c, e, s) => Container(
+                width: 90,
+                height: 60,
+                color: Colors.black12,
+                alignment: Alignment.center,
+                child: const Icon(Icons.broken_image_outlined),
+              ),
+            ),
+          ),
+          if (selected)
+            Positioned(
+              right: 4,
+              top: 4,
+              child: Container(
+                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.all(2),
+                child: const Icon(Icons.check, color: Colors.white, size: 14),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
   Widget _themeChoiceChip(String label, ThemePreset preset, ThemeProvider themeProv) {
     final selected = themeProv.preset == preset;
+    final cs = Theme.of(context).colorScheme;
     return ChoiceChip(
-      label: Text(label),
+      // Chip has a surface-like container; keep its text dark for readability
+      label: Text(label, style: TextStyle(color: cs.onSurface)),
       selected: selected,
       onSelected: (_) => themeProv.setPreset(preset),
     );
@@ -1830,13 +1985,15 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final themeProv = context.watch<ThemeProvider>();
+    final darkBar = themeProv.forceWhiteText; // when true, prefer a dark appbar background
     final appts = context.watch<AppointmentProvider>();
     final due = appts.dueNow(graceMinutes: 10);
     final upcoming = appts.upcomingWithin(withinMinutes: 60);
     final hasAlerts = due.isNotEmpty || upcoming.isNotEmpty;
     return AppBar(
       elevation: 0,
-      backgroundColor: cs.surface,
+      backgroundColor: darkBar ? Colors.black.withOpacity(0.45) : cs.surface,
       title: Row(children: [
         const AppLogo(size: 28),
         const SizedBox(width: 10),
@@ -1845,6 +2002,7 @@ class _TopBar extends StatelessWidget {
           style: GoogleFonts.cinzel(
             fontWeight: FontWeight.w800,
             letterSpacing: 0.5,
+            color: darkBar ? Colors.white : null,
           ),
         ),
       ]),
