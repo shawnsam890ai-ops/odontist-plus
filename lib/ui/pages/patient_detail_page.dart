@@ -26,6 +26,7 @@ import '../../core/enums.dart';
 import '../../core/constants.dart';
 import '../../models/treatment_session.dart';
 import '../../models/patient.dart';
+import '../../providers/theme_provider.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../widgets/multi_select_dropdown.dart';
 import '../widgets/search_editable_multi_select.dart';
@@ -5773,11 +5774,23 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     }
   final nextAppt = s.nextAppointment?.toLocal().toString().split(' ').first;
 
-    // Load optional header/footer images (ignore if missing)
-    Future<pw.Widget?> loadImage(String assetPath) async {
+    // Load optional header/footer images (asset or file). Ignore if missing.
+    Future<pw.Widget?> loadAssetImage(String assetPath) async {
       try {
         final data = await rootBundle.load(assetPath);
         final bytes = data.buffer.asUint8List();
+        final image = pw.MemoryImage(bytes);
+        return pw.Image(image, fit: pw.BoxFit.contain, height: 80);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    Future<pw.Widget?> loadFileImage(String filePath) async {
+      try {
+        final file = File(filePath);
+        if (!await file.exists()) return null;
+        final bytes = await file.readAsBytes();
         final image = pw.MemoryImage(bytes);
         return pw.Image(image, fit: pw.BoxFit.contain, height: 80);
       } catch (_) {
@@ -5799,7 +5812,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         ]);
       }
       for (final c in candidates) {
-        final w = await loadImage(c);
+        final w = await loadAssetImage(c);
         if (w != null) return w;
       }
       // Debug print (will show in console, harmless in release)
@@ -5808,8 +5821,21 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       return null;
     }
 
-    final headerImage = await resolveImage('clinic_header');
-    final footerImage = await resolveImage('clinic_footer');
+    // Prefer user-provided paths from ThemeProvider; fallback to clinic_header/clinic_footer assets
+    final themeProv = context.read<ThemeProvider>();
+    Future<pw.Widget?> loadFromSetting(String? path, String legacyBase) async {
+      if (path != null && path.isNotEmpty) {
+        if (path.startsWith('asset:')) {
+          return await loadAssetImage(path.substring('asset:'.length));
+        } else {
+          return await loadFileImage(path);
+        }
+      }
+      return await resolveImage(legacyBase);
+    }
+
+    final headerImage = await loadFromSetting(themeProv.rxHeaderPath, 'clinic_header');
+    final footerImage = await loadFromSetting(themeProv.rxFooterPath, 'clinic_footer');
 
   final demographicsLeft = 'Patient: ${patient.name}\nID: ${patient.displayNumber}${patient.customNumber.isNotEmpty ? ' (${patient.customNumber})' : ''}\nAge/Sex: ${patient.age}/${patient.sex.label}\nDate: ${DateTime.now().toLocal().toString().split(' ').first}';
     // Build concise history summary (only show non-empty)
@@ -5876,7 +5902,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
   await Printing.layoutPdf(onLayout: (format) async => doc.save());
     if (headerImage == null || footerImage == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Header/Footer image missing (expected clinic_header / clinic_footer in assets/images).')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Header/Footer image missing. Set them in Settings > Printing.')));
       }
     }
   }

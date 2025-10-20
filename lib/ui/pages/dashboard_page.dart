@@ -1599,6 +1599,45 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ]),
         const SizedBox(height: 24),
+        // Printing (Rx) header/footer images
+        Text('Printing', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            _rxImagePreview(themeProv.rxHeaderPath),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Rx header image: ${themeProv.hasRxHeader ? (themeProv.rxHeaderPath!.startsWith('asset:') ? themeProv.rxHeaderPath!.substring(6) : themeProv.rxHeaderPath) : 'Not set'}', overflow: TextOverflow.ellipsis)),
+            TextButton.icon(
+              onPressed: () => _showRxImagePicker(isHeader: true, themeProv: themeProv),
+              icon: const Icon(Icons.image_outlined),
+              label: const Text('Change'),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: themeProv.hasRxHeader ? () => themeProv.setRxHeaderImagePath(null) : null,
+              icon: const Icon(Icons.restore),
+              label: const Text('Clear'),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            _rxImagePreview(themeProv.rxFooterPath),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Rx footer image: ${themeProv.hasRxFooter ? (themeProv.rxFooterPath!.startsWith('asset:') ? themeProv.rxFooterPath!.substring(6) : themeProv.rxFooterPath) : 'Not set'}', overflow: TextOverflow.ellipsis)),
+            TextButton.icon(
+              onPressed: () => _showRxImagePicker(isHeader: false, themeProv: themeProv),
+              icon: const Icon(Icons.image_outlined),
+              label: const Text('Change'),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: themeProv.hasRxFooter ? () => themeProv.setRxFooterImagePath(null) : null,
+              icon: const Icon(Icons.restore),
+              label: const Text('Clear'),
+            ),
+          ]),
+        ]),
+        const SizedBox(height: 24),
         // Background image controls
         Text('Background', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
@@ -1687,6 +1726,87 @@ class _DashboardPageState extends State<DashboardPage> {
                     children: presets.map((p) => _bgThumb(p, themeProv)).toList(),
                   );
                 },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  Widget _rxImagePreview(String? path) {
+    final size = const Size(56, 36);
+    if (path == null || path.isEmpty) {
+      return Container(width: size.width, height: size.height, color: Colors.black12, alignment: Alignment.center, child: const Icon(Icons.image_not_supported, size: 18));
+    }
+    if (path.startsWith('asset:')) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Image.asset(path.substring(6), width: size.width, height: size.height, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(width: size.width, height: size.height, color: Colors.black12, alignment: Alignment.center, child: const Icon(Icons.broken_image, size: 18))),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: Image.file(File(path), width: size.width, height: size.height, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(width: size.width, height: size.height, color: Colors.black12, alignment: Alignment.center, child: const Icon(Icons.broken_image, size: 18))),
+    );
+  }
+
+  void _showRxImagePicker({required bool isHeader, required ThemeProvider themeProv}) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(isHeader ? 'Choose Rx Header' : 'Choose Rx Footer'),
+        content: SizedBox(
+          width: 560,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Preset images (assets)')
+              , const SizedBox(height: 8),
+              Wrap(
+                spacing: 8, runSpacing: 8,
+                children: [
+                  'assets/images/clinic_header.jpg',
+                  'assets/images/clinic_footer.jpg',
+                ].map((a) => InkWell(
+                  onTap: () async {
+                    if (isHeader) {
+                      await themeProv.setRxHeaderImageAsset(a);
+                    } else {
+                      await themeProv.setRxFooterImageAsset(a);
+                    }
+                    if (mounted) Navigator.pop(context);
+                  },
+                  child: _bgThumb(a, themeProv),
+                )).toList(),
+              ),
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              const Text('Or pick from your files'),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.tonalIcon(
+                  onPressed: () async {
+                    final res = await FilePicker.platform.pickFiles(type: FileType.image, withReadStream: false);
+                    final p = res?.files.single.path;
+                    if (p != null) {
+                      if (isHeader) {
+                        await themeProv.setRxHeaderImagePath(p);
+                      } else {
+                        await themeProv.setRxFooterImagePath(p);
+                      }
+                      if (mounted) Navigator.pop(context);
+                    }
+                  },
+                  icon: const Icon(Icons.upload),
+                  label: const Text('Pick image file'),
+                ),
               ),
             ],
           ),

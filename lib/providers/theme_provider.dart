@@ -31,6 +31,8 @@ class ThemeProvider extends ChangeNotifier {
   static const _kForceWhiteTextKey = 'theme.forceWhiteText';
   static const _kBackgroundDimKey = 'theme.background.dim';
   static const _kAutoContrastKey = 'theme.background.autoContrast';
+  static const _kRxHeaderPathKey = 'print.rx.header.path';
+  static const _kRxFooterPathKey = 'print.rx.footer.path';
 
   ThemePreset _preset = ThemePreset.purple; // default to purple as requested
   Color _customPrimary = const Color(0xFF28A745);
@@ -40,6 +42,8 @@ class ThemeProvider extends ChangeNotifier {
   bool _forceWhiteText = false;
   double _backgroundDim = 0.22; // 0.0 - 0.6 recommended
   bool _autoContrast = false;
+  String? _rxHeaderPath; // 'asset:...' or absolute file path
+  String? _rxFooterPath; // 'asset:...' or absolute file path
 
   bool get isLoaded => _loaded;
   ThemePreset get preset => _preset;
@@ -51,6 +55,10 @@ class ThemeProvider extends ChangeNotifier {
   bool get forceWhiteText => _forceWhiteText;
   double get backgroundDim => _backgroundDim;
   bool get autoContrast => _autoContrast;
+  String? get rxHeaderPath => _rxHeaderPath;
+  String? get rxFooterPath => _rxFooterPath;
+  bool get hasRxHeader => _rxHeaderPath != null && _rxHeaderPath!.isNotEmpty;
+  bool get hasRxFooter => _rxFooterPath != null && _rxFooterPath!.isNotEmpty;
 
   Future<void> ensureLoaded() async {
     if (_loaded) return;
@@ -66,7 +74,7 @@ class ThemeProvider extends ChangeNotifier {
     final pc = prefs.getInt(_kCustomContainerKey);
     if (p != null) _customPrimary = Color(p);
     if (pc != null) _customPrimaryContainer = Color(pc);
-    _backgroundImagePath = prefs.getString(_kBackgroundImagePathKey);
+  _backgroundImagePath = prefs.getString(_kBackgroundImagePathKey);
     // Enforce default and allowed asset list; migrate old values if needed
     String? newPath;
     if (_backgroundImagePath == null || _backgroundImagePath!.isEmpty) {
@@ -92,6 +100,8 @@ class ThemeProvider extends ChangeNotifier {
   _forceWhiteText = prefs.getBool(_kForceWhiteTextKey) ?? false;
   _backgroundDim = prefs.getDouble(_kBackgroundDimKey) ?? _backgroundDim;
   _autoContrast = prefs.getBool(_kAutoContrastKey) ?? false;
+    _rxHeaderPath = prefs.getString(_kRxHeaderPathKey);
+    _rxFooterPath = prefs.getString(_kRxFooterPathKey);
     _loaded = true;
     notifyListeners();
     // Optionally analyze on startup if enabled
@@ -181,6 +191,34 @@ class ThemeProvider extends ChangeNotifier {
       await setBackgroundImagePath(assetPath.isEmpty ? null : 'asset:$assetPath');
     }
   }
+
+  // Rx header/footer image settings
+  Future<void> setRxHeaderImagePath(String? path) async {
+    final prefs = await SharedPreferences.getInstance();
+    _rxHeaderPath = (path == null || path.isEmpty) ? null : path;
+    if (_rxHeaderPath == null) {
+      await prefs.remove(_kRxHeaderPathKey);
+    } else {
+      await prefs.setString(_kRxHeaderPathKey, _rxHeaderPath!);
+    }
+    notifyListeners();
+  }
+
+  Future<void> setRxFooterImagePath(String? path) async {
+    final prefs = await SharedPreferences.getInstance();
+    _rxFooterPath = (path == null || path.isEmpty) ? null : path;
+    if (_rxFooterPath == null) {
+      await prefs.remove(_kRxFooterPathKey);
+    } else {
+      await prefs.setString(_kRxFooterPathKey, _rxFooterPath!);
+    }
+    notifyListeners();
+  }
+
+  Future<void> setRxHeaderImageAsset(String assetPath) async =>
+      setRxHeaderImagePath(assetPath.isEmpty ? null : 'asset:$assetPath');
+  Future<void> setRxFooterImageAsset(String assetPath) async =>
+      setRxFooterImagePath(assetPath.isEmpty ? null : 'asset:$assetPath');
 
   Future<void> setForceWhiteText(bool value) async {
     _forceWhiteText = value;
