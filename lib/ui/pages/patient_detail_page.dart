@@ -188,8 +188,12 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           children: [
             _basicInfoCard(patient),
             const SizedBox(height: 12),
-            // Interactive Odontogram: fast insight of per-tooth treatments so far
-            Odontogram(patient: patient, padding: const EdgeInsets.fromLTRB(12, 12, 12, 8)),
+            // Odontogram above previous sessions; interactive: tap a tooth to see history/details
+            Odontogram(
+              patient: patient,
+              interactive: true,
+              highlightedTeeth: _currentSelectedTeeth(),
+            ),
             const SizedBox(height: 12),
             // Previous sessions container moved near top
             _sessionHistoryContainer(patient),
@@ -380,6 +384,22 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       defaultToothShades: const ['A1', 'A2', 'A3', 'B1', 'B2', 'C1', 'C2'],
     );
     _optionsLoaded = true;
+  }
+
+  // Aggregate current Add Rx selections to reflect on the odontogram
+  List<String> _currentSelectedTeeth() {
+    final s = <String>{};
+    void add(String? t) {
+      if (t == null) return;
+      final tt = t.trim();
+      if (tt.isEmpty) return;
+      s.add(tt);
+    }
+    for (final e in _toothPlans) { add(e.toothNumber); }
+    for (final e in _rcPlans) { add(e.toothNumber); }
+    for (final e in _prosthoPlans) { add(e.toothNumber); }
+    for (final d in _treatmentsDone) { add(d.toothNumber); }
+    return s.toList()..sort();
   }
 
   Widget _basicInfoCard(patient) {
@@ -1910,10 +1930,6 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                               setState(() {
                                 _rcSteps.add(step);
                                 _addingRcSession = false;
-                                _showRcPrescription = false;
-                                _newRcTreatment.clear();
-                                _newRcPayment.clear();
-                                _newRcSessionDate = DateTime.now();
                               });
                             },
                             child: const Text('Save'),
@@ -2915,13 +2931,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
               child: TextField(
                 controller: _rxTiming,
                 decoration: const InputDecoration(labelText: 'Timing (e.g. 1-0-1)'),
-                onChanged: (_) => setState(() {}),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        _rxSafetyPreview(),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -2930,7 +2943,6 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 controller: _rxTablets,
                 decoration: const InputDecoration(labelText: 'Qty (Tabs/ml)'),
                 keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() {}),
               ),
             ),
             const SizedBox(width: 8),
@@ -2939,7 +2951,6 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 controller: _rxDays,
                 decoration: const InputDecoration(labelText: 'Days'),
                 keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() {}),
               ),
             ),
             const SizedBox(width: 8),
@@ -2949,32 +2960,6 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
           ],
         )
       ],
-    );
-  }
-
-  Widget _rxSafetyPreview() {
-    final patient = widget.patientId == null ? null : context.read<PatientProvider>().byId(widget.patientId!);
-    if (patient == null) return const SizedBox.shrink();
-    final tempList = List<PrescriptionItem>.from(_prescription);
-    // Consider the currently selected (but not yet added) medicine as a preview item
-    if ((_rxSelectedMedicine ?? '').isNotEmpty && _rxTiming.text.trim().isNotEmpty) {
-      tempList.add(PrescriptionItem(serial: 0, medicine: _rxSelectedMedicine!, timing: _rxTiming.text.trim(), tablets: int.tryParse(_rxTablets.text.trim()) ?? 0, days: int.tryParse(_rxDays.text.trim()) ?? 0));
-    }
-    final insights = AiInsightsService().checkPrescriptionSafety(patient, tempList);
-    if (insights.isEmpty) return const SizedBox.shrink();
-    Color colorFor(String s) => s == 'critical' ? Colors.redAccent : s == 'warn' ? Colors.amber : Colors.blueGrey;
-    return Padding(
-      padding: const EdgeInsets.only(left: 4),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [const Icon(Icons.shield_moon_outlined, size: 16), const SizedBox(width: 6), const Text('AI prescription safety', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600))]),
-        const SizedBox(height: 4),
-        ...insights.map((i) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 1),
-              child: Row(children: [
-                Icon(Icons.circle, size: 8, color: colorFor(i.severity)), const SizedBox(width: 6), Expanded(child: Text('${i.title}: ${i.message}', style: const TextStyle(fontSize: 12)))
-              ]),
-            )),
-      ]),
     );
   }
 
@@ -3554,34 +3539,6 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 ]);
               }),
               const SizedBox(height: 8),
-              // Inline safety preview for the editing row
-              Builder(builder: (ctx){
-                final patient = widget.patientId == null ? null : ctx.read<PatientProvider>().byId(widget.patientId!);
-                if (patient == null) return const SizedBox.shrink();
-                final temp = List<PrescriptionItem>.from(_prescription);
-                final med = _editRxSelectedMedicine ?? p.medicine;
-                final timing = _editRxTiming.text.trim().isEmpty ? p.timing : _editRxTiming.text.trim();
-                final tabs = int.tryParse(_editRxTablets.text.trim()) ?? p.tablets;
-                final days = int.tryParse(_editRxDays.text.trim()) ?? p.days;
-                temp[i] = PrescriptionItem(serial: p.serial, medicine: med, timing: timing, tablets: tabs, days: days);
-                final insights = AiInsightsService().checkPrescriptionSafety(patient, temp);
-                if (insights.isEmpty) return const SizedBox.shrink();
-                Color colorFor(String s) => s == 'critical' ? Colors.redAccent : s == 'warn' ? Colors.amber : Colors.blueGrey;
-                return Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 6),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [const Icon(Icons.shield_moon_outlined, size: 16), const SizedBox(width: 6), const Text('AI prescription safety', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600))]),
-                    const SizedBox(height: 4),
-                    ...insights.map((it) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 1),
-                          child: Row(children: [
-                            Icon(Icons.circle, size: 8, color: colorFor(it.severity)), const SizedBox(width: 6), Expanded(child: Text('${it.title}: ${it.message}', style: const TextStyle(fontSize: 12)))
-                          ]),
-                        )),
-                  ]),
-                );
-              }),
-              
               Row(children: [
                 Expanded(
                   child: TextField(

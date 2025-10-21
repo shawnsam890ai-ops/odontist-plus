@@ -158,8 +158,6 @@ class TreatmentSession {
   // New structured lists superseding generalTreatmentPlan (kept for backward compatibility)
   final List<ToothPlanEntry> toothPlans;
   final List<ToothTreatmentDoneEntry> treatmentsDone;
-  // New: per-tooth statuses for interactive odontogram (e.g., Caries, RCT planned, Missing)
-  final Map<String, String> odontogramStatuses; // key: FDI tooth number, value: status label
   final String notes;
   final List<PrescriptionItem> prescription;
   final List<String> mediaPaths;
@@ -217,7 +215,6 @@ class TreatmentSession {
   List<String>? treatmentDoneOptions,
   List<ToothPlanEntry>? toothPlans,
   List<ToothTreatmentDoneEntry>? treatmentsDone,
-  Map<String, String>? odontogramStatuses,
     this.notes = '',
     List<PrescriptionItem>? prescription,
     List<String>? mediaPaths,
@@ -257,7 +254,6 @@ class TreatmentSession {
   treatmentDoneOptions = treatmentDoneOptions ?? [],
   toothPlans = toothPlans ?? [],
   treatmentsDone = treatmentsDone ?? [],
-    odontogramStatuses = odontogramStatuses ?? {},
         prescription = prescription ?? [],
         mediaPaths = mediaPaths ?? [],
         payments = payments ?? [],
@@ -288,7 +284,6 @@ class TreatmentSession {
   List<String>? treatmentDoneOptions,
   List<ToothPlanEntry>? toothPlans,
   List<ToothTreatmentDoneEntry>? treatmentsDone,
-  Map<String, String>? odontogramStatuses,
     String? notes,
     List<PrescriptionItem>? prescription,
     List<String>? mediaPaths,
@@ -335,7 +330,6 @@ class TreatmentSession {
   treatmentDoneOptions: treatmentDoneOptions ?? List.from(this.treatmentDoneOptions),
   toothPlans: toothPlans ?? List.from(this.toothPlans),
   treatmentsDone: treatmentsDone ?? List.from(this.treatmentsDone),
-    odontogramStatuses: odontogramStatuses ?? Map<String, String>.from(this.odontogramStatuses),
         notes: notes ?? this.notes,
         prescription: prescription ?? List.from(this.prescription),
         mediaPaths: mediaPaths ?? List.from(this.mediaPaths),
@@ -384,7 +378,6 @@ class TreatmentSession {
   'treatmentDoneOptions': treatmentDoneOptions,
   'toothPlans': toothPlans.map((e) => e.toJson()).toList(),
   'treatmentsDone': treatmentsDone.map((e) => e.toJson()).toList(),
-    'odontogramStatuses': odontogramStatuses,
         'notes': notes,
         'prescription': prescription.map((e) => e.toJson()).toList(),
         'mediaPaths': mediaPaths,
@@ -437,7 +430,6 @@ class TreatmentSession {
     treatmentsDone: (json['treatmentsDone'] as List<dynamic>? ?? [])
       .map((e) => ToothTreatmentDoneEntry.fromJson(e as Map<String, dynamic>))
       .toList(),
-        odontogramStatuses: Map<String, String>.from(json['odontogramStatuses'] as Map? ?? const {}),
         notes: json['notes'] as String? ?? '',
         prescription: (json['prescription'] as List<dynamic>).map((e) => PrescriptionItem.fromJson(e as Map<String, dynamic>)).toList(),
         mediaPaths: (json['mediaPaths'] as List<dynamic>).cast<String>(),

@@ -1,229 +1,364 @@
 import 'package:flutter/material.dart';
+import 'package:teeth_selector/teeth_selector.dart';
 import '../../models/patient.dart';
 
-/// Lightweight model aggregating per-tooth history and a priority level
-class ToothAggregate {
-  final String tooth; // FDI
-  final List<String> done;
-  final List<String> plans;
-  final List<String> findings;
-  final DateTime? lastDate;
-  final int priority; // 0 none, 1 low, 2 med, 3 high
-  const ToothAggregate({
-    required this.tooth,
-    this.done = const [],
-    this.plans = const [],
-    this.findings = const [],
-    this.lastDate,
-    this.priority = 0,
-  });
+/// Simple interactive odontogram for permanent dentition (FDI 11-48).
+/// Aggregates per-tooth findings, plans, and treatments done across all sessions
+/// for a patient, and color-codes each tooth by AI-style priority:
+/// - critical (red): acute/severe findings like swelling/pain/abscess
+/// - warning (orange): planned RCT/extraction/crown or active plans
+/// - done (green): treatments done like RCT/Filling/Crown/Extraction
+/// - none (grey): no data
+class Odontogram extends StatefulWidget {
+	final Patient patient;
+	final EdgeInsets padding;
+	final double toothSize;
+	final void Function(List<String> selected)? onChange;
+	// View-only mode disables pointer interactions
+	final bool interactive;
+	// List of FDI tooth numbers to visually highlight/select
+	final List<String> highlightedTeeth;
+
+	const Odontogram({
+		super.key,
+		required this.patient,
+		this.padding = const EdgeInsets.all(12),
+		this.toothSize = 36,
+		this.onChange,
+		this.interactive = false,
+		this.highlightedTeeth = const [],
+	});
+
+	@override
+	State<Odontogram> createState() => _OdontogramState();
+
 }
 
-Map<String, ToothAggregate> buildToothAggregates(Patient p, {int daysLookback = 365}) {
-  final since = DateTime.now().subtract(Duration(days: daysLookback));
-  final Map<String, List<String>> done = {};
-  final Map<String, List<String>> plans = {};
-  final Map<String, List<String>> findings = {};
-  final Map<String, DateTime> lastDate = {};
+class _OdontogramState extends State<Odontogram> {
+	late Set<String> _selected;
 
-  void accDate(String tooth, DateTime d) {
-    final prev = lastDate[tooth];
-    if (prev == null || d.isAfter(prev)) lastDate[tooth] = d;
-  }
+	@override
+	void initState() {
+		super.initState();
+		_selected = widget.highlightedTeeth.toSet();
+	}
 
-  for (final s in p.sessions) {
-    if (s.date.isBefore(since)) continue;
-    for (final td in s.treatmentsDone) {
-      final t = td.toothNumber;
-      done.putIfAbsent(t, () => []).add(td.treatment);
-      accDate(t, s.date);
-    }
-    for (final pl in s.toothPlans) {
-      final t = pl.toothNumber;
-      plans.putIfAbsent(t, () => []).add(pl.plan);
-      accDate(t, s.date);
-    }
-    for (final f in s.oralExamFindings) {
-      final t = f.toothNumber;
-      if (t.isEmpty) continue;
-      findings.putIfAbsent(t, () => []).add(f.finding);
-      accDate(t, s.date);
-    }
-    for (final f in s.rootCanalFindings) {
-      final t = f.toothNumber;
-      if (t.isEmpty) continue;
-      findings.putIfAbsent(t, () => []).add(f.finding);
-      accDate(t, s.date);
-    }
-    for (final f in s.prosthodonticFindings) {
-      final t = f.toothNumber;
-      if (t.isEmpty) continue;
-      findings.putIfAbsent(t, () => []).add(f.finding);
-      accDate(t, s.date);
-    }
-  }
+	@override
+	void didUpdateWidget(covariant Odontogram oldWidget) {
+		super.didUpdateWidget(oldWidget);
+		// Keep internal selection in sync with highlighted list from parent
+		if (oldWidget.highlightedTeeth.join(',') != widget.highlightedTeeth.join(',')) {
+			_selected = widget.highlightedTeeth.toSet();
+		}
+	}
 
-  int priorityFor(List<String> plans, List<String> findings) {
-    final txt = (plans + findings).map((e) => e.toLowerCase()).join(' | ');
-    if (txt.contains('acute') || txt.contains('severe') || txt.contains('swelling') || txt.contains('extraction')) return 3;
-    if (txt.contains('rct') || txt.contains('root canal') || txt.contains('pulp')) return 2;
-    if (txt.contains('caries') || txt.contains('filling') || txt.contains('restoration') || txt.contains('sensitivity')) return 1;
-    return 0;
-  }
+	void _handleChange(List<String> now) {
+		final before = _selected;
+		final nowSet = now.toSet();
+		// detect newly selected tooth (tap)
+		final newlySelected = nowSet.difference(before);
+		_selected = nowSet;
+		widget.onChange?.call(now);
+		if (newlySelected.isNotEmpty) {
+			final tooth = newlySelected.first;
+			_openToothDetails(context, tooth);
+		}
+	}
 
-  final keys = <String>{...done.keys, ...plans.keys, ...findings.keys}.toList()..sort();
-  return Map.fromEntries(keys.map((k) {
-    final d = done[k] ?? const [];
-    final pl = plans[k] ?? const [];
-    final fd = findings[k] ?? const [];
-    final pr = priorityFor(pl, fd);
-    return MapEntry(k, ToothAggregate(tooth: k, done: d, plans: pl, findings: fd, lastDate: lastDate[k], priority: pr));
-  }));
+	@override
+	Widget build(BuildContext context) {
+			// Build per-tooth summaries from patient's historical sessions
+		final summaries = _summarizePatientTeeth(widget.patient);
+			final doneSet = summaries.entries.where((e) => e.value.doneCount > 0).map((e) => e.key).toSet();
+			final criticalFindings = summaries.entries.where((e) => e.value.hasCriticalFinding).map((e) => e.key).toSet();
+			final anyFindings = summaries.entries.where((e) => e.value.findingsCount > 0 && !e.value.hasCriticalFinding).map((e) => e.key).toSet();
+
+			// Visual encoding
+			final colorize = <String, Color>{
+				for (final t in doneSet) t: Colors.green.shade400,
+			};
+				final strokedColorized = <String, Color>{
+				for (final t in anyFindings) t: Colors.orangeAccent,
+				for (final t in criticalFindings) t: Colors.redAccent,
+			};
+				final strokeWidth = <String, double>{
+					for (final t in anyFindings) t: 3.0,
+					for (final t in criticalFindings) t: 3.8,
+				};
+				// Overlay current Rx highlight as a thicker primary stroke
+				for (final t in widget.highlightedTeeth) {
+					strokedColorized[t] = Theme.of(context).colorScheme.primary;
+					strokeWidth[t] = 4.2;
+				}
+
+			// Tooltip content per tooth (shown via the notation string)
+			final tooltipByTooth = <String, String>{
+				for (final e in summaries.entries) e.key: e.value.tooltipLabel(),
+			};
+
+			return Card(
+			elevation: 2,
+			clipBehavior: Clip.antiAlias,
+			child: Padding(
+					padding: widget.padding,
+				child: Column(
+					crossAxisAlignment: CrossAxisAlignment.start,
+					children: [
+						Row(children: [
+							const Icon(Icons.monitor_heart_outlined, size: 20),
+							const SizedBox(width: 8),
+							Text('Odontogram', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+						]),
+						const SizedBox(height: 8),
+									Center(
+							child: IgnorePointer(
+									ignoring: !widget.interactive,
+												child: TeethSelector(
+										key: ValueKey('teeth-${widget.highlightedTeeth.join(',')}'),
+										onChange: _handleChange,
+									showPermanent: true,
+									showPrimary: true,
+									multiSelect: true,
+										// Preselect/highlight the provided FDI teeth (ISO/FDI codes)
+										initiallySelected: widget.highlightedTeeth,
+																	// Visual coding (requires README version of the package)
+																						colorized: colorize,
+																						StrokedColorized: strokedColorized,
+																	strokeWidth: strokeWidth,
+												  defaultStrokeWidth: 1.3,
+												  defaultStrokeColor: Theme.of(context).colorScheme.outline.withOpacity(0.7),
+																						// Keep fill unchanged for selection; rely on strokes + colorized for meaning
+																						selectedColor: Colors.transparent,
+												  unselectedColor: Theme.of(context).colorScheme.surface,
+										// Tooltip label builder
+										notation: (iso) => tooltipByTooth[iso] ?? iso,
+								),
+							),
+						),
+										const SizedBox(height: 8),
+										// Compact legend chips to show Findings/Done teeth when per-tooth coloring is unavailable
+										if (anyFindings.isNotEmpty || criticalFindings.isNotEmpty || doneSet.isNotEmpty)
+											Center(
+												child: Wrap(
+													alignment: WrapAlignment.center,
+													spacing: 6,
+													runSpacing: 6,
+													children: [
+														if (doneSet.isNotEmpty)
+															_legendGroup(context, 'Done', doneSet.toList()..sort(), Colors.green.shade400),
+														if (anyFindings.isNotEmpty)
+															_legendGroup(context, 'Findings', anyFindings.toList()..sort(), Colors.orangeAccent),
+														if (criticalFindings.isNotEmpty)
+															_legendGroup(context, 'Urgent', criticalFindings.toList()..sort(), Colors.redAccent),
+													],
+												),
+											),
+					],
+				),
+			),
+		);
+	}
+
+		void _openToothDetails(BuildContext context, String iso) {
+			final records = _recordsForTooth(widget.patient, iso);
+			showModalBottomSheet(
+				context: context,
+				showDragHandle: true,
+				isScrollControlled: true,
+				builder: (_) => DraggableScrollableSheet(
+					expand: false,
+					initialChildSize: 0.6,
+					minChildSize: 0.4,
+					maxChildSize: 0.95,
+					builder: (context, controller) {
+						return Padding(
+							padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+							child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+								Row(children: [
+									Text('Tooth $iso', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+									const SizedBox(width: 12),
+									Chip(label: Text('${records.length} record${records.length == 1 ? '' : 's'}')),
+								]),
+								const SizedBox(height: 8),
+								Expanded(
+									child: records.isEmpty
+											? Center(child: Text('No records for tooth $iso'))
+											: ListView.builder(
+												controller: controller,
+												itemCount: records.length,
+												itemBuilder: (context, i) {
+													final r = records[i];
+													return Card(
+														margin: const EdgeInsets.symmetric(vertical: 6),
+														child: Padding(
+															padding: const EdgeInsets.all(12),
+															child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+																Row(children: [
+																	Icon(Icons.event, size: 18),
+																	const SizedBox(width: 6),
+																	Text(_fmtDate(r.date), style: Theme.of(context).textTheme.titleSmall),
+																]),
+																if (r.chiefComplaint.isNotEmpty) ...[
+																	const SizedBox(height: 8),
+																	Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+																		const SizedBox(width: 2),
+																		Icon(Icons.report_problem_outlined, size: 18),
+																		const SizedBox(width: 6),
+																		Expanded(child: Text(r.chiefComplaint)),
+																	]),
+																],
+																if (r.plans.isNotEmpty) ...[
+																	const SizedBox(height: 8),
+																	Row(children: [
+																		const Icon(Icons.flag_outlined, size: 18),
+																		const SizedBox(width: 6),
+																		Expanded(child: Wrap(spacing: 6, runSpacing: 6, children: r.plans.map((e) => Chip(label: Text(e))).toList())),
+																	]),
+																],
+																if (r.done.isNotEmpty) ...[
+																	const SizedBox(height: 8),
+																	Row(children: [
+																		const Icon(Icons.check_circle_outline, size: 18),
+																		const SizedBox(width: 6),
+																		Expanded(child: Wrap(spacing: 6, runSpacing: 6, children: r.done.map((e) => Chip(label: Text(e))).toList())),
+																	]),
+																],
+															]),
+														),
+													);
+											},
+										),
+								),
+						]),
+						);
+					},
+				),
+			);
+		}
 }
 
-Color colorForPriority(int p, BuildContext context) {
-  switch (p) {
-    case 3:
-      return Colors.redAccent;
-    case 2:
-      return Colors.orange;
-    case 1:
-      return Colors.amber;
-    default:
-      return Theme.of(context).disabledColor;
-  }
-}
+	Widget _legendGroup(BuildContext context, String title, List<String> teeth, Color color) {
+		final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600);
+		return Wrap(
+			crossAxisAlignment: WrapCrossAlignment.center,
+			spacing: 6,
+			runSpacing: 6,
+			children: [
+				Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+				Text('$title:', style: labelStyle),
+				...teeth.map((t) => Chip(
+							label: Text(t),
+							visualDensity: VisualDensity.compact,
+							materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+							padding: const EdgeInsets.symmetric(horizontal: 6),
+										labelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(color: _darken(color, 0.15)),
+							backgroundColor: color.withOpacity(0.15),
+							side: BorderSide(color: color.withOpacity(0.4)),
+						)),
+			],
+		);
+	}
 
-/// An interactive odontogram grid for 32 permanent teeth (FDI 11-18,21-28,31-38,41-48).
-/// Displays AI-priority color ring and a compact history chip count. Tapping a tooth opens details.
-class Odontogram extends StatelessWidget {
-  final Patient patient;
-  final EdgeInsetsGeometry padding;
-  final int daysLookback;
-  const Odontogram({super.key, required this.patient, this.padding = const EdgeInsets.all(8), this.daysLookback = 3650});
+	class _ToothSummary {
+		int findingsCount = 0;
+		int doneCount = 0;
+		bool hasCriticalFinding = false;
+		String lastFinding = '';
+		String lastDone = '';
 
-  static const List<String> upperRight = ['18','17','16','15','14','13','12','11'];
-  static const List<String> upperLeft  = ['21','22','23','24','25','26','27','28'];
-  static const List<String> lowerLeft  = ['38','37','36','35','34','33','32','31'];
-  static const List<String> lowerRight = ['41','42','43','44','45','46','47','48'];
+		String tooltipLabel() {
+			final parts = <String>[];
+			if (findingsCount > 0) parts.add('F:$findingsCount${lastFinding.isNotEmpty ? ' ($lastFinding)' : ''}');
+			if (doneCount > 0) parts.add('D:$doneCount${lastDone.isNotEmpty ? ' ($lastDone)' : ''}');
+			if (parts.isEmpty) return 'No records';
+			return parts.join(' | ');
+		}
+	}
 
-  @override
-  Widget build(BuildContext context) {
-    final agg = buildToothAggregates(patient, daysLookback: daysLookback);
+	Map<String, _ToothSummary> _summarizePatientTeeth(Patient p) {
+		final map = <String, _ToothSummary>{};
+		_ToothSummary sum(String t) => map[t] ??= _ToothSummary();
 
-    Widget row(List<String> numbers) => Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: numbers.map((n) => _toothTile(context, n, agg[n])).toList(),
-        );
+		bool isCritical(String s) {
+			final x = s.toLowerCase();
+			return x.contains('swelling') || x.contains('abscess') || x.contains('severe') || x.contains('acute') || x.contains('sinus');
+		}
 
-    return Card(
-      child: Padding(
-        padding: padding,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Icon(Icons.stacked_line_chart, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 8),
-            Text('Odontogram (last year)', style: Theme.of(context).textTheme.titleMedium),
-            const Spacer(),
-            _legend(context),
-          ]),
-          const SizedBox(height: 8),
-          row(upperRight + upperLeft),
-          const SizedBox(height: 6),
-          row(lowerLeft + lowerRight),
-        ]),
-      ),
-    );
-  }
+		for (final s in p.sessions) {
+			for (final f in s.oralExamFindings) {
+				final t = f.toothNumber.trim(); if (t.isEmpty) continue;
+				final sm = sum(t);
+				sm.findingsCount += 1;
+				sm.lastFinding = f.finding;
+				if (isCritical(f.finding)) sm.hasCriticalFinding = true;
+			}
+			for (final f in s.rootCanalFindings) {
+				final t = f.toothNumber.trim(); if (t.isEmpty) continue;
+				final sm = sum(t);
+				sm.findingsCount += 1;
+				sm.lastFinding = f.finding;
+				if (isCritical(f.finding)) sm.hasCriticalFinding = true;
+			}
+			for (final f in s.prosthodonticFindings) {
+				final t = f.toothNumber.trim(); if (t.isEmpty) continue;
+				final sm = sum(t);
+				sm.findingsCount += 1;
+				sm.lastFinding = f.finding;
+				if (isCritical(f.finding)) sm.hasCriticalFinding = true;
+			}
+			for (final d in s.treatmentsDone) {
+				final t = d.toothNumber.trim(); if (t.isEmpty) continue;
+				final sm = sum(t);
+				sm.doneCount += 1;
+				sm.lastDone = d.treatment;
+			}
+		}
 
-  Widget _legend(BuildContext context) {
-    Widget item(Color c, String t) => Row(children: [
-      Container(width: 10, height: 10, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-      const SizedBox(width: 4), Text(t, style: const TextStyle(fontSize: 12))
-    ]);
-    return Row(children: [
-      item(colorForPriority(3, context), 'High'), const SizedBox(width: 8),
-      item(colorForPriority(2, context), 'Med'), const SizedBox(width: 8),
-      item(colorForPriority(1, context), 'Low'), const SizedBox(width: 8),
-      item(colorForPriority(0, context), 'None'),
-    ]);
-  }
+		return map;
+	}
 
-  Widget _toothTile(BuildContext context, String tooth, ToothAggregate? data) {
-    final pr = data?.priority ?? 0;
-    final ring = colorForPriority(pr, context);
-    final has = data != null;
-    final doneCount = data?.done.length ?? 0;
-    final label = tooth;
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: has ? () => _openDetails(context, data) : null,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.all(6),
-        width: 40,
-        height: 56,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: ring.withOpacity(0.9), width: pr == 0 ? 1 : 2),
-          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.35),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-            const SizedBox(height: 2),
-            if (doneCount > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                decoration: BoxDecoration(color: Colors.teal.withOpacity(.85), borderRadius: BorderRadius.circular(10)),
-                child: Text('x$doneCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+		Color _darken(Color color, [double amount = 0.1]) {
+			final hsl = HSLColor.fromColor(color);
+			final lightness = (hsl.lightness - amount).clamp(0.0, 1.0);
+			return hsl.withLightness(lightness).toColor();
+		}
 
-  void _openDetails(BuildContext context, ToothAggregate data) {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              const Icon(Icons.medical_services_outlined, size: 20),
-              const SizedBox(width: 6),
-              Text('Tooth ${data.tooth}', style: Theme.of(context).textTheme.titleMedium),
-              const Spacer(),
-              if (data.lastDate != null)
-                Text('Last: ${data.lastDate!.toLocal().toString().split(' ').first}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            ]),
-            const SizedBox(height: 8),
-            if (data.findings.isNotEmpty) ...[
-              const Text('Findings', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              ...data.findings.map((e) => Text('• $e')),
-              const SizedBox(height: 8),
-            ],
-            if (data.plans.isNotEmpty) ...[
-              const Text('Plans', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              ...data.plans.map((e) => Text('• $e')),
-              const SizedBox(height: 8),
-            ],
-            if (data.done.isNotEmpty) ...[
-              const Text('Treatments Done', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              ...data.done.map((e) => Text('• $e')),
-            ],
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-}
+			String _fmtDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
+
+		class _ToothRecord {
+			final DateTime date;
+			final String chiefComplaint;
+			final List<String> plans;
+			final List<String> done;
+			_ToothRecord(this.date, this.chiefComplaint, this.plans, this.done);
+		}
+
+		List<_ToothRecord> _recordsForTooth(Patient p, String iso) {
+			final recs = <_ToothRecord>[];
+			for (final s in p.sessions) {
+				final plans = <String>[];
+				final done = <String>[];
+				// collect plans for this tooth across categories
+				for (final e in s.toothPlans) {
+					if (e.toothNumber.trim() == iso) plans.add(e.plan);
+				}
+				for (final e in s.rootCanalPlans) {
+					if (e.toothNumber.trim() == iso) plans.add(e.plan);
+				}
+				for (final e in s.prosthodonticPlans) {
+					if (e.toothNumber.trim() == iso) plans.add(e.plan);
+				}
+				// done entries
+				for (final d in s.treatmentsDone) {
+					if (d.toothNumber.trim() == iso) done.add(d.treatment);
+				}
+				if (plans.isNotEmpty || done.isNotEmpty) {
+					final cc = s.chiefComplaint?.complaints.join(', ') ?? '';
+					recs.add(_ToothRecord(s.date, cc, plans, done));
+				}
+			}
+			// most recent first
+			recs.sort((a, b) => b.date.compareTo(a.date));
+			return recs;
+		}
+

@@ -67,8 +67,8 @@ enum DashboardSection {
   utility('Utility', Icons.miscellaneous_services_outlined),
   labs('Labs', Icons.biotech_outlined),
   medicines('Medicines', Icons.medication_outlined),
-  aiInsights('AI Insights', Icons.psychology_outlined),
-  settings('Settings', Icons.settings_outlined);
+  settings('Settings', Icons.settings_outlined),
+  aiInsights('AI Insights', Icons.auto_awesome);
 
   final String label;
   final IconData icon;
@@ -228,19 +228,19 @@ class _DashboardPageState extends State<DashboardPage> {
         return _labsSection();
       case DashboardSection.medicines:
         return _medicinesSection();
-      case DashboardSection.aiInsights:
-        return _aiInsightsSection();
       case DashboardSection.settings:
         return _settingsSection();
+      case DashboardSection.aiInsights:
+        return _aiInsightsSection();
     }
   }
 
   Widget _aiInsightsSection() {
-    final patients = context.watch<PatientProvider>().patients;
-    // Aggregate last-30-day counts
+    final patientProvider = context.watch<PatientProvider>();
+    // Aggregate last 30 days across all patients
     final since = DateTime.now().subtract(const Duration(days: 30));
     int rct = 0, extraction = 0, fillings = 0, ortho = 0, prostho = 0;
-    for (final p in patients) {
+    for (final p in patientProvider.patients) {
       for (final s in p.sessions) {
         if (s.date.isBefore(since)) continue;
         switch (s.type) {
@@ -263,65 +263,62 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     }
 
-    // Simple AI tips
-    final tips = <String>[];
-    if (rct > 0 && fillings == 0) tips.add('High RCT volume but low fillings. Consider preventive care campaigns.');
-    if (extraction > rct) tips.add('More extractions than RCTs. Review case selection and patient counseling.');
-    if (ortho > 0 && prostho == 0) tips.add('Orthodontic cases active. Promote retention and follow-ups.');
-    if (patients.isEmpty) tips.add('No patients yet. Add patients to start seeing insights.');
+    String tip;
+    if (rct + extraction + fillings == 0 && ortho + prostho == 0) {
+      tip = 'Quiet month so far. Consider outreach or recall reminders to re-activate patients.';
+    } else if (extraction > rct) {
+      tip = 'High extractions vs RCTs. Review case selection and patient counseling for tooth preservation.';
+    } else if (fillings > rct && fillings > extraction) {
+      tip = 'Strong preventive/restorative trend. Consider promoting scaling/oral hygiene packages.';
+    } else if (ortho + prostho > 0) {
+      tip = 'Specialty cases on the rise. Ensure lab coordination and appointment spacing are optimized.';
+    } else {
+      tip = 'Balanced caseload. Keep monitoring inventory and appointment load to avoid bottlenecks.';
+    }
 
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(DashboardSection.aiInsights.icon, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 8),
+      child: SingleChildScrollView(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('AI Insights', style: Theme.of(context).textTheme.headlineSmall),
-        ]),
-        const SizedBox(height: 12),
-        Wrap(spacing: 12, runSpacing: 12, children: [
-          _metricCard('RCTs', rct, Icons.biotech_outlined, Colors.orange),
-          _metricCard('Extractions', extraction, Icons.healing_outlined, Colors.redAccent),
-          _metricCard('Fillings', fillings, Icons.circle_outlined, Colors.teal),
-          _metricCard('Ortho', ortho, Icons.align_horizontal_center, Colors.indigo),
-          _metricCard('Prostho', prostho, Icons.architecture, Colors.brown),
-        ]),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('AI Tips', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              if (tips.isEmpty) const Text('No tips right now.') else ...[
-                for (final t in tips)
-                  Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(children: [
-                    const Icon(Icons.lightbulb, color: Colors.amber, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(t)),
-                  ])),
-              ]
-            ]),
+          const SizedBox(height: 12),
+          Wrap(spacing: 12, runSpacing: 12, children: [
+            _metricCard('Root Canals', rct, Icons.route_outlined, Colors.indigo),
+            _metricCard('Extractions', extraction, Icons.remove_circle_outline, Colors.redAccent),
+            _metricCard('Fillings', fillings, Icons.incomplete_circle_outlined, Colors.teal),
+            _metricCard('Orthodontic', ortho, Icons.straighten, Colors.orange),
+            _metricCard('Prosthodontic', prostho, Icons.brush_outlined, Colors.purple),
+          ]),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(children: [
+                const Icon(Icons.lightbulb, color: Colors.amber),
+                const SizedBox(width: 12),
+                Expanded(child: Text(tip, style: Theme.of(context).textTheme.bodyLarge)),
+              ]),
+            ),
           ),
-        ),
-      ]),
+        ]),
+      ),
     );
   }
 
-  Widget _metricCard(String title, int value, IconData icon, Color color) {
+  Widget _metricCard(String title, int count, IconData icon, Color color) {
     return SizedBox(
-      width: 180,
+      width: 240,
       child: Card(
-        color: Theme.of(context).colorScheme.surface,
+        elevation: 2,
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
           child: Row(children: [
-            CircleAvatar(radius: 18, backgroundColor: color.withOpacity(.15), child: Icon(icon, color: color)),
+            CircleAvatar(backgroundColor: color.withOpacity(0.15), child: Icon(icon, color: color)),
             const SizedBox(width: 12),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              Text('$value', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            ])
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text('$count in last 30 days', style: Theme.of(context).textTheme.bodySmall),
+            ]),
           ]),
         ),
       ),

@@ -62,6 +62,83 @@
 				"$dart"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Analyze Flutter project",
+			"type": "shell",
+			"command": "flutter analyze",
+			"isBackground": false,
+			"problemMatcher": [
+				"$dart-error"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Flutter tests",
+			"type": "shell",
+			"command": "flutter test",
+			"isBackground": false,
+			"problemMatcher": [
+				"$dart-error"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Flutter analyze (odontogram)",
+			"type": "shell",
+			"command": "flutter analyze lib/ui/widgets/odontogram.dart",
+			"isBackground": false,
+			"problemMatcher": [
+				"$dart-error"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Flutter analyze (odontogram)",
+			"type": "shell",
+			"command": "flutter analyze lib/ui/widgets/odontogram.dart",
+			"isBackground": false,
+			"problemMatcher": [
+				"$dart-error"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Analyze flutter project (full)",
+			"type": "shell",
+			"command": "flutter analyze",
+			"isBackground": false,
+			"problemMatcher": [
+				"$dart-error"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Flutter run (debug) - odontogram area only",
+			"type": "shell",
+			"command": "echo \"Optional: run app via task 'Flutter run (debug)' in VS Code tasks\"",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Analyze flutter project (full)",
+			"type": "shell",
+			"command": "flutter analyze",
+			"isBackground": false,
+			"problemMatcher": [
+				"$dart-error"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Analyze flutter project (full)",
+			"type": "shell",
+			"command": "flutter analyze",
+			"isBackground": false,
+			"problemMatcher": [
+				"$dart-error"
+			],
+			"group": "build"
 		}
 	]
 }
