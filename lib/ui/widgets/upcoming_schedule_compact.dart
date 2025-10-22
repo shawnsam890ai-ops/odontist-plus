@@ -74,9 +74,9 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _monthHeader(),
-          const SizedBox(height: 3),
+          const SizedBox(height: 16),
           _fourDayStrip(),
-          const SizedBox(height: 6),
+          const SizedBox(height: 20),
           Expanded(child: _appointmentsList(entries)),
         ],
       ),
@@ -85,13 +85,11 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
 
   Widget _monthHeader() {
     final m = _selectedDay;
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+    const monthsShort = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
-    final monthLabel = '${months[m.month - 1]} ${m.year}';
-    final dateLabel = '${_weekdayShort(m.weekday)} ${m.day}';
-    final combinedLabel = '$monthLabel • $dateLabel';
+    final monthLabel = '${monthsShort[m.month - 1]} ${m.year}';
     return LayoutBuilder(
       builder: (context, constraints) {
   final narrow = constraints.maxWidth < 380;
@@ -136,18 +134,18 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
                   decoration: BoxDecoration(
-                    color: Colors.transparent,
+                    color: Theme.of(context).colorScheme.primary,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Theme.of(context).colorScheme.primary, width: 1.0),
                   ),
                   child: Text(
-                    combinedLabel,
+                    monthLabel,
                     textAlign: TextAlign.center,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
-                          color: Theme.of(context).colorScheme.primary,
+                          color: Colors.white,
                         ),
                   ),
                 ),
@@ -202,7 +200,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-  const stripH = 56.0; // taller for better legibility
+  const stripH = 72.0; // increased for extra breathing room
   const arrowW = 18.0;
   const gap = 0.0; // reduce gaps to avoid overflow
   const count = 4;
@@ -337,7 +335,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
     if (entries.isEmpty) return _emptyBar();
     return ListView.separated(
       itemCount: entries.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 2),
+      separatorBuilder: (_, __) => const SizedBox(height: 14),
       itemBuilder: (_, i) => _appointmentCard(entries[i]),
     );
   }

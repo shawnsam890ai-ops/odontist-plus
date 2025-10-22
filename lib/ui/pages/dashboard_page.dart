@@ -728,9 +728,10 @@ class _DashboardPageState extends State<DashboardPage> {
         spacing: 16,
         runSpacing: 16,
         children: [
+          // Make revenue tile match patient tile width for visual balance
           SizedBox(
             height: revenueHeight,
-            width: revenueWidth,
+            width: patientWidth,
             child: RevenueTrendCard(
               months: 6,
               overlayImage: const AssetImage('assets/images/revenue_icon.png'),
