@@ -33,7 +33,7 @@ import '../widgets/multi_select_dropdown.dart';
 import '../widgets/search_editable_multi_select.dart';
 // import '../widgets/search_multi_select.dart'; // no longer needed here after moving to full-screen edit page
 import 'edit_patient_page.dart';
-import '../widgets/odontogram.dart';
+import '../widgets/odontogram_new.dart';
 
 class PatientDetailPage extends StatefulWidget {
   static const routeName = '/patient-detail';
