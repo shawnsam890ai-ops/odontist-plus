@@ -77,26 +77,38 @@ enum DashboardSection {
 
 class _DashboardPageState extends State<DashboardPage> {
   DashboardSection _section = DashboardSection.staffAttendance; // default to Staff view
-  // Removed "Customize" mode; simplified static layout
-  bool _fullScreen = false;
+  // Always full-screen; provide a bottom-centered menu with a hide toggle
+  bool _menuHidden = false;
+  final ScrollController _menuScroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _menuScroll.addListener(() {
+      // rebuild to show/hide left chevron based on position
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _menuScroll.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-  return Scaffold(
-      appBar: _fullScreen
-          ? null
-          : PreferredSize(
-              preferredSize: const Size.fromHeight(56),
-              child: _TopBar(
-                rightActions: [
-                  IconButton(
-                    tooltip: 'Full screen',
-                    icon: const Icon(Icons.fullscreen),
-                    onPressed: () => setState(() => _fullScreen = true),
-                  ),
-                ],
-              ),
-            ),
+  return WillPopScope(
+    onWillPop: () async {
+      // Back button: first go to Overview; if already there, allow pop
+      if (_section != DashboardSection.overview) {
+        setState(() => _section = DashboardSection.overview);
+        return false;
+      }
+      return true;
+    },
+    child: Scaffold(
+      appBar: null,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -110,48 +122,28 @@ class _DashboardPageState extends State<DashboardPage> {
             );
           }),
           SafeArea(
-          child: Stack(children: [
-            Row(
-              children: [
-                if (!_fullScreen) ...[
-                  const SizedBox(width: 8),
-                  _buildSideMenu(),
-                  const SizedBox(width: 12),
-                ],
-                Expanded(child: _buildSectionContent()),
-              ],
-            ),
-            if (_fullScreen)
+            child: Stack(children: [
+              // Main content without side menu
+              Positioned.fill(child: _buildSectionContent()),
+              // Bottom centered horizontal menu
+              if (!_menuHidden) _buildBottomMenu(context),
+              // Toggle button to hide/show the menu
               Positioned(
-                top: 12,
-                left: 12,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: () => setState(() => _fullScreen = false),
-                    child: Ink(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 10, offset: const Offset(0, 4)),
-                        ],
-                        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(.3)),
-                      ),
-                      child: const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Icon(Icons.fullscreen_exit),
-                      ),
-                    ),
-                  ),
+                right: 12,
+                bottom: 12 + MediaQuery.of(context).padding.bottom,
+                child: FloatingActionButton.small(
+                  heroTag: 'toggleMenu',
+                  elevation: 2,
+                  onPressed: () => setState(() => _menuHidden = !_menuHidden),
+                  child: Icon(_menuHidden ? Icons.expand_less : Icons.expand_more),
                 ),
               ),
-          ]),
+            ]),
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   BoxDecoration _backgroundDecoration(BuildContext context) {
@@ -233,6 +225,112 @@ class _DashboardPageState extends State<DashboardPage> {
       case DashboardSection.aiInsights:
         return _aiInsightsSection();
     }
+  }
+
+  // Bottom horizontal menu centered; icons inside circular outline and highlighted when selected
+  Widget _buildBottomMenu(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final media = MediaQuery.of(context);
+    final maxWidth = media.size.width;
+    final shellWidth = maxWidth.clamp(0, 560).toDouble();
+  final barHeight = 80.0; // ensures 56px icon + 20px padding fits without overflow
+
+    return Positioned(
+      left: (maxWidth - shellWidth) / 2,
+      right: (maxWidth - shellWidth) / 2,
+      bottom: 12,
+      child: Stack(children: [
+        // Shell container with horizontal scroll
+        Container(
+          height: barHeight,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(.10), blurRadius: 18, offset: const Offset(0, 8)),
+            ],
+            border: Border.all(color: cs.outlineVariant.withOpacity(.25)),
+          ),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: SingleChildScrollView(
+              controller: _menuScroll,
+              scrollDirection: Axis.horizontal,
+              physics: const ClampingScrollPhysics(),
+              child: Row(
+                children: [
+                  for (final s in DashboardSection.values)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: _BottomIconButton(
+                        icon: s.icon,
+                        label: s.label,
+                        selected: _section == s,
+                        showLabel: false,
+                        onTap: () => setState(() => _section = s),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Right-side scroll toggle button
+        Positioned(
+          right: 6,
+          top: (barHeight - 40) / 2,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                final pos = _menuScroll.position;
+                final target = (pos.pixels + 220).clamp(0.0, pos.maxScrollExtent);
+                _menuScroll.animateTo(target, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+              },
+              child: Ink(
+                height: 40,
+                width: 40,
+                decoration: BoxDecoration(
+                  color: cs.primary.withOpacity(.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: cs.primary.withOpacity(.4)),
+                ),
+                child: Icon(Icons.chevron_right, color: cs.primary),
+              ),
+            ),
+          ),
+        ),
+        // Left reveal button when scrolled
+        if (_menuScroll.hasClients && _menuScroll.offset > 0)
+          Positioned(
+            left: 6,
+            top: (barHeight - 40) / 2,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  final pos = _menuScroll.position;
+                  final target = (pos.pixels - 220).clamp(0.0, pos.maxScrollExtent);
+                  _menuScroll.animateTo(target, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+                },
+                child: Ink(
+                  height: 40,
+                  width: 40,
+                  decoration: BoxDecoration(
+                    color: cs.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: cs.outlineVariant.withOpacity(.4)),
+                  ),
+                  child: Icon(Icons.chevron_left, color: cs.onSurfaceVariant),
+                ),
+              ),
+            ),
+          ),
+      ]),
+    );
   }
 
   Widget _aiInsightsSection() {
@@ -2342,6 +2440,56 @@ class _TopBar extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _BottomIconButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool showLabel;
+  const _BottomIconButton({required this.icon, required this.label, required this.selected, required this.onTap, this.showLabel = true});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = selected ? cs.primary : cs.onSurfaceVariant;
+    return InkWell(
+      borderRadius: BorderRadius.circular(40),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: selected ? cs.primary.withOpacity(0.08) : Colors.transparent,
+                shape: BoxShape.circle,
+                border: Border.all(color: selected ? cs.primary : cs.outlineVariant.withOpacity(.6)),
+              ),
+              child: Icon(icon, color: color),
+            ),
+            if (showLabel) ...[
+              const SizedBox(height: 6),
+              SizedBox(
+                width: 68,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11, color: color, fontWeight: selected ? FontWeight.w600 : FontWeight.w500),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
