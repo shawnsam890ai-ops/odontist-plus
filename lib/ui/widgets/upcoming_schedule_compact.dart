@@ -90,6 +90,8 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
     final monthLabel = '${months[m.month - 1]} ${m.year}';
+    final dateLabel = '${_weekdayShort(m.weekday)} ${m.day}';
+    final combinedLabel = '$monthLabel • $dateLabel';
     return LayoutBuilder(
       builder: (context, constraints) {
   final narrow = constraints.maxWidth < 380;
@@ -120,7 +122,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
             Expanded(
               flex: 2,
               child: InkWell(
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(8),
                 onTap: () async {
                   final now = DateTime.now();
                   final picked = await showDatePicker(
@@ -131,13 +133,22 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
                   );
                   if (picked != null) setState(() => _selectedDay = picked);
                 },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Theme.of(context).colorScheme.primary, width: 1.0),
+                  ),
                   child: Text(
-                    monthLabel,
+                    combinedLabel,
                     textAlign: TextAlign.center,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, fontSize: 13),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                   ),
                 ),
               ),
@@ -174,6 +185,8 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
       },
     );
   }
+
+  // Removed selected date chip for a cleaner layout, as requested.
 
   Widget _fourDayStrip() {
     final selected = _selectedDay;
@@ -265,7 +278,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
         width: width,
         margin: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
         decoration: BoxDecoration(
-          color: isSel ? Theme.of(context).colorScheme.primary.withOpacity(.1) : Colors.transparent,
+          color: isSel ? Theme.of(context).colorScheme.primary.withOpacity(.06) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: isSel ? Theme.of(context).colorScheme.primary : Colors.transparent, width: 0.8),
         ),
@@ -280,20 +293,36 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
                 color: isSel ? Theme.of(context).colorScheme.primary : Colors.grey[600],
               ),
             ),
-            SizedBox(height: width <= 24 ? 1 : 3),
+            // Small line under the weekday
             Container(
-              padding: EdgeInsets.all(width <= 24 ? 4 : 6),
+              margin: EdgeInsets.only(top: width <= 24 ? 2 : 4, bottom: width <= 24 ? 2 : 4),
+              height: 2,
+              width: width * 0.5,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
+                color: isSel ? Theme.of(context).colorScheme.primary : Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Rounded rectangular box for the date number
+            Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: width <= 24 ? 6 : 8,
+                vertical: width <= 24 ? 2 : 4,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
                 color: isToday
                     ? Theme.of(context).colorScheme.primary
-                    : (isSel ? Theme.of(context).colorScheme.primary.withOpacity(.15) : Colors.grey.shade200),
+                    : Colors.grey.shade200,
+                border: isSel
+                    ? Border.all(color: Theme.of(context).colorScheme.primary, width: 0.8)
+                    : null,
               ),
               child: Text(
                 '${d.day}',
                 style: TextStyle(
                   fontSize: width <= 24 ? 10 : 12,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                   color: isToday ? Colors.white : (isSel ? Theme.of(context).colorScheme.primary : Colors.black87),
                 ),
               ),
@@ -354,7 +383,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
           BoxShadow(color: Colors.black.withOpacity(.02), blurRadius: 4, offset: const Offset(0, 1))
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Row(
         children: [
           // Left: Time
@@ -363,7 +392,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
             fit: FlexFit.tight,
             child: Text(
               time,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               softWrap: false,
@@ -378,7 +407,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
               e.complaint ?? '-',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11),
+              style: const TextStyle(fontSize: 12),
             ),
           ),
           const SizedBox(width: 6),
@@ -396,7 +425,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
                 child: Text(
                   e.patient.name,
                   textAlign: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   softWrap: false,

@@ -42,7 +42,7 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
   final Color _border = const Color(0xFFEEEEEE);
 
   final TextEditingController _searchCtrl = TextEditingController();
-  bool _filterActive = false;
+  // Removed All/Active quick filter; keep advanced filters below
   // Advanced filters
   DateTimeRange? _dateRange;
   final Set<TreatmentType> _typeFilters = {};
@@ -61,9 +61,7 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
       final idMatch = p.displayNumber.toString().contains(query);
       return nameMatch || idMatch;
     }).toList();
-    if (_filterActive) {
-      patients = patients.where((p) => p.sessions.isNotEmpty).toList();
-    }
+    // No All/Active toggle; rely on search and advanced filters
     // Apply advanced filters if any
     final hasAdv = _dateRange != null || _typeFilters.isNotEmpty || _doctorIdFilter != null;
     if (hasAdv) {
@@ -118,10 +116,11 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
       final listWidget = patients.isEmpty
           ? const Center(child: Text('No patients'))
           : ListView.separated(
+              padding: const EdgeInsets.only(bottom: 16),
               shrinkWrap: stacked,
               physics: stacked ? const NeverScrollableScrollPhysics() : null,
               itemCount: patients.length,
-              separatorBuilder: (_, __) => Divider(height: 1, color: _border),
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (_, i) => _buildPatientCard(patients[i]),
             );
 
@@ -129,27 +128,7 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
         TextField(controller: _searchCtrl, decoration: searchDecoration, onChanged: (_) => setState(() {})),
         const SizedBox(height: 12),
         Row(children: [
-          FilterChip(
-            label: Text('All Patients', style: TextStyle(color: !_filterActive ? Colors.white : _secondary)),
-            selected: !_filterActive,
-            onSelected: (v) => setState(() => _filterActive = false),
-            selectedColor: _primary,
-            checkmarkColor: Colors.white,
-            backgroundColor: Colors.white,
-            side: BorderSide(color: _border),
-          ),
-          const SizedBox(width: 8),
-          FilterChip(
-            label: Text('Active', style: TextStyle(color: _filterActive ? Colors.white : _secondary)),
-            selected: _filterActive,
-            onSelected: (v) => setState(() => _filterActive = true),
-            selectedColor: _primary,
-            checkmarkColor: Colors.white,
-            backgroundColor: Colors.white,
-            side: BorderSide(color: _border),
-          ),
-          const Spacer(),
-          // Add Patient CTA
+          // Add Patient CTA (left aligned for mobile, right aligned on wide)
           FilledButton.icon(
             onPressed: () async {
               await Navigator.of(context).pushNamed(AddPatientPage.routeName);
@@ -158,8 +137,8 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
             icon: const Icon(Icons.person_add),
             label: const Text('Add Patient'),
           ),
-          const SizedBox(width: 12),
-          Text('${patients.length} results', style: TextStyle(color: _secondary)),
+          const Spacer(),
+          Text('${patients.length} result${patients.length == 1 ? '' : 's'}', style: TextStyle(color: _secondary)),
         ]),
         const SizedBox(height: 10),
         // Advanced filters row (responsive wrap)
@@ -257,63 +236,81 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
 
   Widget _buildPatientCard(Patient p) {
     final active = p.sessions.isNotEmpty;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      leading: CircleAvatar(backgroundColor: _primary.withOpacity(0.12), child: Icon(Icons.person, color: _secondary)),
-      title: Text(p.name, style: TextStyle(fontWeight: FontWeight.w700, color: _text)),
-      subtitle: Text('MRN: ${p.displayNumber.toString().padLeft(4, '0')} • Next Appt: ${_nextApptLabel(p)}', style: TextStyle(color: _secondary)),
-      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        // WhatsApp
-        IconButton(
-          tooltip: 'WhatsApp',
-          iconSize: 22,
-          padding: const EdgeInsets.all(6),
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          onPressed: (p.phone.trim().isEmpty) ? null : () => _openWhatsApp(p.phone),
-          icon: SvgPicture.asset('assets/images/whatsapp.svg', width: 22, height: 22),
-        ),
-        // Call
-        IconButton(
-          tooltip: 'Call',
-          iconSize: 22,
-          padding: const EdgeInsets.all(6),
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          onPressed: (p.phone.trim().isEmpty) ? null : () => _callPhone(p.phone),
-          icon: const Icon(Icons.phone, color: Color(0xFF20C4C4)),
-        ),
-        const SizedBox(width: 4),
-        Container(width: 10, height: 10, decoration: BoxDecoration(color: active ? Colors.green : Colors.grey, shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        PopupMenuButton<String>(
-          tooltip: 'More',
-          icon: Icon(Icons.more_vert, color: _secondary),
-          onSelected: (v) async {
-            if (v == 'delete') {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('Delete Patient?'),
-                  content: Text('This will permanently delete "${p.name}" and all related sessions. This action cannot be undone.'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                    FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+    return Material(
+      color: Colors.white,
+      elevation: 4,
+      shadowColor: Colors.black.withOpacity(.12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: _border)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => Navigator.of(context).pushNamed(PatientDetailPage.routeName, arguments: {'patientId': p.id}),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              CircleAvatar(backgroundColor: _primary.withOpacity(0.12), child: Icon(Icons.person, color: _secondary)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(p.name, style: TextStyle(fontWeight: FontWeight.w700, color: _text)),
+                  const SizedBox(height: 2),
+                  Text('MRN: ${p.displayNumber.toString().padLeft(4, '0')} • Next Appt: ${_nextApptLabel(p)}', style: TextStyle(color: _secondary)),
+                ]),
+              ),
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(
+                  tooltip: 'WhatsApp',
+                  iconSize: 22,
+                  padding: const EdgeInsets.all(6),
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  onPressed: (p.phone.trim().isEmpty) ? null : () => _openWhatsApp(p.phone),
+                  icon: SvgPicture.asset('assets/images/whatsapp.svg', width: 22, height: 22),
+                ),
+                IconButton(
+                  tooltip: 'Call',
+                  iconSize: 22,
+                  padding: const EdgeInsets.all(6),
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  onPressed: (p.phone.trim().isEmpty) ? null : () => _callPhone(p.phone),
+                  icon: const Icon(Icons.phone, color: Color(0xFF20C4C4)),
+                ),
+                const SizedBox(width: 6),
+                Container(width: 10, height: 10, decoration: BoxDecoration(color: active ? Colors.green : Colors.grey, shape: BoxShape.circle)),
+                const SizedBox(width: 6),
+                PopupMenuButton<String>(
+                  tooltip: 'More',
+                  icon: Icon(Icons.more_vert, color: _secondary),
+                  onSelected: (v) async {
+                    if (v == 'delete') {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (_) => AlertDialog(
+                          title: const Text('Delete Patient?'),
+                          content: Text('This will permanently delete "${p.name}" and all related sessions. This action cannot be undone.'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        await context.read<PatientProvider>().deletePatient(p.id);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Deleted ${p.name}')));
+                        }
+                      }
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'delete', child: Text('Delete Patient')),
                   ],
                 ),
-              );
-              if (confirm == true) {
-                await context.read<PatientProvider>().deletePatient(p.id);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Deleted ${p.name}')));
-                }
-              }
-            }
-          },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'delete', child: Text('Delete Patient')),
-          ],
+              ]),
+            ],
+          ),
         ),
-      ]),
-      onTap: () => Navigator.of(context).pushNamed(PatientDetailPage.routeName, arguments: {'patientId': p.id}),
+      ),
     );
   }
 
