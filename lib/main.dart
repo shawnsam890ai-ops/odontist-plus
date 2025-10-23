@@ -19,9 +19,15 @@ import 'ui/pages/splash_page.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'services/notification_service.dart';
+import 'providers/license_provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'core/auth_backend_firebase.dart';
 // Firebase initialization will be added after FlutterFire configure.
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const DentalClinicApp());
 }
 
@@ -32,9 +38,7 @@ class DentalClinicApp extends StatelessWidget {
   Widget build(BuildContext context) {
   return MultiProvider(
     providers: [
-  // To enable Firebase auth, replace the line below with:
-  // ChangeNotifierProvider(create: (_) => AuthProvider(backend: FirebaseAuthBackend())),
-  ChangeNotifierProvider(create: (_) => AuthProvider()),
+  ChangeNotifierProvider(create: (_) => AuthProvider(backend: FirebaseAuthBackend())),
   ChangeNotifierProvider(create: (_) => PatientProvider()),
   ChangeNotifierProvider(create: (_) => RevenueProvider()),
         ChangeNotifierProvider(create: (_) => LabProvider()),
@@ -49,6 +53,7 @@ class DentalClinicApp extends StatelessWidget {
     ChangeNotifierProvider(create: (_) => LabRegistryProvider()),
     ChangeNotifierProvider(create: (_) => MedicineProvider()),
     ChangeNotifierProvider(create: (_) => ThemeProvider()),
+  ChangeNotifierProvider(create: (_) => LicenseProvider()),
     // Utility depends on RevenueProvider instance
     ChangeNotifierProxyProvider<RevenueProvider, UtilityProvider>(
       create: (ctx) => UtilityProvider(revenue: ctx.read<RevenueProvider>()),
@@ -61,10 +66,15 @@ class DentalClinicApp extends StatelessWidget {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             // Auth first
             ctx.read<AuthProvider>().ensureLoaded();
+            // Refresh license status after auth state is known
+            ctx.read<LicenseProvider>().refresh();
+            ctx.read<LicenseProvider>().startAutoRefresh(every: const Duration(minutes: 30));
             // Load theme choice
             ctx.read<ThemeProvider>().ensureLoaded();
             final opt = ctx.read<OptionsProvider>();
             final pats = ctx.read<PatientProvider>();
+            // Load patients from storage/Firestore
+            pats.ensureLoaded();
             opt.registerPatientProvider(pats);
             // Register revenue into providers that need cross-updates
             final rev = ctx.read<RevenueProvider>();
@@ -81,6 +91,8 @@ class DentalClinicApp extends StatelessWidget {
             ctx.read<MedicineProvider>().ensureLoaded();
             // Load utilities
             ctx.read<UtilityProvider>().ensureLoaded();
+            // Load appointments from Firestore
+            ctx.read<AppointmentProvider>().ensureLoaded();
             // Initialize local notifications
             NotificationService.instance.init();
           });

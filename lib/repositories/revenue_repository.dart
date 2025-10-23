@@ -24,6 +24,12 @@ class RevenueRepository {
     await prefs.setString(_storageKey, jsonEncode(_entries.map((e) => e.toJson()).toList()));
   }
 
+  // Replace all revenue entries in local storage (used when syncing from Firestore)
+  Future<void> replaceAll(List<RevenueEntry> items) async {
+    _entries = List.from(items);
+    await _persist();
+  }
+
   Future<RevenueEntry> addEntry({required String patientId, required String description, required double amount}) async {
     final entry = RevenueEntry(
       id: _uuid.v4(),

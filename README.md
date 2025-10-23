@@ -1,3 +1,68 @@
+# Backend: Auth, Trials, Subscriptions, Integrity
+
+This project includes Firebase Cloud Functions and Firestore rules to support:
+
+- Email/password signup with 3‑day free trial
+- Razorpay subscriptions: monthly ₹1499, 6‑months ₹6900, yearly ₹12000
+- Secure activation via Razorpay webhook (server‑side signature verification)
+- Play Integrity verification to mitigate modded APKs
+- Access checks on the server for every sensitive call
+
+## Components
+
+1. Cloud Functions (Node 18, TypeScript) in `functions/`:
+  - `onAuthCreate`: creates `users/{uid}` doc with `trial_start` and `license_status=trial`.
+  - `checkAccess` (callable): validates Firebase auth, checks trial/active subscription and that integrity was passed recently.
+  - `createOrder` (callable): creates a Razorpay order for the selected plan.
+  - `razorpayWebhook` (HTTP): verifies Razorpay signature and activates license (`license_status=active`, sets `expiry_date`).
+  - `verifyIntegrity` (callable): verifies a Play Integrity token with Google and updates `integrity_passed_at` on success.
+  - `expireLicenses` (scheduled): marks expired active licenses as `expired` daily.
+
+2. Firestore Rules in `firestore.rules`:
+  - Users can read their own document.
+  - Users can update only `profile`, `integrity_passed_at` and `updated_at` from the client.
+  - Clients cannot set/modify `license_status` or `expiry_date` — only Cloud Functions do.
+
+## Configure
+
+1. Install tools and deps (Node 18+):
+  - `npm --prefix functions install`
+
+2. Set Function Config:
+  - `firebase functions:config:set razorpay.key_id=YOUR_KEY_ID razorpay.key_secret=YOUR_KEY_SECRET`
+  - `firebase functions:config:set webhooks.secret=YOUR_RAZORPAY_WEBHOOK_SECRET`
+  - `firebase functions:config:set play.package=com.your.app`
+
+3. Deploy:
+  - `npm --prefix functions run build`
+  - `firebase deploy --only functions,firestore:rules`
+
+## Flutter Integration (high‑level)
+
+1. Signup UI:
+  - Collect first name, last name, preferred username, email, password (+confirm, show/hide).
+  - Call `FirebaseAuth.instance.createUserWithEmailAndPassword`.
+  - After sign‑up, write `users/{uid}.profile` with names and username.
+
+2. Trial & Access Gate:
+  - On app start and before sensitive operations, call the callable `checkAccess`.
+  - If `allowed=false`, open the paywall.
+
+3. Payments:
+  - Call `createOrder` callable to get a Razorpay order (amount/currency).
+  - Use Razorpay Checkout (client SDK) to complete payment.
+  - Server receives webhook and activates the license.
+
+4. Integrity:
+  - Use Play Integrity API on Android (e.g., via native plugin) to fetch an integrity token.
+  - Send it to `verifyIntegrity` callable. Do this after login and weekly.
+
+## Notes on Anti‑Tamper
+
+- Play Integrity checks + server‑side gating significantly reduce modded APK risk, but cannot guarantee absolute prevention.
+- Keep all premium features gated by `checkAccess` on the server.
+- Consider Remote Config feature flags, dynamic signing key pinning, and periodic integrity checks.
+
 # Dental Clinic App (Prototype)
 
 This Flutter application is a prototype for a dental clinic management system featuring:

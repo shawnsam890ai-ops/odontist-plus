@@ -1,1 +1,31 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"dr-shawn-clinic-app","appId":"1:747834012269:android:1e7ac6a2d3ee1654bb8564","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"dr-shawn-clinic-app","configurations":{"android":"1:747834012269:android:1e7ac6a2d3ee1654bb8564","ios":"1:747834012269:ios:f8156452e256a12abb8564","macos":"1:747834012269:ios:f8156452e256a12abb8564","web":"1:747834012269:web:98cdbd047bd125d2bb8564","windows":"1:747834012269:web:aa34d259ed847166bb8564"}}}}}}
+{
+	"flutter": {
+		"platforms": {
+			"android": {
+				"default": {
+					"projectId": "dr-shawn-clinic-app",
+					"appId": "1:747834012269:android:1e7ac6a2d3ee1654bb8564",
+					"fileOutput": "android/app/google-services.json"
+				}
+			},
+			"dart": {
+				"lib/firebase_options.dart": {
+					"projectId": "dr-shawn-clinic-app",
+					"configurations": {
+						"android": "1:747834012269:android:1e7ac6a2d3ee1654bb8564",
+						"ios": "1:747834012269:ios:f8156452e256a12abb8564",
+						"macos": "1:747834012269:ios:f8156452e256a12abb8564",
+						"web": "1:747834012269:web:98cdbd047bd125d2bb8564",
+						"windows": "1:747834012269:web:aa34d259ed847166bb8564"
+					}
+				}
+			}
+		}
+	},
+	"functions": {
+		"source": "functions"
+	},
+	"firestore": {
+		"rules": "firestore.rules"
+	}
+}

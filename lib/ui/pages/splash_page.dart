@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/license_provider.dart';
 import 'login_page.dart';
 import 'dashboard_page.dart';
 import 'pending_approval_page.dart';
@@ -23,13 +24,20 @@ class _SplashPageState extends State<SplashPage> {
       if (!mounted) return;
       final auth = context.read<AuthProvider>();
       await auth.ensureLoaded();
+      // Ensure license state is refreshed before deciding the route
+      try {
+        await context.read<LicenseProvider>().refresh();
+      } catch (_) {}
       if (!mounted) return;
+      final license = context.read<LicenseProvider>();
       if (!auth.isLoggedIn) {
         Navigator.of(context).pushReplacementNamed(LoginPage.routeName);
-      } else if (!auth.isApproved) {
-        Navigator.of(context).pushReplacementNamed(PendingApprovalPage.routeName);
-      } else {
+      } else if (license.allowed) {
+        // Allowed by trial/active subscription
         Navigator.of(context).pushReplacementNamed(DashboardPage.routeName);
+      } else {
+        // Not allowed yet (no trial/expired) – show pending/paywall screen
+        Navigator.of(context).pushReplacementNamed(PendingApprovalPage.routeName);
       }
     });
   }

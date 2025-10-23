@@ -47,6 +47,7 @@ import '../../models/appointment.dart' as appt;
 import 'add_patient_page.dart';
 import '../../providers/theme_provider.dart';
 import '../../models/lab_vendor.dart';
+import '../../providers/license_provider.dart';
 
 /// Dashboard main page with side navigation and section placeholders.
 class DashboardPage extends StatefulWidget {
@@ -127,6 +128,38 @@ class _DashboardPageState extends State<DashboardPage> {
           }),
           SafeArea(
             child: Stack(children: [
+              // License banner
+              Positioned(
+                top: 8,
+                left: 8,
+                right: 8,
+                child: Consumer<LicenseProvider>(builder: (ctx, lic, _) {
+                  final s = lic.state;
+                  String? label;
+                  Color bg = Colors.transparent;
+                  Color fg = Colors.black87;
+                  if (s.status == LicenseStatus.trial && s.trialValid) {
+                    label = 'Trial active: 3-day free access';
+                    bg = Colors.amber.shade100.withOpacity(0.9);
+                  } else if (!s.allowed) {
+                    label = 'Subscription required - access limited';
+                    bg = Colors.red.shade100.withOpacity(0.95);
+                    fg = Colors.red.shade900;
+                  } else if (s.status == LicenseStatus.active) {
+                    label = 'Subscription active';
+                    bg = Colors.green.shade100.withOpacity(0.85);
+                    fg = Colors.green.shade900;
+                  }
+                  if (label == null) return const SizedBox.shrink();
+                  return Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(24), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)]),
+                      child: Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: fg)),
+                    ),
+                  );
+                }),
+              ),
               // Main content without side menu
               Positioned.fill(child: _buildSectionContent()),
               // Bottom centered horizontal menu

@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return request.auth != null && request.auth.uid == uid; }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      // Allow user to create own profile document at signup
+      allow create: if isOwner(uid);
+      // Allow limited updates to own profile fields, but block license fields from client
+      allow update: if isOwner(uid)
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["profile","integrity_passed_at","updated_at"]) ;
+      // No client deletes
+      allow delete: if false;
+
+      // Subcollections owned by the user
+      match /patients/{pid} {
+        allow read, write: if isOwner(uid);
+      }
+      match /revenue/{rid} {
+        allow read, write: if isOwner(uid);
+      }
+      match /appointments/{aid} {
+        allow read, write: if isOwner(uid);
+      }
+      match /medicines/{mid} {
+        allow read, write: if isOwner(uid);
+      }
+      match /inventory/{iid} {
+        allow read, write: if isOwner(uid);
+      }
+      match /lab_work/{lid} {
+        allow read, write: if isOwner(uid);
+      }
+      match /utility_services/{sid} {
+        allow read, write: if isOwner(uid);
+      }
+      match /utility_payments/{pid} {
+        allow read, write: if isOwner(uid);
+      }
+      match /utility_bills/{bid} {
+        allow read, write: if isOwner(uid);
+      }
+      match /lab_registry/{lid} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

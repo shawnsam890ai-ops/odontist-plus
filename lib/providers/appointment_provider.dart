@@ -1,22 +1,54 @@
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/appointment.dart';
 import '../services/notification_service.dart';
 
 class AppointmentProvider with ChangeNotifier {
   final List<Appointment> _appointments = [];
+  bool _loaded = false;
 
   List<Appointment> get appointments => List.unmodifiable(_appointments);
+  bool get isLoaded => _loaded;
 
-  void add(Appointment a) {
+  Future<void> ensureLoaded() async {
+    if (_loaded) return;
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        final snap = await FirebaseFirestore.instance.collection('users').doc(uid).collection('appointments').get();
+        _appointments
+          ..clear()
+          ..addAll(snap.docs.map((d) => Appointment.fromJson(d.data())));
+      }
+    } catch (_) {}
+    _loaded = true;
+    notifyListeners();
+  }
+
+  Future<void> add(Appointment a) async {
     _appointments.add(a);
     _scheduleIfNeeded(a);
+    // Write-through to Firestore
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).collection('appointments').doc(a.id).set(a.toJson());
+      }
+    } catch (_) {}
     notifyListeners();
   }
 
   /// Remove an appointment by id.
-  void remove(String id) {
+  Future<void> remove(String id) async {
     _appointments.removeWhere((a) => a.id == id);
     _cancelNotification(id);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).collection('appointments').doc(id).delete();
+      }
+    } catch (_) {}
     notifyListeners();
   }
 
@@ -24,23 +56,35 @@ class AppointmentProvider with ChangeNotifier {
     return _appointments.where((a) => a.dateTime.year == day.year && a.dateTime.month == day.month && a.dateTime.day == day.day).toList();
   }
 
-  void markAttended(String id) {
+  Future<void> markAttended(String id) async {
     final idx = _appointments.indexWhere((a) => a.id == id);
     if (idx == -1) return;
     _appointments[idx].status = AppointmentStatus.attended;
     _cancelNotification(id);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).collection('appointments').doc(id).set(_appointments[idx].toJson());
+      }
+    } catch (_) {}
     notifyListeners();
   }
 
-  void markMissed(String id) {
+  Future<void> markMissed(String id) async {
     final idx = _appointments.indexWhere((a) => a.id == id);
     if (idx == -1) return;
     _appointments[idx].status = AppointmentStatus.missed;
     _cancelNotification(id);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).collection('appointments').doc(id).set(_appointments[idx].toJson());
+      }
+    } catch (_) {}
     notifyListeners();
   }
 
-  void reschedule(String id, DateTime newDateTime) {
+  Future<void> reschedule(String id, DateTime newDateTime) async {
     final idx = _appointments.indexWhere((a) => a.id == id);
     if (idx == -1) return;
     final a = _appointments[idx];
@@ -56,6 +100,12 @@ class AppointmentProvider with ChangeNotifier {
     // Cancel previous notification (if any) and schedule new
     _cancelNotification(id);
     _scheduleIfNeeded(_appointments[idx]);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).collection('appointments').doc(id).set(_appointments[idx].toJson());
+      }
+    } catch (_) {}
     notifyListeners();
   }
 

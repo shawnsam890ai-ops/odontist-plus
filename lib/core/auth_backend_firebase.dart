@@ -1,41 +1,3 @@
-// NOTE: Firebase-backed implementation scaffold.
-// This stub keeps the analyzer green when Firebase isn't available in the editor.
-// Full implementation is provided below in comments.
-
-import '../models/app_user.dart';
-import 'auth_backend.dart';
-
-class FirebaseAuthBackend implements AuthBackend {
-  FirebaseAuthBackend();
-
-  @override
-  Future<AppUser?> currentUser() async => null;
-
-  @override
-  Stream<AppUser?> authStateChanges() => const Stream.empty();
-
-  @override
-  Future<AppUser> register({required String email, required String password, String? displayName}) async =>
-      throw UnimplementedError('Enable Firebase and use real implementation');
-
-  @override
-  Future<AppUser> signIn({required String email, required String password}) async =>
-      throw UnimplementedError('Enable Firebase and use real implementation');
-
-  @override
-  Future<void> signOut() async {}
-
-  @override
-  Future<void> setApproved(String uid, bool approved) async =>
-      throw UnimplementedError('Enable Firebase and use real implementation');
-
-  @override
-  Future<List<AppUser>> listUsers({bool? approved}) async =>
-      throw UnimplementedError('Enable Firebase and use real implementation');
-}
-
-/*
-// Full implementation (uncomment after Firebase packages resolve in your editor):
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
@@ -76,10 +38,11 @@ class FirebaseAuthBackend implements AuthBackend {
 
   Future<void> _ensureInitialRoleAndProfile(fb_auth.User user) async {
     final col = _db.collection('users');
-    final firstDoc = await col.limit(1).get();
-    final isFirst = firstDoc.docs.isEmpty;
-    final role = isFirst ? 'admin' : 'user';
-    final approved = isFirst;
+  final firstDoc = await col.limit(1).get();
+  final isFirst = firstDoc.docs.isEmpty;
+  final role = isFirst ? 'admin' : 'user';
+  // Auto-approve all users; licensing will gate access separately
+  final approved = true;
     await col.doc(user.uid).set({
       'uid': user.uid,
       'email': user.email,
@@ -92,7 +55,8 @@ class FirebaseAuthBackend implements AuthBackend {
 
   AppUser _userFrom(fb_auth.User user, Map<String, dynamic>? data) {
     final roleStr = (data?['role'] as String?) ?? 'user';
-    final approved = (data?['approved'] as bool?) ?? false;
+  // Default to approved=true if field is missing to avoid blocking on manual approval
+  final approved = (data?['approved'] as bool?) ?? true;
     final displayName = (data?['displayName'] as String?) ?? user.displayName;
     final clinicId = data?['clinicId'] as String?;
     DateTime createdAt = DateTime.now();
@@ -116,7 +80,7 @@ class FirebaseAuthBackend implements AuthBackend {
   AppUser _userFromProfileDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final d = doc.data() ?? {};
     final roleStr = (d['role'] as String?) ?? 'user';
-    final approved = (d['approved'] as bool?) ?? false;
+  final approved = (d['approved'] as bool?) ?? true;
     final displayName = d['displayName'] as String?;
     final clinicId = d['clinicId'] as String?;
     DateTime createdAt = DateTime.now();
@@ -200,4 +164,3 @@ class FirebaseAuthBackend implements AuthBackend {
     return res.docs.map(_userFromProfileDoc).toList();
   }
 }
-*/

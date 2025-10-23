@@ -26,6 +26,12 @@ class PatientRepository {
     await prefs.setString(_storageKey, jsonEncode(_patients.map((e) => e.toJson()).toList()));
   }
 
+  // Replace all patients in local storage (used when syncing from Firestore)
+  Future<void> replaceAll(List<Patient> items) async {
+    _patients = List.from(items);
+    await _persist();
+  }
+
   Future<Patient> addPatient({
     required String name,
     required int age,

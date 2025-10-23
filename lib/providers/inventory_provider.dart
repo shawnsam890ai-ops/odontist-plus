@@ -1,15 +1,67 @@
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/inventory_item.dart';
 
 class InventoryProvider with ChangeNotifier {
   final List<InventoryItem> _items = [];
   final List<LabCostItem> _labCosts = [];
+  bool _loaded = false;
 
   List<InventoryItem> get items => List.unmodifiable(_items);
   List<LabCostItem> get labCosts => List.unmodifiable(_labCosts);
 
+  bool get isLoaded => _loaded;
+
+  Future<void> ensureLoaded() async {
+    if (_loaded) return;
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        final base = FirebaseFirestore.instance.collection('users').doc(uid);
+        final invSnap = await base.collection('inventory').get();
+        _items
+          ..clear()
+          ..addAll(invSnap.docs.map((d) {
+            final m = d.data();
+            return InventoryItem(
+              id: m['id'] as String? ?? d.id,
+              name: (m['name'] as String?) ?? '',
+              quantity: (m['quantity'] as num?)?.toInt() ?? 0,
+              unitCost: (m['unitCost'] as num?)?.toDouble() ?? 0,
+            );
+          }));
+        final costSnap = await base.collection('lab_costs').get();
+        _labCosts
+          ..clear()
+          ..addAll(costSnap.docs.map((d) {
+            final m = d.data();
+            return LabCostItem(
+              id: m['id'] as String? ?? d.id,
+              description: (m['description'] as String?) ?? '',
+              cost: (m['cost'] as num?)?.toDouble() ?? 0,
+            );
+          }));
+      }
+    } catch (_) {}
+    _loaded = true;
+    notifyListeners();
+  }
+
   void addItem(InventoryItem item) {
     _items.add(item);
+    // Write-through to Firestore
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        FirebaseFirestore.instance.collection('users').doc(uid).collection('inventory').doc(item.id).set({
+          'id': item.id,
+          'name': item.name,
+          'quantity': item.quantity,
+          'unitCost': item.unitCost,
+        });
+      }
+    } catch (_) {}
     notifyListeners();
   }
 
@@ -20,16 +72,44 @@ class InventoryProvider with ChangeNotifier {
     if (quantity != null) item.quantity = quantity;
     if (unitCost != null) item.unitCost = unitCost;
     if (name != null && name.trim().isNotEmpty) _items[idx] = InventoryItem(id: item.id, name: name.trim(), quantity: item.quantity, unitCost: item.unitCost);
+    // Mirror to Firestore
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        FirebaseFirestore.instance.collection('users').doc(uid).collection('inventory').doc(id).set({
+          'id': _items[idx].id,
+          'name': _items[idx].name,
+          'quantity': _items[idx].quantity,
+          'unitCost': _items[idx].unitCost,
+        });
+      }
+    } catch (_) {}
     notifyListeners();
   }
 
   void removeItem(String id) {
     _items.removeWhere((e) => e.id == id);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        FirebaseFirestore.instance.collection('users').doc(uid).collection('inventory').doc(id).delete();
+      }
+    } catch (_) {}
     notifyListeners();
   }
 
   void addLabCost(LabCostItem cost) {
     _labCosts.add(cost);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        FirebaseFirestore.instance.collection('users').doc(uid).collection('lab_costs').doc(cost.id).set({
+          'id': cost.id,
+          'description': cost.description,
+          'cost': cost.cost,
+        });
+      }
+    } catch (_) {}
     notifyListeners();
   }
 
@@ -41,11 +121,28 @@ class InventoryProvider with ChangeNotifier {
         id: existing.id,
         description: description != null && description.trim().isNotEmpty ? description.trim() : existing.description,
         cost: cost ?? existing.cost);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        final v = _labCosts[idx];
+        FirebaseFirestore.instance.collection('users').doc(uid).collection('lab_costs').doc(id).set({
+          'id': v.id,
+          'description': v.description,
+          'cost': v.cost,
+        });
+      }
+    } catch (_) {}
     notifyListeners();
   }
 
   void removeLabCost(String id) {
     _labCosts.removeWhere((e) => e.id == id);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        FirebaseFirestore.instance.collection('users').doc(uid).collection('lab_costs').doc(id).delete();
+      }
+    } catch (_) {}
     notifyListeners();
   }
 
