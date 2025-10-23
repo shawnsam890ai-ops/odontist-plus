@@ -381,6 +381,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
           BoxShadow(color: Colors.black.withOpacity(.02), blurRadius: 4, offset: const Offset(0, 1))
         ],
       ),
+      constraints: const BoxConstraints(minHeight: 60),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Row(
         children: [
@@ -390,7 +391,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
             fit: FlexFit.tight,
             child: Text(
               time,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               softWrap: false,
@@ -405,7 +406,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
               e.complaint ?? '-',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12),
+              style: const TextStyle(fontSize: 13),
             ),
           ),
           const SizedBox(width: 6),
@@ -423,7 +424,7 @@ class _UpcomingScheduleCompactState extends State<UpcomingScheduleCompact> {
                 child: Text(
                   e.patient.name,
                   textAlign: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   softWrap: false,

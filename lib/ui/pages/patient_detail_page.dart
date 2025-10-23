@@ -1163,7 +1163,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                   Column(
                     children: _generalPayments.map((p) => ListTile(
                       dense: true,
-                      title: Text('${p.date.toLocal().toString().split(' ').first} • \$${p.amount}'),
+                      title: Text('${p.date.toLocal().toString().split(' ').first} • ₹${p.amount}'),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete, size: 18), 
                         onPressed: () => setState(() => _generalPayments.remove(p))
@@ -1173,7 +1173,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 if (_generalPayments.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Text(
-                    'Total Paid: \$${_generalPayments.fold<double>(0, (sum, p) => sum + p.amount)}', 
+                    'Total Paid: ₹${_generalPayments.fold<double>(0, (sum, p) => sum + p.amount)}', 
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)
                   ),
                 ]
@@ -1554,7 +1554,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         dense: true,
                         leading: const Icon(Icons.event_available, size: 18),
                         title: Text('${s.date.toLocal().toString().split(' ').first} • ${s.description}'),
-                        subtitle: Text((s.payment != null ? 'Payment: ${s.payment}' : 'No payment') + (s.note != null && s.note!.isNotEmpty ? '\nNote: ${s.note}' : '')),
+                        subtitle: Text((s.payment != null ? 'Payment: ₹${s.payment}' : 'No payment') + (s.note != null && s.note!.isNotEmpty ? '\nNote: ${s.note}' : '')),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete_outline, size: 18),
                           onPressed: () => setState(() => _orthoSteps.remove(s)),
@@ -1960,7 +1960,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                         return ListTile(
                           dense: true,
                           title: Text('${s.date.toLocal().toString().split(' ').first} • ${s.description}'),
-                          subtitle: s.payment==null? null : Text('Paid: ${s.payment}'),
+                          subtitle: s.payment==null? null : Text('Paid: ₹${s.payment}'),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -2445,7 +2445,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                     children: _prosthoSteps.map((s) => ListTile(
                       dense: true,
                       title: Text('${s.date.toLocal().toString().split(' ').first} • ${s.description}'),
-                      subtitle: s.payment==null? null : Text('Paid: ${s.payment}'),
+                      subtitle: s.payment==null? null : Text('Paid: ₹${s.payment}'),
                       trailing: IconButton(icon: const Icon(Icons.delete, size: 18), onPressed: () => setState(() => _prosthoSteps.remove(s))),
                     )).toList(),
                   ),
@@ -2786,7 +2786,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                     children: _labSteps.map((s) => ListTile(
                       dense: true,
                       title: Text('${s.date.toLocal().toString().split(' ').first} • ${s.description}'),
-                      subtitle: s.payment == null ? null : Text('Paid: \$${s.payment}'),
+                      subtitle: s.payment == null ? null : Text('Paid: ₹${s.payment}'),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete, size: 18), 
                         onPressed: () => setState(() => _labSteps.remove(s))
@@ -3677,21 +3677,21 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
     final total = double.tryParse(_orthoTotal.text.trim()) ?? 0;
     final paid = _orthoSteps.fold<double>(0, (p, e) => p + (e.payment ?? 0));
     final bal = total - paid;
-    return 'Paid: $paid / Total: $total  Balance: $bal';
+    return 'Paid: ₹$paid / Total: ₹$total  Balance: ₹$bal';
   }
 
   String _rootCanalBalanceSummary() {
     final total = double.tryParse(_rcTotal.text.trim()) ?? 0;
     final paid = _rcSteps.fold<double>(0, (p, e) => p + (e.payment ?? 0));
     final bal = total - paid;
-    return 'Paid: $paid / Total: $total  Balance: $bal';
+    return 'Paid: ₹$paid / Total: ₹$total  Balance: ₹$bal';
   }
 
   String _prosthodonticBalanceSummary() {
     final total = double.tryParse(_prosthoTotal.text.trim()) ?? 0;
     final paid = _prosthoSteps.fold<double>(0, (p, e) => p + (e.payment ?? 0));
     final bal = total - paid;
-    return 'Paid: $paid / Total: $total  Balance: $bal';
+    return 'Paid: ₹$paid / Total: ₹$total  Balance: ₹$bal';
   }
 
   double _computeMedicineProfit(List<PrescriptionItem> rxList, List<Medicine> inventory) {
@@ -3788,7 +3788,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             ),
             pw.SizedBox(height: 12),
             pw.Text('Financial Summary', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-            pw.Text('Paid: $paid / Total: $total  Balance: $bal'),
+            pw.Text('Paid: ₹$paid / Total: ₹$total  Balance: ₹$bal'),
             if (total > 0)
               pw.Container(
                 margin: const pw.EdgeInsets.only(top: 6),
@@ -4473,10 +4473,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Text(st.payment == null ? 'Paid: -' : 'Paid: ${st.payment}',
+                                      Text(st.payment == null ? 'Paid: -' : 'Paid: ₹${st.payment}',
                                           style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.green.shade700)),
                                       if (balance != null)
-                                        Text('Bal: ${balance < 0 ? 0 : balance}',
+                                        Text('Bal: ₹${balance < 0 ? 0 : balance}',
                                             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: balance <= 0 ? Colors.green : Colors.redAccent)),
                                     ],
                                   )
@@ -4487,7 +4487,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           if (total > 0)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
-                              child: Text('Total: $total',
+                              child: Text('Total: ₹$total',
                                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .85))),
                             ),
                         ],
@@ -4573,10 +4573,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Text(st.payment == null ? 'Paid: -' : 'Paid: ${st.payment}',
+                                      Text(st.payment == null ? 'Paid: -' : 'Paid: ₹${st.payment}',
                                           style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.green.shade700)),
                                       if (balance != null)
-                                        Text('Bal: ${balance < 0 ? 0 : balance}',
+                                        Text('Bal: ₹${balance < 0 ? 0 : balance}',
                                             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: balance <= 0 ? Colors.green : Colors.redAccent)),
                                     ],
                                   )
@@ -4587,7 +4587,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           if (total > 0)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
-                              child: Text('Total: $total',
+                              child: Text('Total: ₹$total',
                                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .85))),
                             ),
                         ],
@@ -4692,10 +4692,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Text(st.payment == null ? 'Paid: -' : 'Paid: ${st.payment}',
+                                      Text(st.payment == null ? 'Paid: -' : 'Paid: ₹${st.payment}',
                                           style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.green.shade700)),
                                       if (balance != null)
-                                        Text('Bal: ${balance < 0 ? 0 : balance}',
+                                        Text('Bal: ₹${balance < 0 ? 0 : balance}',
                                             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: balance <= 0 ? Colors.green : Colors.redAccent)),
                                     ],
                                   )
@@ -4706,7 +4706,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           if (total > 0)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
-                              child: Text('Total: $total',
+                              child: Text('Total: ₹$total',
                                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .85))),
                             ),
                         ],
@@ -4729,7 +4729,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                       child: Text(
                         [
                           if (s.toothShade != null) 'Shade: ${s.toothShade}',
-                          if (s.labTotalAmount != null) 'Total: \$${s.labTotalAmount}',
+                          if (s.labTotalAmount != null) 'Total: ₹${s.labTotalAmount}',
                         ].join(' • '),
                         style: TextStyle(
                           fontWeight: FontWeight.w500,
@@ -4795,10 +4795,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Text(st.payment == null ? 'Paid: -' : 'Paid: \$${st.payment}',
+                                      Text(st.payment == null ? 'Paid: -' : 'Paid: ₹${st.payment}',
                                           style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.green.shade700)),
                                       if (balance != null)
-                                        Text('Bal: \$${balance < 0 ? 0 : balance}',
+                                        Text('Bal: ₹${balance < 0 ? 0 : balance}',
                                             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: balance <= 0 ? Colors.green : Colors.redAccent)),
                                     ],
                                   )
@@ -4809,7 +4809,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           if (total > 0)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
-                              child: Text('Total: \$$total',
+                              child: Text('Total: ₹$total',
                                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .85))),
                             ),
                         ],
@@ -4911,7 +4911,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         lines.add('Doctor: ${s.orthoDoctorInCharge}');
       }
       if (s.orthoTotalAmount != null) {
-        lines.add('Total: ${s.orthoTotalAmount}');
+  lines.add('Total: ₹${s.orthoTotalAmount}');
       }
       if (s.orthoSteps.isNotEmpty) {
         lines.add('Steps: ${s.orthoSteps.length}');
@@ -4929,7 +4929,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         lines.add('Doctor: ${s.rootCanalDoctorInCharge}');
       }
       if (s.rootCanalTotalAmount != null) {
-        lines.add('Total: ${s.rootCanalTotalAmount}');
+  lines.add('Total: ₹${s.rootCanalTotalAmount}');
       }
       if (s.rootCanalSteps.isNotEmpty) {
         lines.add('Steps: ${s.rootCanalSteps.length}');
@@ -5196,10 +5196,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.end,
                                       children: [
-                                        Text(st.payment == null ? 'Paid: -' : 'Paid: ${st.payment}',
+                    Text(st.payment == null ? 'Paid: -' : 'Paid: ₹${st.payment}',
                                             style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.green.shade700, fontWeight: FontWeight.w600)),
                                         if (bal != null)
-                                          Text('Bal: ${bal < 0 ? 0 : bal}',
+                                          Text('Bal: ₹${bal < 0 ? 0 : bal}',
                                               style: Theme.of(context).textTheme.labelSmall?.copyWith(color: bal <= 0 ? Colors.green : Colors.redAccent, fontWeight: FontWeight.w500)),
                                       ],
                                     )
@@ -5210,7 +5210,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           ),
                         if (total > 0) ...[
                           const SizedBox(height: 8),
-                          Text('Total: $total  Paid: $runningPaid  Balance: ${total - runningPaid}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                          Text('Total: ₹$total  Paid: ₹$runningPaid  Balance: ₹${total - runningPaid}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
                         ]
                       ],
                     ),
@@ -5283,10 +5283,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.end,
                                       children: [
-                                        Text(st.payment == null ? 'Paid: -' : 'Paid: ${st.payment}',
+                                        Text(st.payment == null ? 'Paid: -' : 'Paid: ₹${st.payment}',
                                             style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.green.shade700, fontWeight: FontWeight.w600)),
                                         if (bal != null)
-                                          Text('Bal: ${bal < 0 ? 0 : bal}',
+                                          Text('Bal: ₹${bal < 0 ? 0 : bal}',
                                               style: Theme.of(context).textTheme.labelSmall?.copyWith(color: bal <= 0 ? Colors.green : Colors.redAccent, fontWeight: FontWeight.w500)),
                                       ],
                                     )
@@ -5297,7 +5297,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           ),
                         if (total > 0) ...[
                           const SizedBox(height: 8),
-                          Text('Total: $total  Paid: $runningPaid  Balance: ${total - runningPaid}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                          Text('Total: ₹$total  Paid: ₹$runningPaid  Balance: ₹${total - runningPaid}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
                         ]
                       ],
                     ),
@@ -5385,11 +5385,11 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.end,
                                       children: [
-                                        Text(st.payment == null ? 'Paid: -' : 'Paid: ${st.payment}',
-                                            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.green.shade700, fontWeight: FontWeight.w600)),
-                                        if (bal != null)
-                                          Text('Bal: ${bal < 0 ? 0 : bal}',
-                                              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: bal <= 0 ? Colors.green : Colors.redAccent, fontWeight: FontWeight.w500)),
+                    Text(st.payment == null ? 'Paid: -' : 'Paid: ₹${st.payment}',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.green.shade700, fontWeight: FontWeight.w600)),
+                    if (bal != null)
+                      Text('Bal: ₹${bal < 0 ? 0 : bal}',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: bal <= 0 ? Colors.green : Colors.redAccent, fontWeight: FontWeight.w500)),
                                       ],
                                     )
                                   ],
@@ -5399,7 +5399,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           ),
                         if (total > 0) ...[
                           const SizedBox(height: 8),
-                          Text('Total: $total  Paid: $runningPaid  Balance: ${total - runningPaid}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                          Text('Total: ₹$total  Paid: ₹$runningPaid  Balance: ₹${total - runningPaid}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
                         ]
                       ],
                     ),
@@ -5472,10 +5472,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.end,
                                       children: [
-                                        Text(st.payment == null ? 'Paid: -' : 'Paid: \$${st.payment}',
+                                        Text(st.payment == null ? 'Paid: -' : 'Paid: ₹${st.payment}',
                                             style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.green.shade700, fontWeight: FontWeight.w600)),
                                         if (bal != null)
-                                          Text('Bal: \$${bal < 0 ? 0 : bal}',
+                                          Text('Bal: ₹${bal < 0 ? 0 : bal}',
                                               style: Theme.of(context).textTheme.labelSmall?.copyWith(color: bal <= 0 ? Colors.green : Colors.redAccent, fontWeight: FontWeight.w500)),
                                       ],
                                     )
@@ -5486,7 +5486,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                           ),
                         if (total > 0) ...[
                           const SizedBox(height: 8),
-                          Text('Total: \$$total  Paid: \$$runningPaid  Balance: \$${total - runningPaid}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                          Text('Total: ₹$total  Paid: ₹$runningPaid  Balance: ₹${total - runningPaid}', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
                         ]
                       ],
                     ),

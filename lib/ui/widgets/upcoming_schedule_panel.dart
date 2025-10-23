@@ -394,7 +394,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
         if (entries.isEmpty) return _emptyBar();
         return ListView.separated(
           itemCount: entries.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (_, i) => _appointmentCard(entries[i]),
         );
       }
@@ -442,7 +442,8 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
               BoxShadow(color: Colors.black.withOpacity(.03), blurRadius: 6, offset: const Offset(0, 2))
             ],
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          constraints: const BoxConstraints(minHeight: 64),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           child: Row(
             children: [
               // Left: Time and doctor in brackets (flexible, no fixed width)
@@ -455,7 +456,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                   children: [
                     Text(
                       time,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       softWrap: false,
@@ -519,7 +520,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                         child: Text(
                           e.patient.name,
                           textAlign: TextAlign.right,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           softWrap: false,

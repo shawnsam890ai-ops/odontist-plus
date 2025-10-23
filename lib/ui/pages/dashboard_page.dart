@@ -21,7 +21,8 @@ import 'package:printing/printing.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:flutter/services.dart' show MissingPluginException;
+import 'package:flutter/services.dart' show MissingPluginException, rootBundle;
+import 'dart:async';
 import 'dart:io' show File;
 import '../../models/revenue_entry.dart';
 // Removed fl_chart and revenue_entry imports after chart removal
@@ -57,22 +58,25 @@ class DashboardPage extends StatefulWidget {
 }
 
 enum DashboardSection {
-  overview('Overview', Icons.dashboard_outlined),
-  managePatients('Manage Patients', Icons.people_alt_outlined),
-  appointments('Appointments', Icons.event_available),
-  revenue('Revenue', Icons.currency_rupee),
-  staffAttendance('Staff Attendance', Icons.badge_outlined),
-  doctorsAttendance('Doctors Attendance', Icons.medical_services_outlined),
-  inventory('Inventory', Icons.inventory_2_outlined),
-  utility('Utility', Icons.miscellaneous_services_outlined),
-  labs('Labs', Icons.biotech_outlined),
-  medicines('Medicines', Icons.medication_outlined),
-  settings('Settings', Icons.settings_outlined),
-  aiInsights('AI Insights', Icons.auto_awesome);
+  // assetName is a PNG used for idle state; if a GIF with the same base name
+  // exists, it will be shown briefly on tap (click-triggered animation).
+  overview('Overview', Icons.dashboard_outlined, assetName: 'dashboard_grid.png'),
+  managePatients('Manage Patients', Icons.people_alt_outlined, assetName: 'sick.png'),
+  appointments('Appointments', Icons.event_available, assetName: 'calendar_star.png'),
+  revenue('Revenue', Icons.currency_rupee, assetName: 'money_coins.png'),
+  staffAttendance('Staff Attendance', Icons.badge_outlined, assetName: 'nurse.png'),
+  doctorsAttendance('Doctors Attendance', Icons.medical_services_outlined, assetName: 'dentist.png'),
+  inventory('Inventory', Icons.inventory_2_outlined, assetName: 'inventory.png'),
+  utility('Utility', Icons.miscellaneous_services_outlined, assetName: 'utility.png'),
+  labs('Labs', Icons.biotech_outlined, assetName: 'tooth cloud.png'),
+  medicines('Medicines', Icons.medication_outlined, assetName: 'pill.png'),
+  settings('Settings', Icons.settings_outlined, assetName: 'gear.png'),
+  aiInsights('AI Insights', Icons.auto_awesome, assetName: 'sparkles.png');
 
   final String label;
   final IconData icon;
-  const DashboardSection(this.label, this.icon);
+  final String? assetName;
+  const DashboardSection(this.label, this.icon, {this.assetName});
 }
 
 class _DashboardPageState extends State<DashboardPage> {
@@ -233,7 +237,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final media = MediaQuery.of(context);
     final maxWidth = media.size.width;
     final shellWidth = maxWidth.clamp(0, 560).toDouble();
-  final barHeight = 80.0; // ensures 56px icon + 20px padding fits without overflow
+  final barHeight = 96.0; // allow 64px icon + vertical padding without overflow
 
     return Positioned(
       left: (maxWidth - shellWidth) / 2,
@@ -265,6 +269,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 6),
                       child: _BottomIconButton(
                         icon: s.icon,
+                        assetName: s.assetName == null ? null : 'assets/images/${s.assetName}',
                         label: s.label,
                         selected: _section == s,
                         showLabel: false,
@@ -2445,46 +2450,145 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _BottomIconButton extends StatelessWidget {
+class _BottomIconButton extends StatefulWidget {
   final IconData icon;
+  final String? assetName; // PNG idle; will try .gif with same base on tap
   final String label;
   final bool selected;
   final VoidCallback onTap;
   final bool showLabel;
-  const _BottomIconButton({required this.icon, required this.label, required this.selected, required this.onTap, this.showLabel = true});
+  const _BottomIconButton({required this.icon, this.assetName, required this.label, required this.selected, required this.onTap, this.showLabel = true});
+
+  @override
+  State<_BottomIconButton> createState() => _BottomIconButtonState();
+}
+
+class _BottomIconButtonState extends State<_BottomIconButton> {
+  bool _hasGif = false;
+  bool _showGif = false;
+  String? _pngPath;
+  String? _gifPath;
+  Timer? _gifTimer;
+  AssetImage? _pngProvider;
+  AssetImage? _gifProvider;
+
+  @override
+  void initState() {
+    super.initState();
+    _configureAssets();
+    // Precache after first frame to avoid jank on first tap
+    WidgetsBinding.instance.addPostFrameCallback((_) => _precache());
+  }
+
+  void _configureAssets() {
+    _pngPath = widget.assetName;
+    _gifPath = null;
+    if (_pngPath != null) {
+      _pngProvider = AssetImage(_pngPath!);
+      final dot = _pngPath!.lastIndexOf('.');
+      final base = dot >= 0 ? _pngPath!.substring(0, dot) : _pngPath!;
+      _gifPath = '$base.gif';
+      _checkGifExists();
+    }
+  }
+
+  Future<void> _checkGifExists() async {
+    if (_gifPath == null) return;
+    try {
+      await rootBundle.load(_gifPath!);
+      _gifProvider = AssetImage(_gifPath!);
+      if (mounted) setState(() => _hasGif = true);
+      // Precache gif after we know it exists
+      WidgetsBinding.instance.addPostFrameCallback((_) => _precache());
+    } catch (_) {
+      // Keep _hasGif false when asset doesn't exist
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _BottomIconButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.assetName != widget.assetName) {
+      _configureAssets();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _precache());
+    }
+  }
+
+  @override
+  void dispose() {
+    _gifTimer?.cancel();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    widget.onTap();
+    if (_hasGif) {
+      setState(() => _showGif = true);
+      _gifTimer?.cancel();
+      _gifTimer = Timer(const Duration(milliseconds: 3000), () {
+        if (mounted) setState(() => _showGif = false);
+      });
+    }
+  }
+
+  void _precache() {
+    if (!mounted) return;
+    if (_pngProvider != null) precacheImage(_pngProvider!, context);
+    if (_hasGif && _gifProvider != null) precacheImage(_gifProvider!, context);
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final color = selected ? cs.primary : cs.onSurfaceVariant;
+    final color = widget.selected ? cs.primary : cs.onSurfaceVariant;
+    Widget iconChild;
+    if (widget.assetName == null) {
+      iconChild = Icon(widget.icon, color: color, size: 36);
+    } else {
+      final baseProvider = (_showGif && _hasGif && _gifProvider != null)
+          ? _gifProvider!
+          : _pngProvider ?? AssetImage(_pngPath!);
+      final dpr = MediaQuery.of(context).devicePixelRatio;
+      final target = (36 * dpr).round();
+      final provider = ResizeImage(baseProvider, width: target, height: target);
+      iconChild = Image(
+        image: provider,
+        width: 36,
+        height: 36,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        errorBuilder: (c, e, s) => Icon(widget.icon, color: color, size: 36),
+      );
+    }
+
     return InkWell(
       borderRadius: BorderRadius.circular(40),
-      onTap: onTap,
+      onTap: _handleTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 56,
-              height: 56,
+              width: 64,
+              height: 64,
               decoration: BoxDecoration(
-                color: selected ? cs.primary.withOpacity(0.08) : Colors.transparent,
+                color: widget.selected ? cs.primary.withOpacity(0.08) : Colors.transparent,
                 shape: BoxShape.circle,
-                border: Border.all(color: selected ? cs.primary : cs.outlineVariant.withOpacity(.6)),
+                border: Border.all(color: widget.selected ? cs.primary : cs.outlineVariant.withOpacity(.6)),
               ),
-              child: Icon(icon, color: color),
+              child: Center(child: iconChild),
             ),
-            if (showLabel) ...[
+            if (widget.showLabel) ...[
               const SizedBox(height: 6),
               SizedBox(
                 width: 68,
                 child: Text(
-                  label,
+                  widget.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 11, color: color, fontWeight: selected ? FontWeight.w600 : FontWeight.w500),
+                  style: TextStyle(fontSize: 11, color: color, fontWeight: widget.selected ? FontWeight.w600 : FontWeight.w500),
                 ),
               ),
             ],

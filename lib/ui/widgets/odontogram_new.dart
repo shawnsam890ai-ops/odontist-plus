@@ -82,65 +82,128 @@ class _OdontogramState extends State<Odontogram> {
     final scheme = Theme.of(context).colorScheme;
     final darkBg = _darken(scheme.surfaceVariant, Theme.of(context).brightness == Brightness.light ? 0.45 : 0.2);
 
-    return Card(
-      elevation: 2,
-      clipBehavior: Clip.antiAlias,
-      color: widget.backgroundColor ?? darkBg,
-      child: Padding(
-        padding: widget.padding,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Icon(Icons.monitor_heart_outlined, size: 20),
-            const SizedBox(width: 8),
-            Text('Odontogram', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-          ]),
-          const SizedBox(height: 8),
-          Center(
-            child: FittedBox(
-              child: SizedBox.fromSize(
-                size: _data.size,
-                child: Stack(children: [
-                  CustomPaint(size: _data.size, painter: _ToothFillPainter(_data.teeth, skipFill: doneSet)),
-                  IgnorePointer(
-                    ignoring: !widget.interactive,
-                    child: TeethSelector(
-                      key: ValueKey('teeth-${widget.highlightedTeeth.join(',')}'),
-                      onChange: _handleChange,
-                      showPermanent: true,
-                      showPrimary: true,
-                      multiSelect: true,
-                      initiallySelected: widget.highlightedTeeth,
-                      colorized: colorize,
-                      StrokedColorized: strokedColorized,
-                      strokeWidth: strokeWidth,
-                      // Prevent package from drawing any interior strokes (we'll draw outer outline ourselves)
-                      defaultStrokeWidth: 1.2,
-                      defaultStrokeColor: Colors.transparent,
-                      selectedColor: Colors.transparent,
-                      unselectedColor: Colors.transparent,
-                      notation: (iso) => tooltipByTooth[iso] ?? iso,
-                    ),
+    final toothMarks = _computeToothMarks(widget.patient);
+    final globals = _computeGlobalNotes(widget.patient);
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Card(
+          elevation: 2,
+          clipBehavior: Clip.antiAlias,
+          color: widget.backgroundColor ?? darkBg,
+          child: Padding(
+            padding: widget.padding,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Icon(Icons.monitor_heart_outlined, size: 20),
+                const SizedBox(width: 8),
+                Text('Odontogram', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              ]),
+              const SizedBox(height: 8),
+
+              // Global notes/annotations above the diagram
+              if (globals.notes.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 12,
+                    runSpacing: 6,
+                    children: globals.notes
+                        .map((n) => InkWell(
+                              onTap: () => _openGeneralInfoSheet(context, n.label),
+                              child: Text(
+                                n.label,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(decoration: TextDecoration.underline, color: n.color ?? Theme.of(context).colorScheme.primary),
+                              ),
+                            ))
+                        .toList(),
                   ),
-                ]),
+                ),
+
+              Center(
+                child: FittedBox(
+                  child: SizedBox.fromSize(
+                    size: _data.size,
+                    child: Stack(children: [
+                      CustomPaint(size: _data.size, painter: _ToothFillPainter(_data.teeth, skipFill: doneSet)),
+                      // Per-tooth letter/short-code marks
+                      IgnorePointer(child: CustomPaint(size: _data.size, painter: _ToothMarkPainter(_data.teeth, toothMarks))),
+                      IgnorePointer(
+                        ignoring: !widget.interactive,
+                        child: TeethSelector(
+                          key: ValueKey('teeth-${widget.highlightedTeeth.join(',')}'),
+                          onChange: _handleChange,
+                          showPermanent: true,
+                          showPrimary: true,
+                          multiSelect: true,
+                          initiallySelected: widget.highlightedTeeth,
+                          // Disable package-drawn fills/strokes; we draw our own enamel + glow
+                          colorized: const <String, Color>{},
+                          StrokedColorized: const <String, Color>{},
+                          strokeWidth: const <String, double>{},
+                          // Prevent package from drawing any interior strokes entirely
+                          defaultStrokeWidth: 0.0,
+                          defaultStrokeColor: Colors.transparent,
+                          selectedColor: Colors.transparent,
+                          unselectedColor: Colors.transparent,
+                          notation: (iso) => tooltipByTooth[iso] ?? iso,
+                        ),
+                      ),
+                      // Draw thin yellow glow outlines for highlighted teeth on top
+                      IgnorePointer(
+                        child: CustomPaint(
+                          size: _data.size,
+                          painter: _ToothHighlightPainter(_data.teeth, _selected),
+                        ),
+                      ),
+                      if (globals.showCD)
+                        Positioned(
+                          top: 4,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade600,
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1))],
+                              ),
+                              child: Text(
+                                'CD',
+                                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ]),
+                  ),
+                ),
               ),
+              const SizedBox(height: 8),
+              // intentionally removed the Done/Findings legend here per user request
+            ]),
+          ),
+        ),
+        // Info icon positioned at top-right corner of the Card
+        Positioned(
+          right: 8,
+          top: -4,
+          child: Material(
+            color: Colors.transparent,
+            child: IconButton(
+              tooltip: 'Abbreviations',
+              icon: const Icon(Icons.info_outline, size: 20),
+              onPressed: () => _showAbbrevDialog(context),
             ),
           ),
-          const SizedBox(height: 8),
-          if (anyFindings.isNotEmpty || criticalFindings.isNotEmpty || doneSet.isNotEmpty)
-            Center(
-              child: Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  if (doneSet.isNotEmpty) _legendGroup(context, 'Done', doneSet.toList()..sort(), Colors.green.shade400),
-                  if (anyFindings.isNotEmpty) _legendGroup(context, 'Findings', anyFindings.toList()..sort(), Colors.orangeAccent),
-                  if (criticalFindings.isNotEmpty) _legendGroup(context, 'Urgent', criticalFindings.toList()..sort(), Colors.redAccent),
-                ],
-              ),
-            ),
-        ]),
-      ),
+        ),
+      ],
     );
   }
 
@@ -228,12 +291,125 @@ class _OdontogramState extends State<Odontogram> {
       ),
     );
   }
+
+  void _openGeneralInfoSheet(BuildContext context, String title) {
+    // Gather latest non-empty sections across sessions
+    String chief = '';
+    final plans = <String>[];
+    final done = <String>[];
+    for (final s in widget.patient.sessions.reversed) {
+      chief = chief.isEmpty ? (s.chiefComplaint?.complaints.join(', ') ?? '') : chief;
+      if (plans.isEmpty && (s.generalTreatmentPlan.isNotEmpty || s.planOptions.isNotEmpty || s.toothPlans.isNotEmpty)) {
+        plans.addAll(s.generalTreatmentPlan);
+        plans.addAll(s.planOptions);
+        plans.addAll(s.toothPlans.map((e) => (e.toothNumber.isEmpty ? e.plan : '${e.toothNumber}: ${e.plan}')));
+      }
+      if (done.isEmpty && (s.treatmentsDone.isNotEmpty || s.treatmentDoneOptions.isNotEmpty)) {
+        done.addAll(s.treatmentDoneOptions);
+        done.addAll(s.treatmentsDone.map((e) => (e.toothNumber.isEmpty ? e.treatment : '${e.toothNumber}: ${e.treatment}')));
+      }
+      if (chief.isNotEmpty && plans.isNotEmpty && done.isNotEmpty) break;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: ListView(
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            if (chief.isNotEmpty) ...[
+              Text('Chief Complaint', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 4),
+              Text(chief),
+              const SizedBox(height: 12),
+            ],
+            if (plans.isNotEmpty) ...[
+              Text('Treatment Plan', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 4),
+              Wrap(spacing: 6, runSpacing: 6, children: plans.map((e) => Chip(label: Text(e))).toList()),
+              const SizedBox(height: 12),
+            ],
+            if (done.isNotEmpty) ...[
+              Text('Treatment Done', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 4),
+              Wrap(spacing: 6, runSpacing: 6, children: done.map((e) => Chip(label: Text(e))).toList()),
+            ],
+            if (chief.isEmpty && plans.isEmpty && done.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text('No information recorded yet.'),
+              )
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAbbrevDialog(BuildContext context) {
+    final items = <Map<String, dynamic>>[
+      {'code': 'R', 'label': 'Root canal', 'color': Colors.red.shade700},
+      {'code': 'Xn', 'label': 'Extraction', 'color': Colors.red.shade700},
+      {'code': 'M', 'label': 'Missing', 'color': Colors.black},
+      {'code': 'C', 'label': 'Crown', 'color': Colors.blue},
+      {'code': 'Rp', 'label': 'Removable partial denture (RPD)', 'color': Colors.pink.shade400},
+      {'code': 'CD', 'label': 'Complete denture', 'color': Colors.green.shade700},
+      {'code': 'R + C', 'label': 'Root canal + Crown', 'color': null},
+      {'code': 'D', 'label': 'Dry socket', 'color': Colors.brown.shade700},
+      {'code': 'DC', 'label': 'Dental caries', 'color': Colors.black},
+      {'code': 'DDC', 'label': 'Deep dental caries', 'color': Colors.black},
+      {'code': 'GD', 'label': 'Grossly decayed', 'color': Colors.black},
+      {'code': 'Rs', 'label': 'Root stumps', 'color': Colors.amber.shade700},
+      {'code': 'CA', 'label': 'Cervical abrasion', 'color': Colors.amber.shade700},
+      {'code': 'IDC', 'label': 'Initial carious lesion', 'color': Colors.black},
+      {'code': 'E1/E2/E3', 'label': 'Ellis fracture (levels)', 'color': Colors.brown.shade700},
+      {'code': 'G1/G2/G3', 'label': 'Mobile Grade 1/2/3', 'color': Colors.red.shade700},
+      {'code': 'Er', 'label': 'Erosion', 'color': Colors.purple},
+      {'code': 'EEC', 'label': 'Early enamel caries', 'color': Colors.blue},
+      {'code': 'Gen. stains', 'label': 'Generalised stains and deposits (note)', 'color': Colors.teal},
+    ];
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Odontogram abbreviations'),
+        content: SizedBox(
+          width: 420,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const Divider(height: 12),
+            itemBuilder: (context, i) {
+              final it = items[i];
+              final color = it['color'] as Color?;
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (color != null)
+                    Container(width: 14, height: 14, margin: const EdgeInsets.only(right: 8), decoration: BoxDecoration(color: color, shape: BoxShape.circle))
+                  else
+                    const SizedBox(width: 14, height: 14),
+                  const SizedBox(width: 8),
+                  Text(it['code'] as String, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(it['label'] as String)),
+                ],
+              );
+            },
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+      ),
+    );
+  }
 }
 
+// ignore: unused_element
 Widget _legendGroup(BuildContext context, String title, List<String> teeth, Color color) {
   final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600);
   return Wrap(
-    crossAxisAlignment: WrapCrossAlignment.center,
     spacing: 6,
     runSpacing: 6,
     children: [
@@ -282,7 +458,7 @@ class _ToothFillPainter extends CustomPainter {
 
       final rect = tooth.rect;
       final path = rect.topLeft == Offset.zero ? tooth.path : tooth.path.shift(rect.topLeft);
-  final inner = _bestInnerContour(path, rect);
+      final inner = _bestInnerContour(path, rect);
       final outer = _largestClosedSubpath(path); // for outer white outline only
 
       canvas.drawShadow(path, Colors.black.withOpacity(0.20), 4.5, false);
@@ -315,8 +491,6 @@ class _ToothFillPainter extends CustomPainter {
       canvas.drawRect(rect, innerShadePaint);
 
       // Specular highlight for glossy enamel (top-left edge)
-      // Use an explicit saveLayer confined to the inner enamel bounds so
-      // blend artifacts don't escape as rectangular tiles outside the tooth.
       final specularPaint = Paint()
         ..shader = const RadialGradient(
           center: Alignment(-0.75, -0.8), // near top-left corner
@@ -344,9 +518,6 @@ class _ToothFillPainter extends CustomPainter {
         final clipped = Path.combine(PathOperation.intersect, fissure, inner);
         canvas.drawPath(clipped, fissurePaint);
       } else {
-        // Anterior: derive the incisal edge by following the outer contour
-        // near the incisal margin, then inset slightly towards the center so
-        // it sits just inside the enamel outline.
         if (outer != null) {
           final isUpper = _isUpperArch(iso);
           final incisalPath = _incisalCurveFromOuter(outer, rect, isUpper: isUpper, insetPx: 2.0);
@@ -363,11 +534,8 @@ class _ToothFillPainter extends CustomPainter {
         }
       }
 
-      // No inner white rim stroke — avoids a white line sitting above black occlusal/incisal strokes
-
       canvas.restore();
 
-      // Draw a clean outer white outline (since TeethSelector strokes are disabled)
       if (outer != null) {
         final outerStroke = Paint()
           ..color = Colors.white.withOpacity(0.95)
@@ -377,7 +545,6 @@ class _ToothFillPainter extends CustomPainter {
         canvas.drawPath(outer, outerStroke);
       }
 
-      // Optional subtle inner dark rim for depth
       final darkRim = Paint()
         ..color = Colors.black.withOpacity(0.06)
         ..style = PaintingStyle.stroke
@@ -396,8 +563,6 @@ int _lastDigit(String iso) {
   return ch >= 48 && ch <= 57 ? ch - 48 : 0;
 }
 
-// Heuristic: pick the largest closed contour that is clearly inside the rect (not the outer ring)
-// and not tiny (to ignore decorative grooves). Fallback to smallest closed if nothing matches.
 Path _bestInnerContour(Path input, Rect rect) {
   final metrics = input.computeMetrics(forceClosed: false).toList();
   if (metrics.isEmpty) return input;
@@ -411,12 +576,10 @@ Path _bestInnerContour(Path input, Rect rect) {
     final sub = m.extractPath(0, m.length);
     final b = sub.getBounds();
     final area = (b.width * b.height).abs();
-    // Track smallest (fallback)
     if (area < smallestArea) {
       smallest = sub;
       smallestArea = area;
     }
-    // Accept areas between 15% and 95% of the rect area; pick the largest among them
     if (area > rectArea * 0.15 && area < rectArea * 0.95) {
       if (area > candidateArea) {
         candidate = sub;
@@ -427,7 +590,6 @@ Path _bestInnerContour(Path input, Rect rect) {
   return candidate ?? smallest ?? input;
 }
 
-// Pick the largest closed subpath (assumed to be the outer contour)
 Path? _largestClosedSubpath(Path input) {
   final metrics = input.computeMetrics(forceClosed: false).toList();
   if (metrics.isEmpty) return null;
@@ -446,20 +608,15 @@ Path? _largestClosedSubpath(Path input) {
   return largest;
 }
 
-// Determine if the ISO tooth belongs to the upper arch (permanent: 1,2; primary: 5,6)
 bool _isUpperArch(String iso) {
   if (iso.isEmpty) return true;
-  final first = iso.codeUnitAt(0) - 48; // '0' => 0
+  final first = iso.codeUnitAt(0) - 48;
   return first == 1 || first == 2 || first == 5 || first == 6;
 }
 
-// Build a curve that follows the outer contour near the incisal margin.
-// - isUpper: if true, take the bottom-most band; otherwise top-most band.
-// - insetPx: move the curve inward towards the rect center to sit inside enamel.
 Path? _incisalCurveFromOuter(Path outer, Rect rect, {required bool isUpper, double insetPx = 2.0}) {
   final metrics = outer.computeMetrics(forceClosed: false).toList();
   if (metrics.isEmpty) return null;
-  // Sample along the outer path
   final points = <Offset>[];
   const samplesPerMetric = 80;
   for (final m in metrics) {
@@ -470,15 +627,10 @@ Path? _incisalCurveFromOuter(Path outer, Rect rect, {required bool isUpper, doub
     }
   }
   if (points.length < 4) return null;
-  // Filter to a narrow band right at the incisal edge
-  final bandFrac = 0.12; // 12% of height from the edge
-  final band = points.where((p) => isUpper
-      ? (p.dy <= rect.top + rect.height * bandFrac)
-      : (p.dy >= rect.bottom - rect.height * bandFrac)).toList();
+  final bandFrac = 0.12;
+  final band = points.where((p) => isUpper ? (p.dy <= rect.top + rect.height * bandFrac) : (p.dy >= rect.bottom - rect.height * bandFrac)).toList();
   if (band.length < 4) return null;
-  // Sort band points by x to get a monotonic curve left->right
   band.sort((a, b) => a.dx.compareTo(b.dx));
-  // Trim extremes to avoid side-wall wrap
   final minX = band.first.dx;
   final maxX = band.last.dx;
   final span = maxX - minX;
@@ -488,19 +640,16 @@ Path? _incisalCurveFromOuter(Path outer, Rect rect, {required bool isUpper, doub
       ..clear()
       ..addAll(trimmed);
   }
-  // Inset points slightly towards the center to avoid sitting on the outline
   final c = rect.center;
   final inset = band.map((p) {
     final dx = c.dx - p.dx;
     final dy = c.dy - p.dy;
-  final len = math.sqrt(dx * dx + dy * dy);
+    final len = math.sqrt(dx * dx + dy * dy);
     if (len == 0) return p;
     return Offset(p.dx + dx / len * insetPx, p.dy + dy / len * insetPx);
   }).toList();
-  // Build a path from the inset points
   final path = Path();
   path.moveTo(inset.first.dx, inset.first.dy);
-  // Use quadratic segments every few points for smoothness
   for (int i = 1; i < inset.length - 1; i += 2) {
     final cp = inset[i];
     final to = inset[i + 1];
@@ -588,3 +737,180 @@ Color _darken(Color color, double amount) {
   final h = hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0));
   return h.toColor();
 }
+
+// --- Marks and global notes -------------------------------------------------
+
+class _Mark {
+  final String text;
+  final Color color;
+  const _Mark(this.text, this.color);
+}
+
+class _GlobalNotes {
+  final bool showCD;
+  final List<_Note> notes;
+  const _GlobalNotes({this.showCD = false, this.notes = const []});
+}
+
+class _Note {
+  final String label;
+  final Color? color;
+  const _Note(this.label, {this.color});
+}
+
+Map<String, List<_Mark>> _computeToothMarks(Patient patient) {
+  final map = <String, List<_Mark>>{};
+  void add(String tooth, _Mark m) {
+    if (tooth.isEmpty) return;
+    final list = map.putIfAbsent(tooth, () => []);
+    if (list.any((x) => x.text == m.text)) return;
+    list.add(m);
+  }
+
+  List<_Mark> parse(String text) {
+    final t = text.toLowerCase();
+    final out = <_Mark>[];
+    Color brown = Colors.brown.shade700;
+    Color yellow = Colors.amber.shade700;
+    Color pink = Colors.pink.shade400;
+  if (t.contains('deep dental caries') || t.contains('ddc')) out.add(const _Mark('DDC', Colors.black));
+    if (t.contains('initial carious lesion') || t.contains('icl') || t.contains('idl') || t.contains('idc')) out.add(const _Mark('IDC', Colors.black));
+  // Generic dental caries (exclude deep variants)
+  if (!t.contains('deep') && (t.contains('dental caries') || t.contains('caries'))) out.add(const _Mark('DC', Colors.black));
+    if (t.contains('root canal') || t.contains('rct')) out.add(_Mark('R', Colors.red.shade700));
+    if (t.contains('extraction') || t.contains('extract')) out.add(_Mark('Xn', Colors.red.shade700));
+    if (t.contains('missing')) out.add(const _Mark('M', Colors.black));
+    if (t.contains('crown')) out.add(const _Mark('C', Colors.blue));
+    if (t.contains('rpd') || t.contains('removable partial') || t.contains('removable')) out.add(_Mark('Rp', pink));
+    if (t.contains('dry socket')) out.add(_Mark('D', brown));
+    if (t.contains('grossly decayed') || t.contains('grossly carious')) out.add(const _Mark('GD', Colors.black));
+    if (t.contains('root stump')) out.add(_Mark('Rs', yellow));
+    if (t.contains('cervical abrasion') || (t.contains('abrasion') && t.contains('cervical'))) out.add(_Mark('CA', yellow));
+    if (t.contains('ellis')) {
+      final match = RegExp(r'e\s*([1-9])').firstMatch(t);
+      if (match != null) out.add(_Mark('E${match.group(1)}', brown));
+    }
+    if (RegExp(r'\bg[1-3]\b').hasMatch(t) || t.contains('grade 1') || t.contains('grade 2') || t.contains('grade 3')) {
+      String grade = 'G1';
+      if (t.contains('g2') || t.contains('grade 2')) grade = 'G2';
+      if (t.contains('g3') || t.contains('grade 3')) grade = 'G3';
+      out.add(_Mark(grade, Colors.red.shade700));
+    }
+    if (t.contains('erosion')) out.add(_Mark('Er', Colors.purple));
+    if (t.contains('early enamel caries') || t.contains('eec')) out.add(const _Mark('EEC', Colors.blue));
+    return out;
+  }
+
+  for (final s in patient.sessions) {
+    for (final f in s.oralExamFindings) {
+      for (final m in parse(f.finding)) add(f.toothNumber, m);
+    }
+    for (final f in s.investigationFindings) {
+      for (final m in parse(f.finding)) add(f.toothNumber, m);
+    }
+    for (final f in s.rootCanalFindings) {
+      for (final m in parse(f.finding)) add(f.toothNumber, m);
+    }
+    for (final p in s.toothPlans) {
+      for (final m in parse(p.plan)) add(p.toothNumber, m);
+    }
+    for (final d in s.treatmentsDone) {
+      for (final m in parse(d.treatment)) add(d.toothNumber, m);
+    }
+    for (final p in s.rootCanalPlans) {
+      for (final m in parse(p.plan)) add(p.toothNumber, m);
+    }
+    for (final p in s.prosthodonticPlans) {
+      for (final m in parse(p.plan)) add(p.toothNumber, m);
+    }
+  }
+  // limit to first two marks per tooth to avoid clutter
+  for (final e in map.entries) {
+    if (e.value.length > 2) e.value.removeRange(2, e.value.length);
+  }
+  return map;
+}
+
+_GlobalNotes _computeGlobalNotes(Patient patient) {
+  bool showCD = false;
+  bool showGenStains = false;
+  bool showGenBlackStains = false;
+  for (final s in patient.sessions) {
+    for (final f in s.oralExamFindings) {
+      if (f.toothNumber.trim().isEmpty) {
+        final t = f.finding.toLowerCase();
+        if (t.contains('complete denture')) showCD = true;
+        if (t.contains('stain') || t.contains('deposit')) showGenStains = true;
+        if (t.contains('black stain')) showGenBlackStains = true;
+      }
+    }
+  }
+  final notes = <_Note>[];
+  if (showGenStains) notes.add(const _Note('Gen. stains and deposits noted.', color: Colors.teal));
+  if (showGenBlackStains) notes.add(const _Note('Gen. black stains noted.', color: Colors.black87));
+  return _GlobalNotes(showCD: showCD, notes: notes);
+}
+
+class _ToothMarkPainter extends CustomPainter {
+  final Map<String, Tooth> teeth;
+  final Map<String, List<_Mark>> marks;
+  _ToothMarkPainter(this.teeth, this.marks);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final tp = TextPainter(textDirection: TextDirection.ltr, textAlign: TextAlign.center);
+    for (final entry in marks.entries) {
+      final iso = entry.key;
+      final tooth = teeth[iso];
+      if (tooth == null) continue;
+      final rect = tooth.rect;
+      final center = rect.center;
+      final items = entry.value.take(2).toList();
+      final totalHeight = items.length == 1 ? 0.0 : 12.0;
+      double y = center.dy - totalHeight / 2;
+      for (final m in items) {
+        final maxW = rect.width * 0.7;
+        double font = (rect.width * 0.38).clamp(8.0, 14.0);
+        if (m.text.length >= 3) font *= 0.75; else if (m.text.length == 2) font *= 0.9;
+        final style = TextStyle(fontSize: font, fontWeight: FontWeight.w800, color: m.color);
+        tp.text = TextSpan(text: m.text, style: style.copyWith(shadows: const [Shadow(offset: Offset(0.6, 0.6), blurRadius: 0.8, color: Colors.white)]));
+        tp.layout(maxWidth: maxW);
+        final dx = center.dx - tp.width / 2;
+        final dy = y - tp.height / 2;
+        tp.paint(canvas, Offset(dx, dy));
+        y += 12.0;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ToothMarkPainter oldDelegate) => !mapEquals(oldDelegate.teeth, teeth) || oldDelegate.marks != marks;
+}
+
+// Paints a small outer yellow halo around highlighted/selected teeth without filling or stroking interior
+class _ToothHighlightPainter extends CustomPainter {
+  final Map<String, Tooth> teeth;
+  final Set<String> highlighted;
+  _ToothHighlightPainter(this.teeth, this.highlighted);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (highlighted.isEmpty) return;
+    for (final iso in highlighted) {
+      final tooth = teeth[iso];
+      if (tooth == null) continue;
+      final rect = tooth.rect;
+      final path = rect.topLeft == Offset.zero ? tooth.path : tooth.path.shift(rect.topLeft);
+      // Prefer the outer closed contour for a halo drawn outside the tooth
+      final outer = _largestClosedSubpath(path) ?? _bestInnerContour(path, rect);
+      if (outer == null) continue;
+
+      // Draw a small outer halo using a subtle shadow (no inner stroke to keep text visible)
+      canvas.drawShadow(outer, Colors.yellow.shade700, 3.0, false);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ToothHighlightPainter oldDelegate) => !mapEquals(oldDelegate.teeth, teeth) || !setEquals(oldDelegate.highlighted, highlighted);
+}
+
