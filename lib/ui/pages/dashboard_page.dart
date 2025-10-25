@@ -16,6 +16,7 @@ import '../../providers/medicine_provider.dart';
 import '../../providers/options_provider.dart';
 import '../../models/medicine.dart';
 import '../../providers/utility_provider.dart';
+import '../../providers/app_settings_provider.dart';
 import '../../models/bill_entry.dart';
 import 'package:printing/printing.dart';
 import 'package:file_picker/file_picker.dart';
@@ -1736,10 +1737,11 @@ class _DashboardPageState extends State<DashboardPage> {
     var digits = input.replaceAll(RegExp(r'[^+0-9]'), '');
     if (digits.isEmpty) return '';
     if (forWhatsApp) {
-      // wa.me expects international format without +. If local 10-digit, prefix default India code 91.
+      // wa.me expects international format without +. If local 10-digit, prefix default country code from settings.
       if (digits.startsWith('+')) digits = digits.substring(1);
       if (RegExp(r'^0\d{10}$').hasMatch(digits)) digits = digits.substring(1);
-      if (RegExp(r'^\d{10}$').hasMatch(digits)) digits = '91$digits';
+      final code = context.read<AppSettingsProvider>().defaultCountryCode;
+      if (RegExp(r'^\d{10}$').hasMatch(digits)) digits = '$code$digits';
       return digits;
     }
     return digits;
@@ -1810,6 +1812,7 @@ class _DashboardPageState extends State<DashboardPage> {
   // ============== Settings ==============
   Widget _settingsSection() {
     final themeProv = context.watch<ThemeProvider>();
+    final appSettings = context.watch<AppSettingsProvider>();
     // When forceWhiteText is ON, show white foreground for texts/icons in the
     // Settings section (which is laid on the background image), while keeping
     // text inside surfaced containers elsewhere black via their own theming.
@@ -1837,6 +1840,23 @@ class _DashboardPageState extends State<DashboardPage> {
         Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 16),
         const Text('General configuration placeholders will appear here.'),
+        const SizedBox(height: 12),
+        // Communication settings
+        Text('Communication', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: Text('Default country code for phone numbers')),
+          SizedBox(
+            width: 120,
+            child: TextField(
+              controller: TextEditingController(text: '+${appSettings.defaultCountryCode}')
+                ..selection = TextSelection.fromPosition(TextPosition(offset: ('+${appSettings.defaultCountryCode}').length)),
+              decoration: const InputDecoration(prefixText: ''),
+              onSubmitted: (v) => appSettings.setDefaultCountryCode(v),
+              onChanged: (v) {},
+            ),
+          )
+        ]),
         const SizedBox(height: 12),
         Text('Theme', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
@@ -4289,6 +4309,11 @@ class _PhoneField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final defaultCode = context.watch<AppSettingsProvider>().defaultCountryCode;
+    if (controller.text.trim().isEmpty) {
+      controller.text = '+$defaultCode ';
+      controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
+    }
     return Row(children: [
       Expanded(
         child: TextField(

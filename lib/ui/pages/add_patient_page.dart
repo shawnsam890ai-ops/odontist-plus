@@ -6,6 +6,7 @@ import '../../core/constants.dart';
 // Removed legacy simple SearchMultiSelect (using editable variant)
 import '../widgets/search_editable_multi_select.dart';
 import '../../providers/options_provider.dart';
+import '../../providers/app_settings_provider.dart';
 
 class AddPatientPage extends StatefulWidget {
   static const routeName = '/add-patient';
@@ -29,6 +30,11 @@ class _AddPatientPageState extends State<AddPatientPage> {
 
   @override
   Widget build(BuildContext context) {
+    final defaultCode = context.watch<AppSettingsProvider>().defaultCountryCode;
+    if (_phone.text.trim().isEmpty) {
+      _phone.text = '+$defaultCode ';
+      _phone.selection = TextSelection.fromPosition(TextPosition(offset: _phone.text.length));
+    }
     // Load dynamic options for history
     final opt = context.read<OptionsProvider>();
     if (!opt.isLoaded) {

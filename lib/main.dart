@@ -18,6 +18,7 @@ import 'providers/utility_provider.dart';
 import 'ui/pages/splash_page.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/app_settings_provider.dart';
 import 'services/notification_service.dart';
 import 'providers/license_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -53,6 +54,7 @@ class DentalClinicApp extends StatelessWidget {
     ChangeNotifierProvider(create: (_) => LabRegistryProvider()),
     ChangeNotifierProvider(create: (_) => MedicineProvider()),
     ChangeNotifierProvider(create: (_) => ThemeProvider()),
+    ChangeNotifierProvider(create: (_) => AppSettingsProvider()),
   ChangeNotifierProvider(create: (_) => LicenseProvider()),
     // Utility depends on RevenueProvider instance
     ChangeNotifierProxyProvider<RevenueProvider, UtilityProvider>(
@@ -71,6 +73,8 @@ class DentalClinicApp extends StatelessWidget {
             ctx.read<LicenseProvider>().startAutoRefresh(every: const Duration(minutes: 30));
             // Load theme choice
             ctx.read<ThemeProvider>().ensureLoaded();
+            // Load app settings
+            ctx.read<AppSettingsProvider>().ensureLoaded();
             final opt = ctx.read<OptionsProvider>();
             final pats = ctx.read<PatientProvider>();
             // Load patients from storage/Firestore

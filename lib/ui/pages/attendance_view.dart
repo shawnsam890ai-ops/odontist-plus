@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../providers/app_settings_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/staff_attendance_provider.dart';
@@ -278,11 +279,12 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
     final nameCtrl = TextEditingController();
     final ageCtrl = TextEditingController();
     final addressCtrl = TextEditingController();
-    final primaryPhoneCtrl = TextEditingController();
-    final extraPhoneCtrl = TextEditingController();
+  final defaultCode = context.read<AppSettingsProvider>().defaultCountryCode;
+  final primaryPhoneCtrl = TextEditingController(text: '+$defaultCode ');
+  final extraPhoneCtrl = TextEditingController(text: '+$defaultCode ');
     final emgNameCtrl = TextEditingController();
     final emgRelationCtrl = TextEditingController();
-    final emgPhoneCtrl = TextEditingController();
+  final emgPhoneCtrl = TextEditingController(text: '+$defaultCode ');
     final emgAddressCtrl = TextEditingController();
     final monthlySalaryCtrl = TextEditingController();
   DateTime? paymentDueDate;
@@ -1139,11 +1141,12 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
   }
 
   Future<void> _launchWhatsApp(String phone) async {
-    // Normalize to international format without '+'; assume India +91 for 10-digit local numbers
+    // Normalize to international format without '+'; default to app setting for local numbers
+    final code = context.read<AppSettingsProvider>().defaultCountryCode;
     var digits = phone.replaceAll(RegExp(r'[^0-9+]'), '');
     if (digits.startsWith('+')) digits = digits.substring(1);
     if (RegExp(r'^0\d{10}$').hasMatch(digits)) digits = digits.substring(1);
-    if (RegExp(r'^\d{10}$').hasMatch(digits)) digits = '91$digits';
+    if (RegExp(r'^\d{10}$').hasMatch(digits)) digits = '$code$digits';
     final native = Uri.parse('whatsapp://send?phone=$digits');
     final web = Uri.parse('https://wa.me/$digits');
     if (await canLaunchUrl(native)) {

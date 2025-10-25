@@ -5,6 +5,7 @@ import '../../core/enums.dart';
 import '../../core/constants.dart';
 import '../widgets/search_editable_multi_select.dart';
 import '../../providers/options_provider.dart';
+import '../../providers/app_settings_provider.dart';
 
 class EditPatientPage extends StatefulWidget {
   static const routeName = '/edit-patient';
@@ -57,6 +58,8 @@ class _EditPatientPageState extends State<EditPatientPage> {
 
   @override
   Widget build(BuildContext context) {
+  // Access default country code if needed for future enhancements
+  // final defaultCode = context.watch<AppSettingsProvider>().defaultCountryCode;
     if (!_loaded) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }

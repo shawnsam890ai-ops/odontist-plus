@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
+import '../../providers/app_settings_provider.dart';
 import '../../providers/doctor_provider.dart';
 import '../../models/doctor.dart';
 import '../../providers/doctor_attendance_provider.dart';
@@ -670,9 +671,10 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       }
       return;
     }
-    // WhatsApp expects international format without leading '+' in wa.me URL
-    // Add default country code (assume India +91) when a local 10-digit number is given.
-    var digits = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+  // WhatsApp expects international format without leading '+' in wa.me URL
+  // Add default country code from settings when a local 10-digit number is given.
+  final defaultCode = context.read<AppSettingsProvider>().defaultCountryCode;
+  var digits = phone.replaceAll(RegExp(r'[^0-9+]'), '');
     if (digits.startsWith('+')) digits = digits.substring(1);
     // Heuristics: 10-digit Indian mobile or 11-digit with leading 0
     if (RegExp(r'^0\d{10}$').hasMatch(digits)) {
@@ -680,8 +682,8 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       digits = digits.substring(1);
     }
     if (RegExp(r'^\d{10}$').hasMatch(digits)) {
-      // Prefix India country code by default
-      digits = '91$digits';
+      // Prefix default country code by default
+      digits = '$defaultCode$digits';
     }
     if (!RegExp(r'^\d{7,15}$').hasMatch(digits)) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid phone number')));
