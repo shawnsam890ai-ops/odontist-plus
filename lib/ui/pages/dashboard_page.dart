@@ -1008,65 +1008,69 @@ class _DashboardPageState extends State<DashboardPage> {
           Text('Services: ${services.length}')
         ]),
         const SizedBox(height: 16),
+        // Scrollable content area containing all cards below
         Expanded(
-          child: context.responsiveCenter(
-            maxWidth: 1100,
-            child: Card(
-            clipBehavior: Clip.antiAlias,
-            child: services.isEmpty
-                ? const Center(child: Text('No utilities added'))
-                : ListView.separated(
-                    itemCount: services.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, i) {
-                      final s = services[i];
-                      return ExpansionTile(
-                        title: Text(s.name),
-                        subtitle: s.regNumber == null || s.regNumber!.isEmpty ? null : Text('Reg/ID: ${s.regNumber}'),
-                        trailing: Switch(value: s.active, onChanged: (v) => context.read<UtilityProvider>().updateService(s.id, active: v)),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: FilledButton.tonalIcon(
-                                  onPressed: () => _showAddUtilityPaymentDialog(s.id),
-                                  icon: const Icon(Icons.receipt_long),
-                                  label: const Text('Add Payment'),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              _utilityPaymentsList(s.id),
-                            ]),
-                          )
-                        ],
-                      );
-                    },
-                  ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        // Payments history panel (scrollable, filterable, exportable)
-        Expanded(
-          child: context.responsiveCenter(
-            maxWidth: 1100,
-            child: Card(
-            clipBehavior: Clip.antiAlias,
-            child: _UtilityPaymentsHistoryPanel(),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        // Bills history
-        Expanded(
-          child: context.responsiveCenter(
-            maxWidth: 1100,
-            child: Card(
-            clipBehavior: Clip.antiAlias,
-            child: _BillsHistoryPanel(),
-            ),
+          child: SingleChildScrollView(
+            child: Column(children: [
+              // Services list
+              context.responsiveCenter(
+                maxWidth: 1100,
+                child: Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: services.isEmpty
+                      ? const Padding(padding: EdgeInsets.all(16), child: Center(child: Text('No utilities added')))
+                      : ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: services.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, i) {
+                            final s = services[i];
+                            return ExpansionTile(
+                              title: Text(s.name),
+                              subtitle: s.regNumber == null || s.regNumber!.isEmpty ? null : Text('Reg/ID: ${s.regNumber}'),
+                              trailing: Switch(value: s.active, onChanged: (v) => context.read<UtilityProvider>().updateService(s.id, active: v)),
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: FilledButton.tonalIcon(
+                                        onPressed: () => _showAddUtilityPaymentDialog(s.id),
+                                        icon: const Icon(Icons.receipt_long),
+                                        label: const Text('Add Payment'),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    _utilityPaymentsList(s.id),
+                                  ]),
+                                )
+                              ],
+                            );
+                          },
+                        ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Payments history panel (self-expands with pagination)
+              context.responsiveCenter(
+                maxWidth: 1100,
+                child: Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: _UtilityPaymentsHistoryPanel(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Bills history (self-expands with pagination)
+              context.responsiveCenter(
+                maxWidth: 1100,
+                child: Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: _BillsHistoryPanel(),
+                ),
+              ),
+            ]),
           ),
         ),
       ]),
@@ -3691,6 +3695,9 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
   String _mode = 'recent';
   final Set<String> _selected = {};
   String _categoryFilter = 'all';
+  // Paging (max 12 items per view)
+  static const int _pageSize = 12;
+  int _page = 0;
   // Analytics controls
   String _analyticsPeriod = 'month'; // 'month' | 'year'
   int _analyticsYear = DateTime.now().year;
@@ -3713,9 +3720,12 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
     if (_mode != 'recent') {
       final y = int.tryParse(_mode);
       if (y != null) list = list.where((e) => e.date.year == y).toList();
-    } else {
-      list = list.take(12).toList();
     }
+    // Pagination
+    final totalPages = (list.length / _pageSize).ceil().clamp(1, 1 << 31);
+    if (_page >= totalPages) _page = totalPages - 1;
+    final start = (_page * _pageSize).clamp(0, list.length);
+    final visible = list.skip(start).take(_pageSize).toList();
     // Analytics compute
     Map<String, double> analyticsTotals = {
       'Consumables': 0,
@@ -3759,10 +3769,10 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
               child: DropdownButton<String>(
                 value: _mode,
                 items: [
-                  const DropdownMenuItem(value: 'recent', child: Text('Recent 12 months')),
+                  const DropdownMenuItem(value: 'recent', child: Text('All (recent first)')),
                   ...years.map((y) => DropdownMenuItem(value: y.toString(), child: Text(y.toString())))
                 ],
-                onChanged: (v) => setState(() => _mode = v ?? 'recent'),
+                onChanged: (v) => setState(() { _mode = v ?? 'recent'; _page = 0; }),
               ),
             ),
             const SizedBox(width: 8),
@@ -3823,7 +3833,7 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
           ]),
         ),
         const Divider(height: 1),
-        if (list.isEmpty)
+        if (visible.isEmpty)
           const Padding(
             padding: EdgeInsets.all(16),
             child: Center(child: Text('No bills')),
@@ -3832,10 +3842,10 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: list.length,
+            itemCount: visible.length,
             separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, i) {
-              final b = list[i];
+              final b = visible[i];
               final dateStr = '${b.date.year}-${b.date.month.toString().padLeft(2, '0')}-${b.date.day.toString().padLeft(2, '0')}';
               return ListTile(
                 dense: true,
@@ -3886,6 +3896,25 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
                 ]),
               );
             },
+          ),
+        if (list.length > _pageSize)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: Row(children: [
+              Text('Page ${_page + 1} of ${((list.length + _pageSize - 1) / _pageSize).floor()}'),
+              const Spacer(),
+              OutlinedButton.icon(
+                onPressed: _page > 0 ? () => setState(() => _page -= 1) : null,
+                icon: const Icon(Icons.chevron_left),
+                label: const Text('Previous'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: ((_page + 1) * _pageSize) < list.length ? () => setState(() => _page += 1) : null,
+                icon: const Icon(Icons.chevron_right),
+                label: const Text('Next'),
+              ),
+            ]),
           ),
       ]),
     );
@@ -4073,6 +4102,9 @@ Future<void> openReceiptWithFallback(BuildContext context, String path) async {
 
 class _UtilityPaymentsHistoryPanelState extends State<_UtilityPaymentsHistoryPanel> {
   String _mode = 'recent'; // recent or YYYY
+  // Paging (max 12 items per view)
+  static const int _pageSize = 12;
+  int _page = 0;
 
   List<int> _availableYears(List payments) {
     final years = <int>{};
@@ -4123,9 +4155,12 @@ class _UtilityPaymentsHistoryPanelState extends State<_UtilityPaymentsHistoryPan
       if (y != null) {
         entries = entries.where((e) => e.date.year == y).toList();
       }
-    } else {
-      entries = entries.take(12).toList(); // recent 12
     }
+    // Pagination
+    final totalPages = (entries.length / _pageSize).ceil().clamp(1, 1 << 31);
+    if (_page >= totalPages) _page = totalPages - 1;
+    final start = (_page * _pageSize).clamp(0, entries.length);
+    final visible = entries.skip(start).take(_pageSize).toList();
     return Column(children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
@@ -4136,10 +4171,10 @@ class _UtilityPaymentsHistoryPanelState extends State<_UtilityPaymentsHistoryPan
             child: DropdownButton<String>(
               value: _mode,
               items: [
-                const DropdownMenuItem(value: 'recent', child: Text('Recent 12 months')),
+                const DropdownMenuItem(value: 'recent', child: Text('All (recent first)')),
                 ...years.map((y) => DropdownMenuItem(value: y.toString(), child: Text(y.toString())))
               ],
-              onChanged: (v) => setState(() => _mode = v ?? 'recent'),
+              onChanged: (v) => setState(() { _mode = v ?? 'recent'; _page = 0; }),
             ),
           ),
           const SizedBox(width: 8),
@@ -4151,23 +4186,43 @@ class _UtilityPaymentsHistoryPanelState extends State<_UtilityPaymentsHistoryPan
         ]),
       ),
       const Divider(height: 1),
-      Expanded(
-        child: entries.isEmpty
-            ? const Center(child: Text('No payments'))
-            : ListView.separated(
-                itemCount: entries.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, i) {
-                  final e = entries[i];
-                  final dateStr = '${e.date.year}-${e.date.month.toString().padLeft(2, '0')}-${e.date.day.toString().padLeft(2, '0')}';
-                  return ListTile(
-                    dense: true,
-                    title: Text('${services[e.serviceId] ?? e.serviceId} • ₹${e.amount.toStringAsFixed(0)}'),
-                    subtitle: Text('Date: $dateStr • Mode: ${e.mode ?? '—'} • Paid: ${e.paid ? 'Yes' : 'No'}'),
-                  );
-                },
-              ),
-      )
+      if (visible.isEmpty)
+        const Padding(padding: EdgeInsets.all(16), child: Center(child: Text('No payments')))
+      else
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: visible.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (context, i) {
+            final e = visible[i];
+            final dateStr = '${e.date.year}-${e.date.month.toString().padLeft(2, '0')}-${e.date.day.toString().padLeft(2, '0')}';
+            return ListTile(
+              dense: true,
+              title: Text('${services[e.serviceId] ?? e.serviceId} • ₹${e.amount.toStringAsFixed(0)}'),
+              subtitle: Text('Date: $dateStr • Mode: ${e.mode ?? '—'} • Paid: ${e.paid ? 'Yes' : 'No'}'),
+            );
+          },
+        ),
+      if (entries.length > _pageSize)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: Row(children: [
+            Text('Page ${_page + 1} of ${((entries.length + _pageSize - 1) / _pageSize).floor()}'),
+            const Spacer(),
+            OutlinedButton.icon(
+              onPressed: _page > 0 ? () => setState(() => _page -= 1) : null,
+              icon: const Icon(Icons.chevron_left),
+              label: const Text('Previous'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              onPressed: ((_page + 1) * _pageSize) < entries.length ? () => setState(() => _page += 1) : null,
+              icon: const Icon(Icons.chevron_right),
+              label: const Text('Next'),
+            ),
+          ]),
+        ),
     ]);
   }
 }

@@ -33,6 +33,73 @@ This project includes Firebase Cloud Functions and Firestore rules to support:
   - `firebase functions:config:set webhooks.secret=YOUR_RAZORPAY_WEBHOOK_SECRET`
   - `firebase functions:config:set play.package=com.your.app`
 
+  ### Firebase Integration Quick Checklist
+
+  Follow these steps to finish integrating the Firebase backend (Cloud Functions + Firestore rules):
+
+  1. Verify you are logged into the correct Firebase account:
+
+  ```powershell
+  firebase login:list
+  firebase projects:list
+  ```
+
+  2. Bind this repo to the Firebase project (if not already):
+
+  ```powershell
+  firebase use --add
+  # choose projectId and alias (use 'default' for the main project)
+  ```
+
+  3. Set required functions config variables (replace placeholders):
+
+  ```powershell
+  firebase functions:config:set \
+    razorpay.key_id="YOUR_KEY_ID" \
+    razorpay.key_secret="YOUR_KEY_SECRET" \
+    webhooks.secret="YOUR_WEBHOOK_SECRET" \
+    play.package="com.your.app" \
+    otp.secret="<otp-secret>" \
+    resend.api_key="<resend-key-if-used>" \
+    resend.from="no-reply@yourdomain.example" \
+    sendgrid.api_key="<sendgrid-key-if-used>" \
+    sendgrid.from="no-reply@yourdomain.example"
+  ```
+
+  4. If you plan to deploy Cloud Functions, upgrade the project to Blaze (required to enable Cloud Build & Artifact Registry). Visit:
+
+  ```
+  https://console.firebase.google.com/project/<PROJECT_ID>/usage/details
+  ```
+
+  5. Deploy only rules (safe without Blaze):
+
+  ```powershell
+  firebase deploy --only "firestore:rules"
+  ```
+
+  6. Build and deploy functions (requires Blaze):
+
+  ```powershell
+  cd functions
+  npm install
+  npm run build
+  firebase deploy --only "functions"
+  ```
+
+  7. After deploying, configure a Razorpay webhook in your Razorpay dashboard with the functions URL:
+
+  ```
+  https://<REGION>-<PROJECT>.cloudfunctions.net/razorpayWebhook/razorpay/webhook
+  ```
+
+  8. Optional: run emulators locally for development:
+
+  ```powershell
+  cd functions
+  npm run serve
+  ```
+
 3. Deploy:
   - `npm --prefix functions run build`
   - `firebase deploy --only functions,firestore:rules`

@@ -29,6 +29,7 @@ import '../../models/patient.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/ai_insights_service.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import '../../core/utils/currency.dart';
 import '../widgets/multi_select_dropdown.dart';
 import '../widgets/search_editable_multi_select.dart';
 // import '../widgets/search_multi_select.dart'; // no longer needed here after moving to full-screen edit page
@@ -186,17 +187,58 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _basicInfoCard(patient),
-            const SizedBox(height: 12),
-            // Odontogram above previous sessions; interactive: tap a tooth to see history/details
-            Odontogram(
-              patient: patient,
-              interactive: true,
-              highlightedTeeth: _currentSelectedTeeth(),
+            // Responsive layout: on wide screens show Basic Info + Sessions on the left and Odontogram on the right
+            LayoutBuilder(
+              builder: (ctx, constraints) {
+                final wide = constraints.maxWidth >= 900;
+                if (wide) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left column: basic info and session history
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _basicInfoCard(patient),
+                            const SizedBox(height: 12),
+                            _sessionHistoryContainer(patient),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Right column: odontogram (kept centered and fitted)
+                      Expanded(
+                        flex: 2,
+                        child: Odontogram(
+                          patient: patient,
+                          interactive: true,
+                          highlightedTeeth: _currentSelectedTeeth(),
+                          onAddPlan: _onAddPlanFromOdontogram,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                // Narrow screens: stack vertically
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _basicInfoCard(patient),
+                    const SizedBox(height: 12),
+                    Odontogram(
+                      patient: patient,
+                      interactive: true,
+                      highlightedTeeth: _currentSelectedTeeth(),
+                      onAddPlan: _onAddPlanFromOdontogram,
+                    ),
+                    const SizedBox(height: 12),
+                    _sessionHistoryContainer(patient),
+                  ],
+                );
+              },
             ),
-            const SizedBox(height: 12),
-            // Previous sessions container moved near top
-            _sessionHistoryContainer(patient),
             const SizedBox(height: 16),
             // Removed duplicate Add Rx + outer type row (type now moved inside form header)
             // Global follow-up button removed (now per-session inside history list)
@@ -360,6 +402,27 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
         ),
       ),
     );
+  }
+
+  // Handle quick-add actions from Odontogram tooth sheet
+  void _onAddPlanFromOdontogram(String tooth, TreatmentType type) {
+    setState(() {
+      _showRxForm = true;
+      _editingSessionId = null; // ensure creating new unless user switches to edit
+      _selectedType = type;
+      switch (type) {
+        case TreatmentType.rootCanal:
+          _rcPlanTooth.text = tooth;
+          // Focus will remain where user taps next; leave plan text empty for explicit input
+          break;
+        case TreatmentType.prosthodontic:
+          _prosthoPlanTooth.text = tooth;
+          break;
+        default:
+          // For other types, no-op
+          break;
+      }
+    });
   }
 
   // Ensure all option lists (including new oral findings) are loaded exactly once
@@ -3757,7 +3820,7 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             if (first.orthoOralFindings.isNotEmpty) pw.Text('Findings: ${first.orthoOralFindings}'),
             if (first.bracketType != null) pw.Text('Bracket: ${first.bracketType!.label}'),
             if (first.orthoDoctorInCharge != null && first.orthoDoctorInCharge!.trim().isNotEmpty) pw.Text('Doctor: ${first.orthoDoctorInCharge}'),
-            if (first.orthoTotalAmount != null) pw.Text('Total Amount: ${first.orthoTotalAmount}'),
+            if (first.orthoTotalAmount != null) pw.Text('Total Amount: ${Currency.inrFormat(first.orthoTotalAmount!)}'),
             pw.SizedBox(height: 12),
             pw.Text('Sessions (${allSteps.length})', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
             if (allSteps.isEmpty) pw.Text('No monthly sessions recorded.') else pw.Table(
@@ -3781,14 +3844,14 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 ...allSteps.map((st) => pw.TableRow(children: [
                   pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(st.date.toLocal().toString().split(' ').first)),
                   pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(st.description)),
-                  pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(st.payment == null ? '-' : st.payment.toString())),
+                  pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(st.payment == null ? '-' : Currency.inrFormat(st.payment!))),
                   pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(st.note ?? '-')),
                 ]))
               ],
             ),
             pw.SizedBox(height: 12),
             pw.Text('Financial Summary', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-            pw.Text('Paid: ₹$paid / Total: ₹$total  Balance: ₹$bal'),
+            pw.Text('Paid: ${Currency.inrFormat(paid)} / Total: ${Currency.inrFormat(total)}  Balance: ${Currency.inrFormat(bal)}'),
             if (total > 0)
               pw.Container(
                 margin: const pw.EdgeInsets.only(top: 6),

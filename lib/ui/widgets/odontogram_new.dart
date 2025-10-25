@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:teeth_selector/teeth_selector.dart';
 import '../../models/patient.dart';
 import 'dart:math' as math;
+import '../../core/enums.dart';
 
 /// Interactive odontogram with 3D enamel fill under TeethSelector overlays.
 class Odontogram extends StatefulWidget {
@@ -13,6 +14,8 @@ class Odontogram extends StatefulWidget {
   final bool interactive;
   final List<String> highlightedTeeth;
   final Color? backgroundColor; // optional override
+  // Optional: request parent to add a per-tooth plan of a specific type
+  final void Function(String toothNumber, TreatmentType type)? onAddPlan;
 
   const Odontogram({
     super.key,
@@ -23,6 +26,7 @@ class Odontogram extends StatefulWidget {
     this.interactive = false,
     this.highlightedTeeth = const [],
     this.backgroundColor,
+    this.onAddPlan,
   });
   @override
   State<Odontogram> createState() => _OdontogramState();
@@ -31,6 +35,11 @@ class Odontogram extends StatefulWidget {
 class _OdontogramState extends State<Odontogram> {
   Set<String> _selected = {};
   final Data _data = loadTeeth();
+  // Cached computed data derived from patient sessions to avoid recomputing every build
+  Map<String, _ToothSummary>? _cachedSummaries;
+  Map<String, List<_Mark>>? _cachedMarks;
+  _GlobalNotes? _cachedGlobals;
+  String _cacheKey = '';
 
   @override
   void initState() {
@@ -43,6 +52,10 @@ class _OdontogramState extends State<Odontogram> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.highlightedTeeth.join(',') != widget.highlightedTeeth.join(',')) {
       _selected = widget.highlightedTeeth.toSet();
+    }
+    // Invalidate cache when patient identity changes or sessions likely changed (cheap heuristic)
+    if (!identical(oldWidget.patient, widget.patient)) {
+      _cacheKey = '';
     }
   }
 
@@ -57,12 +70,13 @@ class _OdontogramState extends State<Odontogram> {
 
   @override
   Widget build(BuildContext context) {
-    final summaries = _summarizePatientTeeth(widget.patient);
+    // Ensure cached computed data is up to date
+    _ensureCache();
+    final summaries = _cachedSummaries!;
     final doneSet = summaries.entries.where((e) => e.value.doneCount > 0).map((e) => e.key).toSet();
     final criticalFindings = summaries.entries.where((e) => e.value.hasCriticalFinding).map((e) => e.key).toSet();
     final anyFindings = summaries.entries.where((e) => e.value.findingsCount > 0 && !e.value.hasCriticalFinding).map((e) => e.key).toSet();
 
-    final colorize = <String, Color>{for (final t in doneSet) t: Colors.green.shade400};
     final strokedColorized = <String, Color>{
       for (final t in anyFindings) t: Colors.orangeAccent,
       for (final t in criticalFindings) t: Colors.redAccent,
@@ -82,8 +96,8 @@ class _OdontogramState extends State<Odontogram> {
     final scheme = Theme.of(context).colorScheme;
     final darkBg = _darken(scheme.surfaceVariant, Theme.of(context).brightness == Brightness.light ? 0.45 : 0.2);
 
-    final toothMarks = _computeToothMarks(widget.patient);
-    final globals = _computeGlobalNotes(widget.patient);
+  final toothMarks = _cachedMarks!;
+  final globals = _cachedGlobals!;
 
     return Stack(
       clipBehavior: Clip.none,
@@ -124,64 +138,70 @@ class _OdontogramState extends State<Odontogram> {
 
               Center(
                 child: FittedBox(
-                  child: SizedBox.fromSize(
-                    size: _data.size,
-                    child: Stack(children: [
-                      CustomPaint(size: _data.size, painter: _ToothFillPainter(_data.teeth, skipFill: doneSet)),
-                      // Per-tooth letter/short-code marks
-                      IgnorePointer(child: CustomPaint(size: _data.size, painter: _ToothMarkPainter(_data.teeth, toothMarks))),
-                      IgnorePointer(
-                        ignoring: !widget.interactive,
-                        child: TeethSelector(
-                          key: ValueKey('teeth-${widget.highlightedTeeth.join(',')}'),
-                          onChange: _handleChange,
-                          showPermanent: true,
-                          showPrimary: true,
-                          multiSelect: true,
-                          initiallySelected: widget.highlightedTeeth,
-                          // Disable package-drawn fills/strokes; we draw our own enamel + glow
-                          colorized: const <String, Color>{},
-                          StrokedColorized: const <String, Color>{},
-                          strokeWidth: const <String, double>{},
-                          // Prevent package from drawing any interior strokes entirely
-                          defaultStrokeWidth: 0.0,
-                          defaultStrokeColor: Colors.transparent,
-                          selectedColor: Colors.transparent,
-                          unselectedColor: Colors.transparent,
-                          notation: (iso) => tooltipByTooth[iso] ?? iso,
+                  child: RepaintBoundary(
+                    child: SizedBox.fromSize(
+                      size: _data.size,
+                      child: Stack(children: [
+                        // Enamel/base layer (static for given patient state)
+                        CustomPaint(size: _data.size, painter: _ToothFillPainter(_data.teeth, skipFill: doneSet), isComplex: true, willChange: false),
+                        // Per-tooth letter/short-code marks
+                        IgnorePointer(child: CustomPaint(size: _data.size, painter: _ToothMarkPainter(_data.teeth, toothMarks), isComplex: true, willChange: false)),
+                        // Hit-test & selection overlay
+                        IgnorePointer(
+                          ignoring: !widget.interactive,
+                          child: TeethSelector(
+                            key: ValueKey('teeth-${widget.highlightedTeeth.join(',')}'),
+                            onChange: _handleChange,
+                            showPermanent: true,
+                            showPrimary: true,
+                            multiSelect: true,
+                            initiallySelected: widget.highlightedTeeth,
+                            // Disable package-drawn fills/strokes; we draw our own enamel + glow
+                            colorized: const <String, Color>{},
+                            StrokedColorized: const <String, Color>{},
+                            strokeWidth: const <String, double>{},
+                            // Prevent package from drawing any interior strokes entirely
+                            defaultStrokeWidth: 0.0,
+                            defaultStrokeColor: Colors.transparent,
+                            selectedColor: Colors.transparent,
+                            unselectedColor: Colors.transparent,
+                            notation: (iso) => tooltipByTooth[iso] ?? iso,
+                          ),
                         ),
-                      ),
-                      // Draw thin yellow glow outlines for highlighted teeth on top
-                      IgnorePointer(
-                        child: CustomPaint(
-                          size: _data.size,
-                          painter: _ToothHighlightPainter(_data.teeth, _selected),
+                        // Thin yellow halo around highlighted teeth
+                        IgnorePointer(
+                          child: CustomPaint(
+                            size: _data.size,
+                            painter: _ToothHighlightPainter(_data.teeth, _selected),
+                            isComplex: true,
+                            willChange: true,
+                          ),
                         ),
-                      ),
-                      if (globals.showCD)
-                        Positioned(
-                          top: 4,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.green.shade600,
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1))],
-                              ),
-                              child: Text(
-                                'CD',
-                                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                    ),
+                        if (globals.showCD)
+                          Positioned(
+                            top: 4,
+                            left: 0,
+                            right: 0,
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade600,
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1))],
+                                ),
+                                child: Text(
+                                  'CD',
+                                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                    ]),
+                      ]),
+                    ),
                   ),
                 ),
               ),
@@ -227,6 +247,27 @@ class _OdontogramState extends State<Odontogram> {
                 const SizedBox(width: 12),
                 Chip(label: Text('${records.length} record${records.length == 1 ? '' : 's'}')),
               ]),
+              if (widget.onAddPlan != null) ...[
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, children: [
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.medical_services_outlined, size: 18),
+                    label: const Text('Add Rx – Root Canal'),
+                    onPressed: () {
+                      Navigator.of(context).maybePop();
+                      widget.onAddPlan!.call(iso, TreatmentType.rootCanal);
+                    },
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.brush_outlined, size: 18),
+                    label: const Text('Add Rx – Prosthodontic'),
+                    onPressed: () {
+                      Navigator.of(context).maybePop();
+                      widget.onAddPlan!.call(iso, TreatmentType.prosthodontic);
+                    },
+                  ),
+                ]),
+              ],
               const SizedBox(height: 8),
               Expanded(
                 child: records.isEmpty
@@ -403,6 +444,35 @@ class _OdontogramState extends State<Odontogram> {
         actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
       ),
     );
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Cache helpers inside state
+extension on _OdontogramState {
+  void _ensureCache() {
+    final newKey = _makeCacheKey(widget.patient);
+    if (newKey == _cacheKey &&
+        _cachedSummaries != null &&
+        _cachedMarks != null &&
+        _cachedGlobals != null) {
+      return;
+    }
+    _cachedSummaries = _summarizePatientTeeth(widget.patient);
+    _cachedMarks = _computeToothMarks(widget.patient);
+    _cachedGlobals = _computeGlobalNotes(widget.patient);
+    _cacheKey = newKey;
+  }
+
+  String _makeCacheKey(Patient p) {
+    int count = p.sessions.length;
+    int maxTs = 0;
+    for (final s in p.sessions) {
+      final ts = s.date.millisecondsSinceEpoch;
+      if (ts > maxTs) maxTs = ts;
+    }
+    // Include highlighted teeth set in the key only for highlight painter; summaries/marks depend on sessions only.
+    return '$count:$maxTs';
   }
 }
 
@@ -685,6 +755,9 @@ Map<String, _ToothSummary> _summarizePatientTeeth(Patient patient) {
     for (final f in sess.rootCanalFindings) {
       if (f.toothNumber.isNotEmpty) bumpFinding(f.toothNumber, f.finding);
     }
+    for (final f in sess.prosthodonticFindings) {
+      if (f.toothNumber.isNotEmpty) bumpFinding(f.toothNumber, f.finding);
+    }
     for (final p in sess.toothPlans) {
       if (p.toothNumber.isNotEmpty) bumpFinding(p.toothNumber, p.plan);
     }
@@ -717,6 +790,8 @@ List<_ToothRecordExt> _recordsForTooth(Patient patient, String iso) {
     findings.addAll(s.rootCanalFindings.where((e) => e.toothNumber == iso).map((e) => e.finding));
     final plans = <String>[];
     plans.addAll(s.toothPlans.where((e) => e.toothNumber == iso).map((e) => e.plan));
+    plans.addAll(s.rootCanalPlans.where((e) => e.toothNumber == iso).map((e) => e.plan));
+    plans.addAll(s.prosthodonticPlans.where((e) => e.toothNumber == iso).map((e) => e.plan));
     final done = <String>[];
     done.addAll(s.treatmentsDone.where((e) => e.toothNumber == iso).map((e) => e.treatment));
     if (findings.isEmpty && plans.isEmpty && done.isEmpty && cc.isEmpty) continue;
@@ -903,8 +978,6 @@ class _ToothHighlightPainter extends CustomPainter {
       final path = rect.topLeft == Offset.zero ? tooth.path : tooth.path.shift(rect.topLeft);
       // Prefer the outer closed contour for a halo drawn outside the tooth
       final outer = _largestClosedSubpath(path) ?? _bestInnerContour(path, rect);
-      if (outer == null) continue;
-
       // Draw a small outer halo using a subtle shadow (no inner stroke to keep text visible)
       canvas.drawShadow(outer, Colors.yellow.shade700, 3.0, false);
     }
