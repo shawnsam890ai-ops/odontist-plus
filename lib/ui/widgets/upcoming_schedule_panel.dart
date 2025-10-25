@@ -302,7 +302,8 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
             // If calculation yields too-large chips (due to negative avail), clamp down
             if (chipW.isNaN || chipW.isInfinite) chipW = minChip;
             chipW = chipW.clamp(minChip, maxChip);
-            final stripH = narrow ? 48.0 : 56.0;
+            // Slightly larger height to prevent 1-3px overflow on very compact fonts/densities
+            final stripH = narrow ? 54.0 : 60.0;
             return SizedBox(
               height: stripH,
               child: Row(children: [
@@ -355,7 +356,8 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             width: width,
-            margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 0),
+            // Reduce vertical margin slightly in compact mode to avoid pixel overflow
+            margin: EdgeInsets.symmetric(vertical: compact ? 1 : 2, horizontal: 0),
             decoration: BoxDecoration(
               color: isSel ? Theme.of(context).colorScheme.primary.withOpacity(.1) : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
@@ -372,7 +374,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                     color: isSel ? Theme.of(context).colorScheme.primary : Colors.grey[600],
                   ),
                 ),
-                SizedBox(height: compact ? 2 : 3),
+                SizedBox(height: compact ? 1.5 : 3),
                 Container(
                   padding: EdgeInsets.all(compact ? 5 : 6),
                   decoration: BoxDecoration(

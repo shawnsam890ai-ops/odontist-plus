@@ -1139,8 +1139,18 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
   }
 
   Future<void> _launchWhatsApp(String phone) async {
-    final uri = Uri.parse('https://wa.me/$phone');
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    // Normalize to international format without '+'; assume India +91 for 10-digit local numbers
+    var digits = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (digits.startsWith('+')) digits = digits.substring(1);
+    if (RegExp(r'^0\d{10}$').hasMatch(digits)) digits = digits.substring(1);
+    if (RegExp(r'^\d{10}$').hasMatch(digits)) digits = '91$digits';
+    final native = Uri.parse('whatsapp://send?phone=$digits');
+    final web = Uri.parse('https://wa.me/$digits');
+    if (await canLaunchUrl(native)) {
+      await launchUrl(native);
+      return;
+    }
+    if (!await launchUrl(web, mode: LaunchMode.externalApplication)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('WhatsApp not available')));
       }

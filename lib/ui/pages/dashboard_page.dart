@@ -625,39 +625,30 @@ class _DashboardPageState extends State<DashboardPage> {
           Align(alignment: Alignment.centerLeft, child: Text('Overview', style: Theme.of(context).textTheme.headlineSmall)),
           const SizedBox(height: 16),
           if (!wide) ...[
-            // Non-wide: use existing stacked layout with compact panels
+            // Non-wide: stack panels vertically to avoid row overflow on phones
             _buildMetricsGrid(todaysRevenue, monthlyRevenue, patientProvider, inventoryProvider, revenueProvider),
             const SizedBox(height: 12),
-            // Upcoming Schedule and Cases Overview side by side
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(
-                flex: 1,
-                child: _LargePanel(
-                  title: '',
-                  child: SizedBox(
-                    height: 260,
-                    child: const UpcomingScheduleCompact(
-                      padding: EdgeInsets.fromLTRB(0, 4, 0, 8),
-                    ),
-                  ),
-                ).withRadius(12),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 1,
-                child: _LargePanel(
-                  title: 'Upcoming Appointment',
-                  child: const SizedBox(
-                    height: 220,
-                    child: UpcomingAppointmentWidget(
-                      padding: EdgeInsets.all(12),
-                    ),
-                  ),
+            _LargePanel(
+              title: '',
+              child: SizedBox(
+                height: 260,
+                child: const UpcomingScheduleCompact(
+                  padding: EdgeInsets.fromLTRB(0, 4, 0, 8),
                 ),
               ),
-            ]),
+            ).withRadius(12),
             const SizedBox(height: 12),
-              _LargePanel(
+            _LargePanel(
+              title: 'Upcoming Appointment',
+              child: const SizedBox(
+                height: 220,
+                child: UpcomingAppointmentWidget(
+                  padding: EdgeInsets.all(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _LargePanel(
               title: '',
               child: const SizedBox(height: 420, child: StaffAttendanceOverviewWidget()),
             ),
@@ -1720,9 +1711,14 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _launchWhatsApp(String rawNumber) async {
     final number = _normalizePhone(rawNumber, forWhatsApp: true);
     if (number.isEmpty) return;
-    final uri = Uri.parse('https://wa.me/$number');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final native = Uri.parse('whatsapp://send?phone=$number');
+    final web = Uri.parse('https://wa.me/$number');
+    if (await canLaunchUrl(native)) {
+      await launchUrl(native);
+      return;
+    }
+    if (await canLaunchUrl(web)) {
+      await launchUrl(web, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -1737,11 +1733,14 @@ class _DashboardPageState extends State<DashboardPage> {
 
   String _normalizePhone(String input, {bool forWhatsApp = false}) {
     // Keep digits and leading +, strip spaces/dashes/others
-    final digits = input.replaceAll(RegExp(r'[^+0-9]'), '');
+    var digits = input.replaceAll(RegExp(r'[^+0-9]'), '');
     if (digits.isEmpty) return '';
     if (forWhatsApp) {
-      // wa.me expects international format without +
-      return digits.startsWith('+') ? digits.substring(1) : digits;
+      // wa.me expects international format without +. If local 10-digit, prefix default India code 91.
+      if (digits.startsWith('+')) digits = digits.substring(1);
+      if (RegExp(r'^0\d{10}$').hasMatch(digits)) digits = digits.substring(1);
+      if (RegExp(r'^\d{10}$').hasMatch(digits)) digits = '91$digits';
+      return digits;
     }
     return digits;
   }
@@ -3748,80 +3747,133 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
       child: Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-          child: Row(children: [
-            const Text('Bills History', style: TextStyle(fontWeight: FontWeight.w600)),
-            const Spacer(),
-            DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _categoryFilter,
-                items: const [
-                  DropdownMenuItem(value: 'all', child: Text('All Categories')),
-                  DropdownMenuItem(value: 'Consumables', child: Text('Consumables')),
-                  DropdownMenuItem(value: 'Equipment', child: Text('Equipment')),
-                  DropdownMenuItem(value: 'Maintenance', child: Text('Maintenance')),
-                  DropdownMenuItem(value: 'Other', child: Text('Other')),
-                ],
-                onChanged: (v) => setState(() => _categoryFilter = v ?? 'all'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _mode,
-                items: [
-                  const DropdownMenuItem(value: 'recent', child: Text('All (recent first)')),
-                  ...years.map((y) => DropdownMenuItem(value: y.toString(), child: Text(y.toString())))
-                ],
-                onChanged: (v) => setState(() { _mode = v ?? 'recent'; _page = 0; }),
-              ),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.tonalIcon(
-              onPressed: _selected.isEmpty ? null : () async {
-                await context.read<UtilityProvider>().deleteBills(_selected.toList());
-                setState(() => _selected.clear());
-              },
-              icon: const Icon(Icons.delete_sweep),
-              label: const Text('Delete Selected'),
-            ),
-          ]),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 520;
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Bills History', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _categoryFilter,
+                            items: const [
+                              DropdownMenuItem(value: 'all', child: Text('All Categories')),
+                              DropdownMenuItem(value: 'Consumables', child: Text('Consumables')),
+                              DropdownMenuItem(value: 'Equipment', child: Text('Equipment')),
+                              DropdownMenuItem(value: 'Maintenance', child: Text('Maintenance')),
+                              DropdownMenuItem(value: 'Other', child: Text('Other')),
+                            ],
+                            onChanged: (v) => setState(() => _categoryFilter = v ?? 'all'),
+                          ),
+                        ),
+                        DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _mode,
+                            items: [
+                              const DropdownMenuItem(value: 'recent', child: Text('All (recent first)')),
+                              ...years.map((y) => DropdownMenuItem(value: y.toString(), child: Text(y.toString())))
+                            ],
+                            onChanged: (v) => setState(() { _mode = v ?? 'recent'; _page = 0; }),
+                          ),
+                        ),
+                        FilledButton.tonalIcon(
+                          onPressed: _selected.isEmpty ? null : () async {
+                            await context.read<UtilityProvider>().deleteBills(_selected.toList());
+                            setState(() => _selected.clear());
+                          },
+                          icon: const Icon(Icons.delete_sweep),
+                          label: const Text('Delete Selected'),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              }
+              // Wide layout
+              return Row(children: [
+                const Text('Bills History', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _categoryFilter,
+                    items: const [
+                      DropdownMenuItem(value: 'all', child: Text('All Categories')),
+                      DropdownMenuItem(value: 'Consumables', child: Text('Consumables')),
+                      DropdownMenuItem(value: 'Equipment', child: Text('Equipment')),
+                      DropdownMenuItem(value: 'Maintenance', child: Text('Maintenance')),
+                      DropdownMenuItem(value: 'Other', child: Text('Other')),
+                    ],
+                    onChanged: (v) => setState(() => _categoryFilter = v ?? 'all'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _mode,
+                    items: [
+                      const DropdownMenuItem(value: 'recent', child: Text('All (recent first)')),
+                      ...years.map((y) => DropdownMenuItem(value: y.toString(), child: Text(y.toString())))
+                    ],
+                    onChanged: (v) => setState(() { _mode = v ?? 'recent'; _page = 0; }),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: _selected.isEmpty ? null : () async {
+                    await context.read<UtilityProvider>().deleteBills(_selected.toList());
+                    setState(() => _selected.clear());
+                  },
+                  icon: const Icon(Icons.delete_sweep),
+                  label: const Text('Delete Selected'),
+                ),
+              ]);
+            },
+          ),
         ),
         // Analytics bar
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              const Text('Category analytics:'),
-              const SizedBox(width: 8),
-              DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _analyticsPeriod,
-                  items: const [
-                    DropdownMenuItem(value: 'month', child: Text('Month')),
-                    DropdownMenuItem(value: 'year', child: Text('Year')),
-                  ],
-                  onChanged: (v) => setState(() => _analyticsPeriod = v ?? 'month'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (_analyticsPeriod == 'month') ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                const Text('Category analytics:'),
                 DropdownButtonHideUnderline(
-                  child: DropdownButton<int>(
-                    value: _analyticsMonth,
-                    items: List.generate(12, (i) => i + 1).map((m) => DropdownMenuItem(value: m, child: Text('M$m'))).toList(),
-                    onChanged: (v) => setState(() => _analyticsMonth = v ?? DateTime.now().month),
+                  child: DropdownButton<String>(
+                    value: _analyticsPeriod,
+                    items: const [
+                      DropdownMenuItem(value: 'month', child: Text('Month')),
+                      DropdownMenuItem(value: 'year', child: Text('Year')),
+                    ],
+                    onChanged: (v) => setState(() => _analyticsPeriod = v ?? 'month'),
                   ),
                 ),
-                const SizedBox(width: 8),
-              ],
-              DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: _analyticsYear,
-                  items: (years.isEmpty ? [DateTime.now().year] : years).map((y) => DropdownMenuItem(value: y, child: Text(y.toString()))).toList(),
-                  onChanged: (v) => setState(() => _analyticsYear = v ?? DateTime.now().year),
+                if (_analyticsPeriod == 'month')
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: _analyticsMonth,
+                      items: List.generate(12, (i) => i + 1).map((m) => DropdownMenuItem(value: m, child: Text('M$m'))).toList(),
+                      onChanged: (v) => setState(() => _analyticsMonth = v ?? DateTime.now().month),
+                    ),
+                  ),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: _analyticsYear,
+                    items: (years.isEmpty ? [DateTime.now().year] : years).map((y) => DropdownMenuItem(value: y, child: Text(y.toString()))).toList(),
+                    onChanged: (v) => setState(() => _analyticsYear = v ?? DateTime.now().year),
+                  ),
                 ),
-              ),
-            ]),
+              ],
+            ),
             const SizedBox(height: 8),
             Wrap(spacing: 8, runSpacing: 8, children: [
               _CategoryTotalChip(label: 'Consumables', amount: analyticsTotals['Consumables'] ?? 0),

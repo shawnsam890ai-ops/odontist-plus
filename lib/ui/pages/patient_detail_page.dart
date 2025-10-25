@@ -671,13 +671,24 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       return;
     }
     // WhatsApp expects international format without leading '+' in wa.me URL
-    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) {
+    // Add default country code (assume India +91) when a local 10-digit number is given.
+    var digits = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (digits.startsWith('+')) digits = digits.substring(1);
+    // Heuristics: 10-digit Indian mobile or 11-digit with leading 0
+    if (RegExp(r'^0\d{10}$').hasMatch(digits)) {
+      // If it contains leading 0 + 10 digits, drop the 0
+      digits = digits.substring(1);
+    }
+    if (RegExp(r'^\d{10}$').hasMatch(digits)) {
+      // Prefix India country code by default
+      digits = '91$digits';
+    }
+    if (!RegExp(r'^\d{7,15}$').hasMatch(digits)) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid phone number')));
       return;
     }
-    final waUriWeb = Uri.parse('https://wa.me/$digits');
-    final waUriNative = Uri.parse('whatsapp://send?phone=$digits');
+  final waUriWeb = Uri.parse('https://wa.me/$digits');
+  final waUriNative = Uri.parse('whatsapp://send?phone=$digits');
     try {
       if (await canLaunchUrl(waUriNative)) {
         await launchUrl(waUriNative);

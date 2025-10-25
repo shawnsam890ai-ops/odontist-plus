@@ -493,23 +493,50 @@ class _LedgerSection extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              const Text('Payments Ledger', style: TextStyle(fontWeight: FontWeight.w600)),
-              const Spacer(),
-              OutlinedButton.icon(
-                onPressed: () => _showMakePayoutDialog(context),
-                icon: const Icon(Icons.payments_outlined),
-                label: const Text('Make Payment'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () {
-                  final csv = provider.exportCsv(entries);
-                  _showCsvDialog(context, csv);
-                },
-                icon: const Icon(Icons.download),
-                label: const Text('Export CSV'),
-              )
-            ]),
+            LayoutBuilder(builder: (ctx, cons) {
+              final narrow = cons.maxWidth < 520;
+              if (narrow) {
+                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Payments Ledger', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    OutlinedButton.icon(
+                      onPressed: () => _showMakePayoutDialog(context),
+                      icon: const Icon(Icons.payments_outlined),
+                      label: const Text('Make Payment'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        final csv = provider.exportCsv(entries);
+                        _showCsvDialog(context, csv);
+                      },
+                      icon: const Icon(Icons.download),
+                      label: const Text('Export CSV'),
+                    ),
+                  ]),
+                ]);
+              }
+              return Row(children: [
+                const Text('Payments Ledger', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                Row(children: [
+                  OutlinedButton.icon(
+                    onPressed: () => _showMakePayoutDialog(context),
+                    icon: const Icon(Icons.payments_outlined),
+                    label: const Text('Make Payment'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      final csv = provider.exportCsv(entries);
+                      _showCsvDialog(context, csv);
+                    },
+                    icon: const Icon(Icons.download),
+                    label: const Text('Export CSV'),
+                  ),
+                ]),
+              ]);
+            }),
             const SizedBox(height: 8),
             Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
               SizedBox(
