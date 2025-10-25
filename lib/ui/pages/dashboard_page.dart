@@ -130,38 +130,8 @@ class _DashboardPageState extends State<DashboardPage> {
           }),
           SafeArea(
             child: Stack(children: [
-              // License banner
-              Positioned(
-                top: 8,
-                left: 8,
-                right: 8,
-                child: Consumer<LicenseProvider>(builder: (ctx, lic, _) {
-                  final s = lic.state;
-                  String? label;
-                  Color bg = Colors.transparent;
-                  Color fg = Colors.black87;
-                  if (s.status == LicenseStatus.trial && s.trialValid) {
-                    label = 'Trial active: 3-day free access';
-                    bg = Colors.amber.shade100.withOpacity(0.9);
-                  } else if (!s.allowed) {
-                    label = 'Subscription required - access limited';
-                    bg = Colors.red.shade100.withOpacity(0.95);
-                    fg = Colors.red.shade900;
-                  } else if (s.status == LicenseStatus.active) {
-                    label = 'Subscription active';
-                    bg = Colors.green.shade100.withOpacity(0.85);
-                    fg = Colors.green.shade900;
-                  }
-                  if (label == null) return const SizedBox.shrink();
-                  return Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(24), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)]),
-                      child: Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: fg)),
-                    ),
-                  );
-                }),
-              ),
+              // (Banner removed) The license/trial banner was intentionally removed
+              // to keep the dashboard chrome minimal on request.
               // Main content without side menu
               Positioned.fill(child: _buildSectionContent()),
               // Bottom centered horizontal menu
@@ -299,27 +269,39 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: SingleChildScrollView(
-              controller: _menuScroll,
-              scrollDirection: Axis.horizontal,
-              physics: const ClampingScrollPhysics(),
-              child: Row(
-                children: [
-                  for (final s in DashboardSection.values)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: _BottomIconButton(
-                        icon: s.icon,
-                        assetName: s.assetName == null ? null : 'assets/images/${s.assetName}',
-                        label: s.label,
-                        selected: _section == s,
-                        showLabel: false,
-                        onTap: () => setState(() => _section = s),
+            child: LayoutBuilder(builder: (ctx, bc) {
+              // Show exactly 3 icons in the visible area; allow horizontal scroll
+              // to access remaining icons. Reserve some trailing space so the
+              // right-side toggle button doesn't overlap the last icon.
+              final visibleSlots = 3;
+              final reservedTrailing = 48.0; // space for toggle overlay
+              final slotWidth = (shellWidth - reservedTrailing) / visibleSlots;
+              return SingleChildScrollView(
+                controller: _menuScroll,
+                scrollDirection: Axis.horizontal,
+                physics: const ClampingScrollPhysics(),
+                child: Row(
+                  children: [
+                    for (final s in DashboardSection.values)
+                      SizedBox(
+                        width: slotWidth,
+                        child: Center(
+                          child: _BottomIconButton(
+                            icon: s.icon,
+                            assetName: s.assetName == null ? null : 'assets/images/${s.assetName}',
+                            label: s.label,
+                            selected: _section == s,
+                            showLabel: false,
+                            onTap: () => setState(() => _section = s),
+                          ),
+                        ),
                       ),
-                    ),
-                ],
-              ),
-            ),
+                    // trailing padding so last icon is not hidden under the toggle
+                    SizedBox(width: reservedTrailing),
+                  ],
+                ),
+              );
+            }),
           ),
         ),
         // Right-side scroll toggle button
@@ -1871,6 +1853,8 @@ class _DashboardPageState extends State<DashboardPage> {
     final chipTheme = baseTheme.chipTheme.copyWith(
       labelStyle: TextStyle(color: cs.onSurface),
     );
+    final media = MediaQuery.of(context);
+    final barHeight = context.scale(context.isPhone ? 96 : 110);
     return Theme(
       data: useWhite ? baseTheme.copyWith(textTheme: whiteTextTheme, chipTheme: chipTheme) : baseTheme,
       child: DefaultTextStyle.merge(
@@ -1879,7 +1863,11 @@ class _DashboardPageState extends State<DashboardPage> {
           data: IconTheme.of(context).copyWith(color: useWhite ? Colors.white70 : null),
           child: Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child: SingleChildScrollView(
+        // leave room at the bottom so the floating bottom menu doesn't overlap
+        // the content and cause RenderOverflow errors.
+        padding: EdgeInsets.only(bottom: media.padding.bottom + barHeight + 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 16),
         const Text('General configuration placeholders will appear here.'),
@@ -2009,14 +1997,15 @@ class _DashboardPageState extends State<DashboardPage> {
               },
               icon: const Icon(Icons.logout),
               label: const Text('Sign out'),
-            )
+            ),
           ],
-        )
-      ]),
-          ),
         ),
-      ),
-    );
+      ]),
+    ),
+  ),
+),
+),
+);
   }
 
   void _showBackgroundPicker(ThemeProvider themeProv) {
@@ -2593,21 +2582,37 @@ class _BottomIconButtonState extends State<_BottomIconButton> {
   @override
   void initState() {
     super.initState();
+    // Configure image assets (png/gif) asynchronously. _configureAssets
+    // will handle safe precaching only after verifying asset existence
     _configureAssets();
-    // Precache after first frame to avoid jank on first tap
-    WidgetsBinding.instance.addPostFrameCallback((_) => _precache());
   }
 
-  void _configureAssets() {
+  Future<void> _configureAssets() async {
     _pngPath = widget.assetName;
     _gifPath = null;
-    if (_pngPath != null) {
+    _pngProvider = null;
+    _gifProvider = null;
+    _hasGif = false;
+
+    if (_pngPath == null) return;
+
+    // Try to load the PNG first; if it's missing we'll fall back to GIF
+    try {
+      await rootBundle.load(_pngPath!);
       _pngProvider = AssetImage(_pngPath!);
-      final dot = _pngPath!.lastIndexOf('.');
-      final base = dot >= 0 ? _pngPath!.substring(0, dot) : _pngPath!;
-      _gifPath = '$base.gif';
-      _checkGifExists();
+    } catch (_) {
+      _pngProvider = null;
     }
+
+    final dot = _pngPath!.lastIndexOf('.');
+    final base = dot >= 0 ? _pngPath!.substring(0, dot) : _pngPath!;
+    _gifPath = '$base.gif';
+    await _checkGifExists();
+
+    // After we've determined which providers actually exist, precache
+    // only the available ones to avoid triggering missing-asset errors.
+    if (mounted) setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) => _precache());
   }
 
   Future<void> _checkGifExists() async {
@@ -2615,11 +2620,10 @@ class _BottomIconButtonState extends State<_BottomIconButton> {
     try {
       await rootBundle.load(_gifPath!);
       _gifProvider = AssetImage(_gifPath!);
-      if (mounted) setState(() => _hasGif = true);
-      // Precache gif after we know it exists
-      WidgetsBinding.instance.addPostFrameCallback((_) => _precache());
+      if (mounted) _hasGif = true;
     } catch (_) {
-      // Keep _hasGif false when asset doesn't exist
+      _hasGif = false;
+      _gifProvider = null;
     }
   }
 
@@ -2628,7 +2632,6 @@ class _BottomIconButtonState extends State<_BottomIconButton> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.assetName != widget.assetName) {
       _configureAssets();
-      WidgetsBinding.instance.addPostFrameCallback((_) => _precache());
     }
   }
 
@@ -2651,8 +2654,18 @@ class _BottomIconButtonState extends State<_BottomIconButton> {
 
   void _precache() {
     if (!mounted) return;
-    if (_pngProvider != null) precacheImage(_pngProvider!, context);
-    if (_hasGif && _gifProvider != null) precacheImage(_gifProvider!, context);
+    // Precache only providers that were confirmed to exist. Wrap in
+    // try/catch to avoid bubbling any asset load errors to the console.
+    try {
+      if (_pngProvider != null) {
+        precacheImage(_pngProvider!, context).catchError((_) {});
+      }
+      if (_hasGif && _gifProvider != null) {
+        precacheImage(_gifProvider!, context).catchError((_) {});
+      }
+    } catch (_) {
+      // swallow any unexpected precache errors
+    }
   }
 
   @override
