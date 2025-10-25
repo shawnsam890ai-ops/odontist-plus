@@ -8,6 +8,7 @@ import '../../providers/doctor_provider.dart';
 import '../../providers/appointment_provider.dart';
 import '../../models/appointment.dart' as appt;
 import '../pages/patient_detail_page.dart';
+import '../responsive/responsive.dart';
 
 class _StatusItem {
   final String label;
@@ -98,7 +99,12 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
           if (widget.showTitle) const SizedBox(height: 6),
           const Divider(height: 0.5),
           const SizedBox(height: 8),
-          Expanded(child: _appointmentsList(entries)),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: context.gutter / 2),
+              child: _appointmentsList(entries),
+            ),
+          ),
         ],
       ),
     );

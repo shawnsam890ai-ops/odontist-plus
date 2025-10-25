@@ -45,6 +45,10 @@ service cloud.firestore {
       match /lab_registry/{lid} {
         allow read, write: if isOwner(uid);
       }
+        // Allow the owner full read/write access to any nested subcollections under their user document
+        match /{document=**} {
+          allow read, write: if isOwner(uid);
+        }
     }
 
     // Default deny

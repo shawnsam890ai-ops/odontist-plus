@@ -32,6 +32,7 @@ import '../widgets/cases_overview_chart.dart';
 import '../widgets/revenue_trend_card.dart';
 import '../widgets/patient_overview_card.dart';
 import '../widgets/upcoming_schedule_panel.dart';
+import '../responsive/responsive.dart';
 import '../widgets/upcoming_schedule_compact.dart';
 import '../widgets/upcoming_appointment_widget.dart';
 import '../widgets/app_logo.dart';
@@ -269,8 +270,8 @@ class _DashboardPageState extends State<DashboardPage> {
     final cs = Theme.of(context).colorScheme;
     final media = MediaQuery.of(context);
     final maxWidth = media.size.width;
-    final shellWidth = maxWidth.clamp(0, 560).toDouble();
-  final barHeight = 96.0; // allow 64px icon + vertical padding without overflow
+  final shellWidth = maxWidth.clamp(0, context.isPhone ? 420 : 620).toDouble();
+  final barHeight = context.scale(context.isPhone ? 80 : 96); // adaptive height for menu bar
 
     return Positioned(
       left: (maxWidth - shellWidth) / 2,
@@ -946,39 +947,42 @@ class _DashboardPageState extends State<DashboardPage> {
         ]),
         const SizedBox(height: 16),
         Expanded(
-          child: Card(
-            child: Column(
-              children: [
-                const ListTile(title: Text('Inventory Items')),
-                const Divider(height: 1),
-                Expanded(
-                  child: inventoryProvider.items.isEmpty
-                      ? const Center(child: Text('No items'))
-                      : ListView.builder(
-                          itemCount: inventoryProvider.items.length,
-                          itemBuilder: (c, i) {
-                            final item = inventoryProvider.items[i];
-                            return ListTile(
-                              title: Text(item.name),
-                              subtitle: Text('Qty: ${item.quantity}  Unit: ₹${item.unitCost.toStringAsFixed(0)}  Total: ₹${item.total.toStringAsFixed(0)}'),
-                              trailing: PopupMenuButton<String>(
-                                onSelected: (v) {
-                                  if (v == 'edit') _showEditInventoryDialog(item.id, item.name, item.quantity, item.unitCost);
-                                  if (v == 'delete') inventoryProvider.removeItem(item.id);
-                                },
-                                itemBuilder: (_) => [
-                                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                                  const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                )
-              ],
+          child: context.responsiveCenter(
+            maxWidth: 1100,
+            child: Card(
+              child: Column(
+                children: [
+                  const ListTile(title: Text('Inventory Items')),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: inventoryProvider.items.isEmpty
+                        ? const Center(child: Text('No items'))
+                        : ListView.builder(
+                            itemCount: inventoryProvider.items.length,
+                            itemBuilder: (c, i) {
+                              final item = inventoryProvider.items[i];
+                              return ListTile(
+                                title: Text(item.name),
+                                subtitle: Text('Qty: ${item.quantity}  Unit: ₹${item.unitCost.toStringAsFixed(0)}  Total: ₹${item.total.toStringAsFixed(0)}'),
+                                trailing: PopupMenuButton<String>(
+                                  onSelected: (v) {
+                                    if (v == 'edit') _showEditInventoryDialog(item.id, item.name, item.quantity, item.unitCost);
+                                    if (v == 'delete') inventoryProvider.removeItem(item.id);
+                                  },
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(value: 'edit', child: Text('Edit')),
+                                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
             ),
           ),
-        )
+        ),
       ]),
     );
   }
@@ -1005,7 +1009,9 @@ class _DashboardPageState extends State<DashboardPage> {
         ]),
         const SizedBox(height: 16),
         Expanded(
-          child: Card(
+          child: context.responsiveCenter(
+            maxWidth: 1100,
+            child: Card(
             clipBehavior: Clip.antiAlias,
             child: services.isEmpty
                 ? const Center(child: Text('No utilities added'))
@@ -1038,22 +1044,29 @@ class _DashboardPageState extends State<DashboardPage> {
                       );
                     },
                   ),
+            ),
           ),
         ),
         const SizedBox(height: 16),
         // Payments history panel (scrollable, filterable, exportable)
         Expanded(
-          child: Card(
+          child: context.responsiveCenter(
+            maxWidth: 1100,
+            child: Card(
             clipBehavior: Clip.antiAlias,
             child: _UtilityPaymentsHistoryPanel(),
+            ),
           ),
         ),
         const SizedBox(height: 16),
         // Bills history
         Expanded(
-          child: Card(
+          child: context.responsiveCenter(
+            maxWidth: 1100,
+            child: Card(
             clipBehavior: Clip.antiAlias,
             child: _BillsHistoryPanel(),
+            ),
           ),
         ),
       ]),
@@ -1308,7 +1321,9 @@ class _DashboardPageState extends State<DashboardPage> {
         ]),
         const SizedBox(height: 16),
         Expanded(
-          child: Card(
+          child: context.responsiveCenter(
+            maxWidth: 1100,
+            child: Card(
             child: labs.isEmpty
                 ? const Center(child: Text('No labs registered'))
                 : ListView.separated(
@@ -1413,6 +1428,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       );
                     },
                   ),
+            ),
           ),
         ),
       ]),
@@ -1435,7 +1451,9 @@ class _DashboardPageState extends State<DashboardPage> {
         ]),
         const SizedBox(height: 16),
         Expanded(
-          child: Card(
+          child: context.responsiveCenter(
+            maxWidth: 1100,
+            child: Card(
             child: meds.isEmpty
                 ? const Center(child: Text('No medicines added'))
                 : ListView.separated(
@@ -1474,6 +1492,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       );
                     },
                   ),
+            ),
           ),
         ),
       ]),

@@ -4,6 +4,7 @@ import '../../providers/patient_provider.dart';
 import '../../providers/doctor_provider.dart';
 import '../../core/enums.dart';
 import 'package:provider/provider.dart';
+import '../responsive/responsive.dart';
 
 class PatientListPage extends StatefulWidget {
   static const routeName = '/patients';
@@ -192,21 +193,50 @@ class _PatientListPageState extends State<PatientListPage> {
           ),
         ),
       ),
-      body: filtered.isEmpty
-          ? const Center(child: Text('No patients found'))
-          : ListView.separated(
-              itemCount: filtered.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final p = filtered[index];
-                return ListTile(
-                  title: Text('${p.displayNumber}. ${p.name}'),
-                  subtitle: Text(p.phone),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).pushNamed(PatientDetailPage.routeName, arguments: {'patientId': p.id}),
-                );
-              },
+      body: Builder(builder: (context) {
+        if (filtered.isEmpty) return const Center(child: Text('No patients found'));
+        final cols = context.gridColumns(phone: 1, tablet: 2, desktop: 3, wide: 4);
+        final cardPad = EdgeInsets.all(context.gap);
+        return context.responsiveCenter(
+          child: GridView.builder(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: cols,
+              crossAxisSpacing: context.gap,
+              mainAxisSpacing: context.gap,
+              childAspectRatio: context.isPhone ? 3.2 : 3.8,
             ),
+            itemCount: filtered.length,
+            itemBuilder: (ctx, i) {
+              final p = filtered[i];
+              return Card(
+                elevation: 1,
+                child: InkWell(
+                  onTap: () => Navigator.of(context).pushNamed(PatientDetailPage.routeName, arguments: {'patientId': p.id}),
+                  child: Padding(
+                    padding: cardPad,
+                    child: Row(children: [
+                      CircleAvatar(child: Text(p.name.isNotEmpty ? p.name[0].toUpperCase() : '?')),
+                      SizedBox(width: context.gap),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('${p.displayNumber}. ${p.name}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 4),
+                            Text(p.phone, style: Theme.of(context).textTheme.bodySmall),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right),
+                    ]),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      }),
     );
   }
 }

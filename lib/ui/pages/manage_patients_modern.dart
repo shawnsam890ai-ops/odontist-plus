@@ -10,6 +10,7 @@ import '../../providers/doctor_provider.dart';
 import '../../core/enums.dart';
 import '../../models/patient.dart';
 import '../../models/treatment_session.dart';
+import '../responsive/responsive.dart';
 import '../pages/add_patient_page.dart';
 import '../pages/patient_detail_page.dart';
 
@@ -144,13 +145,24 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
         // Advanced filters row (responsive wrap)
         _advancedFiltersRow(doctorProvider),
         const SizedBox(height: 12),
-        if (!stacked) Expanded(child: listWidget) else listWidget,
+        if (!stacked)
+          Expanded(
+            child: context.responsiveCenter(
+              maxWidth: 1200,
+              child: listWidget,
+            ),
+          )
+        else
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: context.gutter),
+            child: listWidget,
+          ),
       ]);
 
       if (widget.embedded) {
         return content;
       }
-      return Padding(padding: const EdgeInsets.all(16), child: content);
+      return Padding(padding: EdgeInsets.all(context.gap + 8), child: content);
     });
   }
 

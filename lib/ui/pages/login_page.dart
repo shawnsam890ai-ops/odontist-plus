@@ -92,11 +92,11 @@ class _LoginPageState extends State<LoginPage> {
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
+          constraints: const BoxConstraints(maxWidth: 440),
           child: Card(
             elevation: 4,
             child: Padding(
-              padding: const EdgeInsets.all(24.0),
+              padding: EdgeInsets.all(Theme.of(context).visualDensity.baseSizeAdjustment.dy.abs() > 0 ? 20 : 24),
               child: Form(
                 key: _formKey,
                 child: Column(

@@ -101,7 +101,17 @@ class DentalClinicApp extends StatelessWidget {
             title: 'Odontist Plus',
             theme: theme.lightTheme,
             darkTheme: theme.darkTheme,
-            themeMode: ThemeMode.system,
+            // Force light mode regardless of the device's system theme
+            themeMode: ThemeMode.light,
+            builder: (context, child) {
+              // Clamp text scale to keep UI readable on very small/large screens
+              final mq = MediaQuery.of(context);
+              final clampedScale = mq.textScaleFactor.clamp(0.90, 1.30);
+              return MediaQuery(
+                data: mq.copyWith(textScaleFactor: clampedScale),
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
             onGenerateRoute: AppRouter.generate,
             initialRoute: SplashPage.routeName,
           );
