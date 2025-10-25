@@ -272,12 +272,18 @@ class _DashboardPageState extends State<DashboardPage> {
     final media = MediaQuery.of(context);
     final maxWidth = media.size.width;
   final shellWidth = maxWidth.clamp(0, context.isPhone ? 420 : 620).toDouble();
-  final barHeight = context.scale(context.isPhone ? 80 : 96); // adaptive height for menu bar
+  // Ensure the bar is tall enough to contain the 64x64 icon circle + padding.
+  // On phones we need slightly more vertical space to avoid overflow when
+  // labels are hidden or when system navigation insets are present.
+  final barHeight = context.scale(context.isPhone ? 96 : 110); // adaptive height for menu bar
 
     return Positioned(
-      left: (maxWidth - shellWidth) / 2,
-      right: (maxWidth - shellWidth) / 2,
-      bottom: 12,
+  left: (maxWidth - shellWidth) / 2,
+  right: (maxWidth - shellWidth) / 2,
+  // Use a small fixed offset so the menu sits close to the bottom of the
+  // screen. We intentionally avoid adding media.padding.bottom here so
+  // the menu appears lower (as requested) while keeping a small gap.
+  bottom: 8,
       child: Stack(children: [
         // Shell container with horizontal scroll
         Container(
@@ -890,25 +896,57 @@ class _DashboardPageState extends State<DashboardPage> {
     final todaysStr = '₹${_shortNumber(todaysRevenue)}';
     final monthlyStr = '₹${_shortNumber(monthlyRevenue)}';
     final totalStr = '₹${_shortNumber(revenueProvider.total)}';
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Revenue', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 16),
-        Wrap(spacing: 16, runSpacing: 16, children: [
-         _DashCard(title: "Today's Revenue", value: todaysStr, icon: Icons.today, width: 220, valueColor: todaysRevenue >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/money_bag.png'), minHeight: 130),
-         _DashCard(title: 'Monthly Revenue', value: monthlyStr, icon: Icons.calendar_month, width: 220, valueColor: monthlyRevenue >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/coin_gear.png'), minHeight: 130),
-         _DashCard(title: 'Total Revenue', value: totalStr, icon: Icons.account_balance_wallet, width: 220, valueColor: revenueProvider.total >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/envelope_cash.png'), minHeight: 130),
-        ]),
-        const SizedBox(height: 16),
-        Expanded(
-          child: Card(
-            clipBehavior: Clip.antiAlias,
-            child: _RevenueListPanel(),
+    return LayoutBuilder(builder: (context, constraints) {
+      final media = MediaQuery.of(context);
+      final w = media.size.width;
+      // Treat narrow phones as width < 420
+      final isPhone = w < 420;
+      final header = Text('Revenue', style: Theme.of(context).textTheme.headlineSmall);
+      final tiles = Wrap(spacing: 16, runSpacing: 16, children: [
+        _DashCard(title: "Today's Revenue", value: todaysStr, icon: Icons.today, width: 220, valueColor: todaysRevenue >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/money_bag.png'), minHeight: 130),
+        _DashCard(title: 'Monthly Revenue', value: monthlyStr, icon: Icons.calendar_month, width: 220, valueColor: monthlyRevenue >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/coin_gear.png'), minHeight: 130),
+        _DashCard(title: 'Total Revenue', value: totalStr, icon: Icons.account_balance_wallet, width: 220, valueColor: revenueProvider.total >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/envelope_cash.png'), minHeight: 130),
+      ]);
+
+      if (isPhone) {
+        // On phones, allow the whole section to scroll and make the revenue list
+        // shrink-wrapped so the outer scroll handles scrolling. Add bottom padding
+        // to avoid overlap with bottom menu.
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              header,
+              const SizedBox(height: 16),
+              tiles,
+              const SizedBox(height: 16),
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: _RevenueListPanel(shrinkWrap: true),
+              ),
+              SizedBox(height: media.padding.bottom + 96),
+            ]),
           ),
-        )
-      ]),
-    );
+        );
+      }
+
+      // Larger screens keep the split layout with an Expanded panel
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          header,
+          const SizedBox(height: 16),
+          tiles,
+          const SizedBox(height: 16),
+          Expanded(
+            child: Card(
+              clipBehavior: Clip.antiAlias,
+              child: _RevenueListPanel(),
+            ),
+          )
+        ]),
+      );
+    });
   }
 
   // Add Clinic section removed
@@ -992,13 +1030,18 @@ class _DashboardPageState extends State<DashboardPage> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
   Text('Utility & Bills', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 12),
-        Row(children: [
-          ElevatedButton.icon(onPressed: _showAddUtilityDialog, icon: const Icon(Icons.add), label: const Text('Add Utility')),
-          const SizedBox(width: 12),
-          FilledButton.tonalIcon(onPressed: _showAddBillDialog, icon: const Icon(Icons.shopping_cart_checkout), label: const Text('Add Bill')),
-          const SizedBox(width: 12),
-          Text('Services: ${services.length}')
-        ]),
+        // Use Wrap so buttons/labels flow to next line on narrow screens instead
+        // of causing a horizontal overflow.
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            ElevatedButton.icon(onPressed: _showAddUtilityDialog, icon: const Icon(Icons.add), label: const Text('Add Utility')),
+            FilledButton.tonalIcon(onPressed: _showAddBillDialog, icon: const Icon(Icons.shopping_cart_checkout), label: const Text('Add Bill')),
+            Text('Services: ${services.length}'),
+          ],
+        ),
         const SizedBox(height: 16),
         // Scrollable content area containing all cards below
         Expanded(
@@ -2676,6 +2719,9 @@ class _BottomIconButtonState extends State<_BottomIconButton> {
 
 // ================= Revenue & Expenses Panel =================
 class _RevenueListPanel extends StatefulWidget {
+  final bool shrinkWrap;
+  const _RevenueListPanel({Key? key, this.shrinkWrap = false}) : super(key: key);
+
   @override
   State<_RevenueListPanel> createState() => _RevenueListPanelState();
 }
@@ -2815,58 +2861,68 @@ class _RevenueListPanelState extends State<_RevenueListPanel> {
         child: Text('Filtered total: ₹${total.toStringAsFixed(0)}', style: TextStyle(fontWeight: FontWeight.w600, color: color)),
       ),
       const Divider(height: 1),
-      Expanded(
-        child: list.isEmpty
-            ? const Center(child: Text('No entries'))
-              : ListView.separated(
-                itemCount: list.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, i) {
-                  final e = list[i];
-                  final dateStr = '${e.date.year}-${e.date.month.toString().padLeft(2, '0')}-${e.date.day.toString().padLeft(2, '0')}';
-                  final amtColor = e.amount >= 0 ? Colors.green : Colors.red;
-                  final displayDesc = _prettyRevenueDescription(context, e);
-                  return ListTile(
-                    dense: true,
-                    title: Text(displayDesc, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    // Show only date; hide internal UUIDs
-                    subtitle: Text(dateStr),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${e.amount >= 0 ? '+' : ''}₹${e.amount.toStringAsFixed(0)}',
-                          style: TextStyle(color: amtColor, fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          tooltip: 'Delete entry',
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () async {
-                            final ok = await showDialog<bool>(
-                              context: context,
-                              builder: (_) => AlertDialog(
-                                title: const Text('Delete entry?'),
-                                content: Text('Delete this ${e.amount >= 0 ? 'income' : 'expense'} entry from $dateStr (₹${e.amount.toStringAsFixed(0)})?'),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                                  FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-                                ],
-                              ),
-                            );
-                            if (ok == true) {
-                              await context.read<RevenueProvider>().removeById(e.id);
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Entry deleted')));
-                            }
-                          },
-                        ),
-                      ],
+      // Build the list either shrink-wrapped (for embedding in a scrollable)
+      // or expanded to fill available space on larger layouts.
+      Builder(builder: (ctx) {
+        Widget listWidget;
+        if (list.isEmpty) {
+          listWidget = const Center(child: Text('No entries'));
+        } else {
+          listWidget = ListView.separated(
+            shrinkWrap: widget.shrinkWrap,
+            physics: widget.shrinkWrap ? const NeverScrollableScrollPhysics() : null,
+            itemCount: list.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, i) {
+              final e = list[i];
+              final dateStr = '${e.date.year}-${e.date.month.toString().padLeft(2, '0')}-${e.date.day.toString().padLeft(2, '0')}';
+              final amtColor = e.amount >= 0 ? Colors.green : Colors.red;
+              final displayDesc = _prettyRevenueDescription(context, e);
+              return ListTile(
+                dense: true,
+                title: Text(displayDesc, maxLines: 1, overflow: TextOverflow.ellipsis),
+                // Show only date; hide internal UUIDs
+                subtitle: Text(dateStr),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${e.amount >= 0 ? '+' : ''}₹${e.amount.toStringAsFixed(0)}',
+                      style: TextStyle(color: amtColor, fontWeight: FontWeight.w700),
                     ),
-                  );
-                },
-              ),
-      ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: 'Delete entry',
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Delete entry?'),
+                            content: Text('Delete this ${e.amount >= 0 ? 'income' : 'expense'} entry from $dateStr (₹${e.amount.toStringAsFixed(0)})?'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+                            ],
+                          ),
+                        );
+                        if (ok == true) {
+                          await context.read<RevenueProvider>().removeById(e.id);
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Entry deleted')));
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        }
+
+        if (widget.shrinkWrap) return listWidget;
+        return Expanded(child: listWidget);
+      }),
     ]);
   }
 
@@ -4237,16 +4293,23 @@ class _UtilityPaymentsHistoryPanelState extends State<_UtilityPaymentsHistoryPan
       Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
         child: Row(children: [
-          const Text('Payments History', style: TextStyle(fontWeight: FontWeight.w600)),
+          // Make the title flexible so dropdown + icon can fit to the right
+          Flexible(
+            child: Text('Payments History', style: const TextStyle(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
           const Spacer(),
           DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _mode,
-              items: [
-                const DropdownMenuItem(value: 'recent', child: Text('All (recent first)')),
-                ...years.map((y) => DropdownMenuItem(value: y.toString(), child: Text(y.toString())))
-              ],
-              onChanged: (v) => setState(() { _mode = v ?? 'recent'; _page = 0; }),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 200),
+              child: DropdownButton<String>(
+                isDense: true,
+                value: _mode,
+                items: [
+                  const DropdownMenuItem(value: 'recent', child: Text('All (recent first)')),
+                  ...years.map((y) => DropdownMenuItem(value: y.toString(), child: Text(y.toString())))
+                ],
+                onChanged: (v) => setState(() { _mode = v ?? 'recent'; _page = 0; }),
+              ),
             ),
           ),
           const SizedBox(width: 8),

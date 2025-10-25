@@ -295,8 +295,8 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
             final gap = narrow ? 2.0 : 5.0;
             final minChip = 24.0;
             final maxChip = 44.0;
-            // Aggressive safety margin to avoid right-edge overflow
-            const extraMargin = 32.0;
+            // Aggressive safety margin to avoid right-edge overflow (increased to 56 to eliminate 13px overflow)
+            final extraMargin = narrow ? 56.0 : 32.0;
             final avail = maxW - (arrowW * 2) - extraMargin;
             double chipW = (avail - gap * (count - 1)) / count;
             // If calculation yields too-large chips (due to negative avail), clamp down
@@ -318,15 +318,22 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                 ),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                    child: Center(
+                    padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const ClampingScrollPhysics(),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           for (int i = 0; i < days.length; i++) ...[
                             _dayChip(days[i], selected, todayKey, chipW),
                             if (i != days.length - 1) SizedBox(width: gap),
-                          ]
+                          ],
+                          // Trailing spacer to ensure the horizontal scroll content
+                          // never pushes past the right edge (avoids small overflows
+                          // on some device densities). Use extraMargin so it scales
+                          // with the arrow/button sizes computed above.
+                          SizedBox(width: extraMargin),
                         ],
                       ),
                     ),

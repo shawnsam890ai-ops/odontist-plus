@@ -258,19 +258,46 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
         onTap: () => Navigator.of(context).pushNamed(PatientDetailPage.routeName, arguments: {'patientId': p.id}),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              CircleAvatar(backgroundColor: _primary.withOpacity(0.12), child: Icon(Icons.person, color: _secondary)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(p.name, style: TextStyle(fontWeight: FontWeight.w700, color: _text)),
-                  const SizedBox(height: 2),
-                  Text('MRN: ${p.displayNumber.toString().padLeft(4, '0')} • Next Appt: ${_nextApptLabel(p)}', style: TextStyle(color: _secondary)),
-                ]),
-              ),
-              Row(mainAxisSize: MainAxisSize.min, children: [
+          child: LayoutBuilder(builder: (ctx, cons) {
+            const double avatarSize = 40.0;
+            final bool narrow = cons.maxWidth < 380; // very small phones
+            final nameStyle = TextStyle(
+              fontWeight: FontWeight.w700,
+              color: _text,
+              fontSize: narrow ? 13 : 14,
+            );
+            final metaStyle = TextStyle(
+              color: _secondary,
+              fontSize: narrow ? 12 : 13,
+            );
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top row: avatar, name (expanded), actions
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: avatarSize,
+                      height: avatarSize,
+                      child: CircleAvatar(
+                        backgroundColor: _primary.withOpacity(0.12),
+                        child: Icon(Icons.person, color: _secondary),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        p.name,
+                        style: nameStyle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: false,
+                      ),
+                    ),
+                    // Trailing actions (fixed-size icons)
+                    Row(mainAxisSize: MainAxisSize.min, children: [
                 IconButton(
                   tooltip: 'WhatsApp',
                   iconSize: 22,
@@ -318,9 +345,31 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
                     PopupMenuItem(value: 'delete', child: Text('Delete Patient')),
                   ],
                 ),
-              ]),
-            ],
-          ),
+                    ]),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                // Second line: MRN aligned under the text (indent to avatar + gap)
+                Padding(
+                  padding: const EdgeInsets.only(top: 0),
+                  child: Row(
+                    children: [
+                      SizedBox(width: avatarSize + 12),
+                      Expanded(
+                        child: Text(
+                          'MRN: ${p.displayNumber.toString().padLeft(4, '0')}',
+                          style: metaStyle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: false,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }),
         ),
       ),
     );

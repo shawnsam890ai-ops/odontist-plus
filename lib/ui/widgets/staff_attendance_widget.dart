@@ -165,11 +165,13 @@ class _StaffAttendanceWidgetState extends State<StaffAttendanceWidget> {
     }
 
   final days = _daysInMonth();
-  // Calendar layout parameters
-  const double cellHeight = 40.0; // keep height
-  const double cellWidth = 56.0;  // widen tiles (rectangular)
-  const double spacing = 4.0;     // keep same spacing
-  final double gridWidth = cellWidth * 7 + spacing * 6;
+  // Base calendar layout parameters (will adapt to available width)
+  const double cellHeight = 40.0; // desired height
+  const double desiredCellWidth = 56.0;  // desired width (will shrink on narrow screens)
+  const double spacing = 4.0;     // spacing between day tiles
+  // gridWidth and cellWidth will be finalized by LayoutBuilder below
+  double gridWidth = desiredCellWidth * 7 + spacing * 6;
+  double cellWidth = desiredCellWidth;
     double present = 0, absent = 0;
     if (prov != null && prov.staffNames.contains(staffName)) {
       present = prov.presentCount(staffName, _month.year, _month.month) / 2.0;
@@ -186,7 +188,15 @@ class _StaffAttendanceWidgetState extends State<StaffAttendanceWidget> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
-        child: Column(
+        child: LayoutBuilder(builder: (context, constraints) {
+          // If the card's available width is smaller than our desired grid, shrink cell width to fit
+          final maxW = constraints.maxWidth.isFinite ? constraints.maxWidth : gridWidth;
+          if (maxW < gridWidth) {
+            gridWidth = maxW;
+            cellWidth = (gridWidth - spacing * 6) / 7;
+          }
+
+          return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Optional header (when embedding inside a larger staff page, hide to avoid duplicate controls)
@@ -290,7 +300,8 @@ class _StaffAttendanceWidgetState extends State<StaffAttendanceWidget> {
             Text('Total Present: ${present.toStringAsFixed(present % 1 == 0 ? 0 : 1)} days,  Total Absent: ${absent.toStringAsFixed(absent % 1 == 0 ? 0 : 1)} days',
                 style: const TextStyle(fontWeight: FontWeight.w600)),
           ],
-        ),
+        );
+          }),
       ),
     );
   }

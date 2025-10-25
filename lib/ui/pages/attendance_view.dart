@@ -200,7 +200,7 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeInOut,
             margin: const EdgeInsets.symmetric(vertical: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
               color: isSelected ? Theme.of(context).colorScheme.primary.withOpacity(0.06) : Theme.of(context).colorScheme.surface,
               border: Border.all(color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).dividerColor.withOpacity(0.12)),
@@ -208,45 +208,44 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
             ),
                           child: Row(children: [
               Expanded(
-                child: Text(name, style: TextStyle(fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, color: isSelected ? Theme.of(context).colorScheme.primary : null)),
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, color: isSelected ? Theme.of(context).colorScheme.primary : null),
+                ),
               ),
-              Row(children: [
-                IconButton(
-                  tooltip: 'View Details',
-                  icon: const Icon(Icons.info_outline, size: 18),
-                  onPressed: () => _showViewStaffDialog(member),
+              // Make actions responsive: wrap onto next line if space is tight
+              Flexible(
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 6,
+                  runSpacing: 2,
+                  children: [
+                    _miniIconButton(icon: const Icon(Icons.info_outline, size: 18), tooltip: 'View Details', onTap: () => _showViewStaffDialog(member)),
+                    _miniIconButton(icon: const Icon(Icons.edit, size: 18), tooltip: 'Edit', onTap: () => _showEditStaffDialog(member)),
+                    _miniIconButton(icon: const Icon(Icons.payments, size: 18), tooltip: 'Record Payment', onTap: () => _showRecordPaymentDialog(member.name)),
+                    _miniIconButton(icon: Icon(Icons.chat, size: 18, color: primaryPhone.isEmpty ? null : Colors.green), tooltip: 'WhatsApp', onTap: primaryPhone.isEmpty ? null : () => _launchWhatsApp(primaryPhone)),
+                    _miniIconButton(icon: const Icon(Icons.call, size: 18), tooltip: 'Call', onTap: primaryPhone.isEmpty ? null : () => _launchCall(primaryPhone)),
+                    _miniIconButton(icon: const Icon(Icons.delete_outline, size: 18), tooltip: 'Delete', onTap: () => _confirmDeleteStaff(provider, member.name)),
+                  ],
                 ),
-                              IconButton(
-                                tooltip: 'Edit',
-                                icon: const Icon(Icons.edit, size: 18),
-                                onPressed: () => _showEditStaffDialog(member),
-                              ),
-                              IconButton(
-                                tooltip: 'Record Payment',
-                                icon: const Icon(Icons.payments, size: 18),
-                                onPressed: () => _showRecordPaymentDialog(member.name),
-                              ),
-                IconButton(
-                  tooltip: 'WhatsApp',
-                  icon: Icon(Icons.chat, size: 18, color: primaryPhone.isEmpty ? null : Colors.green),
-                  onPressed: primaryPhone.isEmpty ? null : () => _launchWhatsApp(primaryPhone),
-                ),
-                IconButton(
-                  tooltip: 'Call',
-                  icon: const Icon(Icons.call, size: 18),
-                  onPressed: primaryPhone.isEmpty ? null : () => _launchCall(primaryPhone),
-                ),
-                              IconButton(
-                                tooltip: 'Delete',
-                                icon: const Icon(Icons.delete_outline, size: 18),
-                                onPressed: () => _confirmDeleteStaff(provider, member.name),
-                              ),
-              ])
+              ),
             ]),
           ),
         );
       },
     );
+  }
+
+  Widget _miniIconButton({required Widget icon, String? tooltip, VoidCallback? onTap}) {
+    final btn = InkResponse(
+      onTap: onTap,
+      customBorder: const CircleBorder(),
+      radius: 18,
+      child: Padding(padding: const EdgeInsets.all(4), child: icon),
+    );
+    return tooltip == null ? btn : Tooltip(message: tooltip, child: btn);
   }
 
   List<DateTime> _daysInMonth() {
@@ -429,20 +428,28 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Row(children: [
-                              const Text('Payment Date: '),
-                              TextButton(
-                                onPressed: () async {
-                                  final now = DateTime.now();
-                                  final picked = await showDatePicker(context: ctx, initialDate: paymentDueDate ?? now, firstDate: DateTime(now.year - 1), lastDate: DateTime(now.year + 2));
-                                  if (picked != null) {
-                                    paymentDueDate = picked;
-                                    (ctx as Element).markNeedsBuild();
-                                  }
-                                },
-                                child: Text(paymentDueDate == null
-                                    ? 'Select date'
-                                    : '${paymentDueDate!.day.toString().padLeft(2, '0')}/${paymentDueDate!.month.toString().padLeft(2, '0')}/${paymentDueDate!.year}'),
-                              )
+                              Flexible(
+                                child: Text('Payment Date:', overflow: TextOverflow.ellipsis, style: Theme.of(ctx).textTheme.bodyMedium),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: TextButton(
+                                    onPressed: () async {
+                                      final now = DateTime.now();
+                                      final picked = await showDatePicker(context: ctx, initialDate: paymentDueDate ?? now, firstDate: DateTime(now.year - 1), lastDate: DateTime(now.year + 2));
+                                      if (picked != null) {
+                                        paymentDueDate = picked;
+                                        (ctx as Element).markNeedsBuild();
+                                      }
+                                    },
+                                    child: Text(paymentDueDate == null
+                                        ? 'Select date'
+                                        : '${paymentDueDate!.day.toString().padLeft(2, '0')}/${paymentDueDate!.month.toString().padLeft(2, '0')}/${paymentDueDate!.year}'),
+                                  ),
+                                ),
+                              ),
                             ]),
                           )
                         ]),

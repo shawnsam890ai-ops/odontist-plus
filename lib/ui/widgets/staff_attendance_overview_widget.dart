@@ -148,17 +148,28 @@ class _StaffAttendanceOverviewWidgetState extends State<StaffAttendanceOverviewW
           physics: const BouncingScrollPhysics(),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            const Text('Staff Attendance', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            const Spacer(),
-            IconButton(onPressed: () { if (staffNames.isNotEmpty) setState(() { _staffIdx = (_staffIdx - 1 + staffNames.length) % staffNames.length; }); }, icon: const Icon(Icons.chevron_left)),
+            Expanded(child: const Text('Staff Attendance', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+            IconButton(
+              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+              padding: EdgeInsets.zero,
+              onPressed: () { if (staffNames.isNotEmpty) setState(() { _staffIdx = (_staffIdx - 1 + staffNames.length) % staffNames.length; }); }, 
+              icon: const Icon(Icons.chevron_left, size: 20),
+              tooltip: 'Previous staff',
+            ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(color: const Color(0xFF8B27E2), borderRadius: BorderRadius.circular(20), boxShadow: [
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: const Color(0xFF8B27E2), borderRadius: BorderRadius.circular(16), boxShadow: [
                 BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 6, offset: const Offset(0,2))
               ]),
-              child: Text(staffName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              child: Text(staffName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
             ),
-            IconButton(onPressed: () { if (staffNames.isNotEmpty) setState(() { _staffIdx = (_staffIdx + 1) % staffNames.length; }); }, icon: const Icon(Icons.chevron_right)),
+            IconButton(
+              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+              padding: EdgeInsets.zero,
+              onPressed: () { if (staffNames.isNotEmpty) setState(() { _staffIdx = (_staffIdx + 1) % staffNames.length; }); }, 
+              icon: const Icon(Icons.chevron_right, size: 20),
+              tooltip: 'Next staff',
+            ),
           ]),
           const SizedBox(height: 8),
           Center(

@@ -83,7 +83,7 @@ class DentalIdCard extends StatelessWidget {
             ),
             // Main content
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -151,20 +151,20 @@ class DentalIdCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   // Staff name
                   Text(
                     name.toUpperCase(),
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF2C3E50),
-                      letterSpacing: 0.3,
+                      letterSpacing: 0.2,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   // Staff details
                   if (age != null || sex != null || bloodGroup != null) ...[
                     Row(
