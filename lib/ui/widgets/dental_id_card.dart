@@ -36,7 +36,8 @@ class DentalIdCard extends StatelessWidget {
 
     return LayoutBuilder(builder: (context, constraints) {
       final maxW = constraints.maxWidth.isFinite ? constraints.maxWidth : baseWidth;
-      final targetW = (width ?? maxW).clamp(240.0, 360.0);
+      // Allow larger cards on desktop; parent width is increased in attendance_view
+      final targetW = (width ?? maxW).clamp(280.0, 520.0);
       final targetH = targetW / aspect;
       return Center(
         child: SizedBox(

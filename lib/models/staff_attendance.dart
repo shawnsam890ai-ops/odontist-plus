@@ -26,4 +26,20 @@ class StaffAttendanceEntry {
 
   /// Returns true if entry is unmarked
   bool get isNone => morningPresent == null && eveningPresent == null;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'staffName': staffName,
+        'date': date.toIso8601String(),
+        'morningPresent': morningPresent,
+        'eveningPresent': eveningPresent,
+      };
+
+  factory StaffAttendanceEntry.fromJson(Map<String, dynamic> j) => StaffAttendanceEntry(
+        id: (j['id'] as String?),
+        staffName: (j['staffName'] as String?) ?? '',
+        date: DateTime.tryParse((j['date'] as String?) ?? '') ?? DateTime.now(),
+        morningPresent: j['morningPresent'] as bool?,
+        eveningPresent: j['eveningPresent'] as bool?,
+      );
 }

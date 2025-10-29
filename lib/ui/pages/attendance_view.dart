@@ -10,7 +10,8 @@ import '../../services/notification_service.dart';
 import '../../core/upi_launcher.dart' as upi;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import '../widgets/staff_attendance_widget.dart';
+// import '../widgets/staff_attendance_widget.dart'; // replaced by overview variant below
+import '../widgets/staff_attendance_overview_widget.dart';
 import '../widgets/dental_id_card.dart';
 import '../../providers/holidays_provider.dart';
 // Removed patient / session imports after extracting schedule panel to dashboard
@@ -25,7 +26,8 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
   DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
   String? _staff;
   final _monthlySalaryController = TextEditingController();
-  bool _staffCollapsed = false;
+  // Collapsed state unused in the new vertical layout; retaining for potential future use is unnecessary.
+  // bool _staffCollapsed = false;
   int _staffIdx = 0;
   bool _staffToggleMode = true; // false = list (scroll), true = single with chevrons (default)
 
@@ -46,16 +48,8 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
       });
     }
     final selectedStaff = _staff;
-
-    final calendarCard = selectedStaff == null
-        ? const Center(child: Text('Add staff to view attendance'))
-        : Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              // Increased only the parent container height; attendance widget unchanged
-              child: SizedBox(height: 420, child: StaffAttendanceWidget(showHeader: false, selectedStaff: selectedStaff, showMonthToggle: true)),
-            ),
-          );
+    // Use the same compact overview calendar design as the dashboard overview
+  final Widget calendarCard = StaffAttendanceOverviewWidget(interactive: true);
     
     Widget staffPanel({required bool boundedHeight}) {
       return Card(
@@ -85,34 +79,20 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
       );
     }
 
-    Widget calendarPanel() => Card(clipBehavior: Clip.antiAlias, child: calendarCard);
+  Widget calendarPanel() => calendarCard; // already returns a Card internally
 
     return LayoutBuilder(builder: (context, constraints) {
-      final width = constraints.maxWidth;
-      final isNarrow = width < 1040;
+  // Single vertical layout; width-based branching no longer required
 
-      // Narrow layout: allow vertical scrolling so tall content (like the
-      // staff ID card) can expand without causing an overflow.
-      if (isNarrow) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(children: [
-            // No fixed height; let the panel grow and the whole page scroll.
-            staffPanel(boundedHeight: false),
-            const SizedBox(height: 12),
-            calendarPanel(),
-          ]),
-        );
-      }
-
-      // Wide layout: keep side-by-side layout and let the parent (scaffold)
-      // constrain height — no vertical scroll here by default.
-      return Padding(
+      // Use a single vertical layout for both narrow and wide: ID card above,
+      // attendance calendar (overview design) below.
+      return SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          SizedBox(width: _staffCollapsed ? 52 : 260, child: staffPanel(boundedHeight: true)),
-          const SizedBox(width: 16),
-          Expanded(child: calendarCard),
+        child: Column(children: [
+          // Let the staff card grow; vertical scroll will handle overflow
+          staffPanel(boundedHeight: false),
+          const SizedBox(height: 12),
+          calendarPanel(),
         ]),
       );
     });
@@ -299,6 +279,7 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
+        final scrollCtrl = ScrollController();
         return Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
@@ -324,8 +305,10 @@ class _MonthlyAttendanceViewState extends State<MonthlyAttendanceView> {
                 child: Form(
                   key: formKey,
                   child: Scrollbar(
+                    controller: scrollCtrl,
                     thumbVisibility: true,
                     child: SingleChildScrollView(
+                      controller: scrollCtrl,
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         TextFormField(
                           controller: nameCtrl,
@@ -1356,10 +1339,14 @@ class _StaffViewContentState extends State<_StaffViewContent> {
     final salaryRec = widget.salaryRec;
     return Padding(
       padding: const EdgeInsets.all(20),
-      child: Scrollbar(
-        thumbVisibility: true,
-        child: SingleChildScrollView(
-          child: Column(
+      child: Builder(builder: (context) {
+        final scrollCtrl = ScrollController();
+        return Scrollbar(
+          controller: scrollCtrl,
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+            controller: scrollCtrl,
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
@@ -1408,7 +1395,8 @@ class _StaffViewContentState extends State<_StaffViewContent> {
             ],
           ),
         ),
-      ),
+      );
+      }),
     );
   }
 

@@ -84,6 +84,8 @@ class DentalClinicApp extends StatelessWidget {
             final rev = ctx.read<RevenueProvider>();
             pats.registerRevenueProvider(rev);
             ctx.read<StaffAttendanceProvider>().registerRevenueProvider(rev);
+            // Load staff + attendance from Firestore
+            ctx.read<StaffAttendanceProvider>().ensureLoaded();
             // Holidays provider currently standalone; no cross-registration required
             // Load persisted doctors and ledger
             ctx.read<DoctorProvider>().load();

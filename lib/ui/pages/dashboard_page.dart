@@ -86,6 +86,7 @@ class _DashboardPageState extends State<DashboardPage> {
   // Always full-screen; provide a bottom-centered menu with a hide toggle
   bool _menuHidden = false;
   final ScrollController _menuScroll = ScrollController();
+  final ScrollController _managePatientsScroll = ScrollController();
 
   @override
   void initState() {
@@ -99,6 +100,7 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void dispose() {
     _menuScroll.dispose();
+    _managePatientsScroll.dispose();
     super.dispose();
   }
 
@@ -645,7 +647,7 @@ class _DashboardPageState extends State<DashboardPage> {
             _LargePanel(
               title: '',
               interactive: false,
-              child: const SizedBox(height: 420, child: StaffAttendanceOverviewWidget()),
+              child: SizedBox(height: 420, child: StaffAttendanceOverviewWidget(interactive: false)),
             ),
           ] else ...[
             // Wide: two columns; right column is vertical Upcoming Schedule
@@ -663,7 +665,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       title: '',
                       interactive: false,
                       // Match the total height of the metrics stack so bottoms align
-                      child: const SizedBox(height: _metricsTotalH, child: StaffAttendanceOverviewWidget()),
+                      child: SizedBox(height: _metricsTotalH, child: StaffAttendanceOverviewWidget(interactive: false)),
                     ),
                   ),
                 ]),
@@ -848,8 +850,10 @@ class _DashboardPageState extends State<DashboardPage> {
         // Always allow vertical scrolling for the Manage Patients section so
         // long lists remain accessible on phones and small screens.
         return Scrollbar(
+          controller: _managePatientsScroll,
           thumbVisibility: true,
           child: SingleChildScrollView(
+            controller: _managePatientsScroll,
             padding: EdgeInsets.zero,
             child: const ManagePatientsModernBody(embedded: true),
           ),
@@ -2734,6 +2738,14 @@ class _BottomIconButtonState extends State<_BottomIconButton> {
 
   Future<void> _checkGifExists() async {
     if (_gifPath == null) return;
+    // Avoid web 404 logs by skipping existence checks for asset keys with spaces
+    // or percent encodings; those often trigger double-encoding on web. In such
+    // cases we simply disable GIF support and use the PNG/static icon.
+    if (_gifPath!.contains(' ') || _gifPath!.contains('%')) {
+      _hasGif = false;
+      _gifProvider = null;
+      return;
+    }
     try {
       await rootBundle.load(_gifPath!);
       _gifProvider = AssetImage(_gifPath!);

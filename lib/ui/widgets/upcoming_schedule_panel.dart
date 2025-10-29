@@ -87,10 +87,8 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _monthHeader(),
-          const SizedBox(height: 4),
-          if (widget.showDoctorFilter) _doctorFilterRow(),
-          if (widget.showDoctorFilter) const SizedBox(height: 4),
-          _sevenDayStrip(),
+          const SizedBox(height: 8),
+          _combinedDoctorAndDateStrip(),
           const SizedBox(height: 8),
           _statusFilters(),
           const SizedBox(height: 8),
@@ -146,82 +144,93 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
           builder: (context, constraints) {
             final narrow = constraints.maxWidth.isFinite && constraints.maxWidth < 380;
             final arrowSize = narrow ? 32.0 : 36.0;
-            return Row(
-              children: [
-                // Left area: previous chevron
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      constraints: BoxConstraints.tightFor(width: arrowSize, height: arrowSize),
-                      padding: EdgeInsets.zero,
-                      tooltip: 'Previous month',
-                      onPressed: () => setState(() => _selectedDay = DateTime(m.year, m.month - 1, m.day)),
-                      icon: const Icon(Icons.chevron_left, size: 20),
-                    ),
-                  ),
-                ),
-                // Center area: month label (true centered)
-                Expanded(
-                  flex: 2,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(6),
-                    onTap: () async {
-                      final now = DateTime.now();
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDay,
-                        firstDate: DateTime(now.year - 3),
-                        lastDate: DateTime(now.year + 3),
-                      );
-                      if (picked != null) setState(() => _selectedDay = picked);
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Text(
-                        monthLabel,
-                        textAlign: TextAlign.center,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  // Left area: previous chevron
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        constraints: BoxConstraints.tightFor(width: arrowSize, height: arrowSize),
+                        padding: EdgeInsets.zero,
+                        tooltip: 'Previous month',
+                        onPressed: () => setState(() => _selectedDay = DateTime(m.year, m.month - 1, m.day)),
+                        icon: const Icon(Icons.chevron_left, size: 20, color: Colors.white),
                       ),
                     ),
                   ),
-                ),
-                // Right area: Today (icon on narrow) + next chevron
-                Expanded(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      if (narrow)
+                  // Center area: month label (true centered)
+                  Expanded(
+                    flex: 2,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () async {
+                        final now = DateTime.now();
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _selectedDay,
+                          firstDate: DateTime(now.year - 3),
+                          lastDate: DateTime(now.year + 3),
+                        );
+                        if (picked != null) setState(() => _selectedDay = picked);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          monthLabel,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Right area: Today (icon on narrow) + next chevron
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (narrow)
+                          IconButton(
+                            constraints: BoxConstraints.tightFor(width: arrowSize, height: arrowSize),
+                            padding: EdgeInsets.zero,
+                            tooltip: 'Today',
+                            onPressed: () => setState(() => _selectedDay = DateTime.now()),
+                            icon: const Icon(Icons.calendar_today_outlined, size: 18, color: Colors.white),
+                          )
+                        else
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                              minimumSize: const Size(0, 0),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            onPressed: () => setState(() => _selectedDay = DateTime.now()),
+                            child: const Text('Today', overflow: TextOverflow.ellipsis),
+                          ),
                         IconButton(
                           constraints: BoxConstraints.tightFor(width: arrowSize, height: arrowSize),
                           padding: EdgeInsets.zero,
-                          tooltip: 'Today',
-                          onPressed: () => setState(() => _selectedDay = DateTime.now()),
-                          icon: const Icon(Icons.calendar_today_outlined, size: 18),
-                        )
-                      else
-                        TextButton(
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                            minimumSize: const Size(0, 0),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          onPressed: () => setState(() => _selectedDay = DateTime.now()),
-                          child: const Text('Today', overflow: TextOverflow.ellipsis),
+                          tooltip: 'Next month',
+                          onPressed: () => setState(() => _selectedDay = DateTime(m.year, m.month + 1, m.day)),
+                          icon: const Icon(Icons.chevron_right, size: 20, color: Colors.white),
                         ),
-                      IconButton(
-                        constraints: BoxConstraints.tightFor(width: arrowSize, height: arrowSize),
-                        padding: EdgeInsets.zero,
-                        tooltip: 'Next month',
-                        onPressed: () => setState(() => _selectedDay = DateTime(m.year, m.month + 1, m.day)),
-                        icon: const Icon(Icons.chevron_right, size: 20),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             );
           },
         );
@@ -253,27 +262,8 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
         return s;
       }
 
-      Widget _doctorFilterRow() {
+      Widget _combinedDoctorAndDateStrip() {
         final doctorProvider = context.read<DoctorProvider>();
-        return Row(children: [
-          const Spacer(),
-          SizedBox(
-            width: 240,
-            child: DropdownButtonFormField<String?>(
-              value: _doctorId,
-              decoration: const InputDecoration(labelText: 'Doctor'),
-              items: [
-                const DropdownMenuItem<String?>(value: null, child: Text('All doctors')),
-                for (final d in doctorProvider.doctors)
-                  DropdownMenuItem<String?>(value: d.id, child: Text(d.name)),
-              ],
-              onChanged: (v) => setState(() => _doctorId = v),
-            ),
-          ),
-        ]);
-      }
-
-      Widget _sevenDayStrip() {
         final selected = _selectedDay;
         final today = DateTime.now();
         final todayKey = DateTime(today.year, today.month, today.day);
@@ -284,73 +274,115 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
           final d = start.add(Duration(days: i));
           return DateTime(d.year, d.month, d.day);
         });
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            // Adaptive sizing to avoid overflow on narrow tiles
-            const count = 5;
-            final maxW = constraints.maxWidth.isFinite ? constraints.maxWidth : 0.0;
-            // More aggressive compacting for narrow widths
-            final narrow = maxW < 420;
-            final arrowW = narrow ? 20.0 : 28.0;
-            final gap = narrow ? 2.0 : 5.0;
-            final minChip = 24.0;
-            final maxChip = 44.0;
-            // Aggressive safety margin to avoid right-edge overflow (increased to 56 to eliminate 13px overflow)
-            final extraMargin = narrow ? 56.0 : 32.0;
-            final avail = maxW - (arrowW * 2) - extraMargin;
-            double chipW = (avail - gap * (count - 1)) / count;
-            // If calculation yields too-large chips (due to negative avail), clamp down
-            if (chipW.isNaN || chipW.isInfinite) chipW = minChip;
-            chipW = chipW.clamp(minChip, maxChip);
-            // Slightly larger height to prevent 1-3px overflow on very compact fonts/densities
-            final stripH = narrow ? 54.0 : 60.0;
-            return SizedBox(
-              height: stripH,
-              child: Row(children: [
-                SizedBox(
-                  width: arrowW,
-                  child: IconButton(
-                    constraints: BoxConstraints.tightFor(width: arrowW, height: 36),
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.chevron_left, size: 20),
-                    onPressed: () => setState(() => _selectedDay = _selectedDay.subtract(const Duration(days: 5))),
-                  ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const ClampingScrollPhysics(),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (int i = 0; i < days.length; i++) ...[
-                            _dayChip(days[i], selected, todayKey, chipW),
-                            if (i != days.length - 1) SizedBox(width: gap),
-                          ],
-                          // Trailing spacer to ensure the horizontal scroll content
-                          // never pushes past the right edge (avoids small overflows
-                          // on some device densities). Use extraMargin so it scales
-                          // with the arrow/button sizes computed above.
-                          SizedBox(width: extraMargin),
+        
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+              width: 1.5,
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              // Doctor selector (if enabled)
+              if (widget.showDoctorFilter)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(children: [
+                    const Spacer(),
+                    SizedBox(
+                      width: 240,
+                      child: DropdownButtonFormField<String?>(
+                        value: _doctorId,
+                        decoration: const InputDecoration(labelText: 'Doctor'),
+                        items: [
+                          const DropdownMenuItem<String?>(value: null, child: Text('All doctors')),
+                          for (final d in doctorProvider.doctors)
+                            DropdownMenuItem<String?>(value: d.id, child: Text(d.name)),
                         ],
+                        onChanged: (v) => setState(() => _doctorId = v),
                       ),
                     ),
-                  ),
+                  ]),
                 ),
-                SizedBox(
-                  width: arrowW,
-                  child: IconButton(
-                    constraints: BoxConstraints.tightFor(width: arrowW, height: 36),
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.chevron_right, size: 20),
-                    onPressed: () => setState(() => _selectedDay = _selectedDay.add(const Duration(days: 5))),
+              // Date strip with outline
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                    width: 1.0,
                   ),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ]),
-            );
-          },
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    const count = 5;
+                    final maxW = constraints.maxWidth.isFinite ? constraints.maxWidth : 0.0;
+                    final narrow = maxW < 420;
+                    final arrowW = narrow ? 20.0 : 28.0;
+                    final gap = narrow ? 2.0 : 5.0;
+                    final minChip = 24.0;
+                    final maxChip = 44.0;
+                    final extraMargin = narrow ? 56.0 : 32.0;
+                    final avail = maxW - (arrowW * 2) - extraMargin;
+                    double chipW = (avail - gap * (count - 1)) / count;
+                    if (chipW.isNaN || chipW.isInfinite) chipW = minChip;
+                    chipW = chipW.clamp(minChip, maxChip);
+                    final stripH = narrow ? 54.0 : 60.0;
+                    
+                    return SizedBox(
+                      height: stripH,
+                      child: Row(children: [
+                        SizedBox(
+                          width: arrowW,
+                          child: IconButton(
+                            constraints: BoxConstraints.tightFor(width: arrowW, height: 36),
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(Icons.chevron_left, size: 20),
+                            onPressed: () => setState(() => _selectedDay = _selectedDay.subtract(const Duration(days: 5))),
+                          ),
+                        ),
+                        Expanded(
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                physics: const ClampingScrollPhysics(),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    for (int i = 0; i < days.length; i++) ...[
+                                      _dayChip(days[i], selected, todayKey, chipW),
+                                      if (i != days.length - 1) SizedBox(width: gap),
+                                    ],
+                                    SizedBox(width: extraMargin),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: arrowW,
+                          child: IconButton(
+                            constraints: BoxConstraints.tightFor(width: arrowW, height: 36),
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(Icons.chevron_right, size: 20),
+                            onPressed: () => setState(() => _selectedDay = _selectedDay.add(const Duration(days: 5))),
+                          ),
+                        ),
+                      ]),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         );
       }
 
@@ -380,6 +412,13 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
                     fontWeight: FontWeight.w600,
                     color: isSel ? Theme.of(context).colorScheme.primary : Colors.grey[600],
                   ),
+                ),
+                SizedBox(height: compact ? 1.5 : 3),
+                // Divider line between day and date
+                Container(
+                  width: width * 0.5,
+                  height: 1,
+                  color: (isSel ? Theme.of(context).colorScheme.primary : Colors.grey[400])?.withOpacity(0.4),
                 ),
                 SizedBox(height: compact ? 1.5 : 3),
                 Container(

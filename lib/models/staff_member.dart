@@ -27,6 +27,38 @@ class StaffMember {
     this.bloodGroup,
     this.preferredPaymentDay,
   }) : phoneNumbers = phoneNumbers ?? [];
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'age': age,
+        'sex': sex,
+        'address': address,
+        'phoneNumbers': phoneNumbers,
+        'emergencyContact': emergencyContact?.toJson(),
+        'foodAllergy': foodAllergy,
+        'medicalConditions': medicalConditions,
+        'medications': medications,
+        'bloodGroup': bloodGroup,
+        'preferredPaymentDay': preferredPaymentDay,
+      };
+
+  factory StaffMember.fromJson(Map<String, dynamic> j) => StaffMember(
+        id: (j['id'] as String?) ?? '',
+        name: (j['name'] as String?) ?? '',
+        age: (j['age'] as num?)?.toInt(),
+        sex: j['sex'] as String?,
+        address: j['address'] as String?,
+        phoneNumbers: (j['phoneNumbers'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
+        emergencyContact: j['emergencyContact'] == null
+            ? null
+            : EmergencyContact.fromJson(j['emergencyContact'] as Map<String, dynamic>),
+        foodAllergy: j['foodAllergy'] as String?,
+        medicalConditions: j['medicalConditions'] as String?,
+        medications: j['medications'] as String?,
+        bloodGroup: j['bloodGroup'] as String?,
+        preferredPaymentDay: (j['preferredPaymentDay'] as num?)?.toInt(),
+      );
 }
 
 class EmergencyContact {
@@ -35,4 +67,18 @@ class EmergencyContact {
   String phone;
   String? address;
   EmergencyContact({required this.name, required this.relation, required this.phone, this.address});
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'relation': relation,
+        'phone': phone,
+        'address': address,
+      };
+
+  factory EmergencyContact.fromJson(Map<String, dynamic> j) => EmergencyContact(
+        name: (j['name'] as String?) ?? '',
+        relation: (j['relation'] as String?) ?? '',
+        phone: (j['phone'] as String?) ?? '',
+        address: j['address'] as String?,
+      );
 }

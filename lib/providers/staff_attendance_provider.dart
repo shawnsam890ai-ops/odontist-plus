@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/staff_attendance.dart';
 import '../models/staff_member.dart';
 import 'revenue_provider.dart';
@@ -10,6 +12,10 @@ class StaffAttendanceProvider with ChangeNotifier {
   final List<StaffMember> _staff = [];
   final Map<String, Map<String, MonthlySalaryRecord>> _salaryRecords = {}; // staffName -> { 'YYYY-MM' : record }
   RevenueProvider? _revenue;
+  bool _loaded = false;
+  bool _listeningStaff = false;
+  bool _listeningAttendance = false;
+  bool _listeningSalary = false;
 
   List<StaffAttendanceEntry> forDay(DateTime day) => _entries
       .where((e) => e.date.year == day.year && e.date.month == day.month && e.date.day == day.day)
@@ -39,9 +45,125 @@ class StaffAttendanceProvider with ChangeNotifier {
     _revenue = revenue;
   }
 
+  // Firestore base refs -------------------------------------------------------
+  DocumentReference<Map<String, dynamic>>? _userDoc() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return null;
+    return FirebaseFirestore.instance.collection('users').doc(uid);
+  }
+
+  Future<void> ensureLoaded() async {
+    if (_loaded) return;
+    try {
+      final base = _userDoc();
+      if (base == null) {
+        _loaded = true; // Nothing to load when signed-out
+        return;
+      }
+      // Pull once
+      final staffSnap = await base.collection('staff').get();
+      _staff
+        ..clear()
+        ..addAll(staffSnap.docs.map((d) => StaffMember.fromJson(d.data())));
+
+      final attSnap = await base.collection('staff_attendance').get();
+      _entries
+        ..clear()
+        ..addAll(attSnap.docs.map((d) => StaffAttendanceEntry.fromJson(d.data())));
+
+      final salSnap = await base.collection('staff_salary_records').get();
+      _salaryRecords.clear();
+      for (final d in salSnap.docs) {
+        final data = d.data();
+        final staffName = (data['staffName'] as String?) ?? '';
+        if (staffName.isEmpty) continue;
+        final year = (data['year'] as num?)?.toInt() ?? 0;
+        final month = (data['month'] as num?)?.toInt() ?? 0;
+        if (year == 0 || month == 0) continue;
+        final rec = MonthlySalaryRecord(
+          year: year,
+          month: month,
+          totalSalary: (data['totalSalary'] as num?)?.toDouble() ?? 0,
+          paid: (data['paid'] as bool?) ?? false,
+          paidAmount: (data['paidAmount'] as num?)?.toDouble() ?? 0,
+          deduction: (data['deduction'] as num?)?.toDouble() ?? 0,
+          paymentDate: data['paymentDate'] == null ? null : DateTime.tryParse(data['paymentDate'] as String),
+          paymentMode: data['paymentMode'] as String?,
+          calendarEventId: data['calendarEventId'] as String?,
+        );
+        _salaryRecords.putIfAbsent(staffName, () => {});
+        final key = '$year-${month.toString().padLeft(2, '0')}';
+        _salaryRecords[staffName]![key] = rec;
+      }
+
+      // Start realtime listeners
+      _startListeners(base);
+    } catch (_) {}
+    _loaded = true;
+    notifyListeners();
+  }
+
+  void _startListeners(DocumentReference<Map<String, dynamic>> base) {
+    if (!_listeningStaff) {
+      _listeningStaff = true;
+      base.collection('staff').snapshots().listen((snap) {
+        _staff
+          ..clear()
+          ..addAll(snap.docs.map((d) => StaffMember.fromJson(d.data())));
+        notifyListeners();
+      });
+    }
+    if (!_listeningAttendance) {
+      _listeningAttendance = true;
+      base.collection('staff_attendance').snapshots().listen((snap) {
+        _entries
+          ..clear()
+          ..addAll(snap.docs.map((d) => StaffAttendanceEntry.fromJson(d.data())));
+        notifyListeners();
+      });
+    }
+    if (!_listeningSalary) {
+      _listeningSalary = true;
+      base.collection('staff_salary_records').snapshots().listen((snap) {
+        _salaryRecords.clear();
+        for (final d in snap.docs) {
+          final data = d.data();
+          final staffName = (data['staffName'] as String?) ?? '';
+          if (staffName.isEmpty) continue;
+          final year = (data['year'] as num?)?.toInt() ?? 0;
+          final month = (data['month'] as num?)?.toInt() ?? 0;
+          if (year == 0 || month == 0) continue;
+          final rec = MonthlySalaryRecord(
+            year: year,
+            month: month,
+            totalSalary: (data['totalSalary'] as num?)?.toDouble() ?? 0,
+            paid: (data['paid'] as bool?) ?? false,
+            paidAmount: (data['paidAmount'] as num?)?.toDouble() ?? 0,
+            deduction: (data['deduction'] as num?)?.toDouble() ?? 0,
+            paymentDate: data['paymentDate'] == null ? null : DateTime.tryParse(data['paymentDate'] as String),
+            paymentMode: data['paymentMode'] as String?,
+            calendarEventId: data['calendarEventId'] as String?,
+          );
+          _salaryRecords.putIfAbsent(staffName, () => {});
+          final key = '$year-${month.toString().padLeft(2, '0')}';
+          _salaryRecords[staffName]![key] = rec;
+        }
+        notifyListeners();
+      });
+    }
+  }
+
   void _ensureNameExists(String name) {
     if (_staff.any((s) => s.name == name)) return;
     _staff.add(StaffMember(id: DateTime.now().microsecondsSinceEpoch.toString(), name: name));
+    // Mirror to Firestore (minimal doc with id+name)
+    try {
+      final base = _userDoc();
+      if (base != null) {
+        final s = _staff.firstWhere((e) => e.name == name);
+        base.collection('staff').doc(s.id).set(s.toJson());
+      }
+    } catch (_) {}
   }
 
   void addStaffDetailed(StaffMember member) {
@@ -49,6 +171,13 @@ class StaffAttendanceProvider with ChangeNotifier {
     // avoid duplicates by name
     if (_staff.any((s) => s.name == member.name)) return;
     _staff.add(member);
+    // Firestore mirror
+    try {
+      final base = _userDoc();
+      if (base != null) {
+        base.collection('staff').doc(member.id).set(member.toJson());
+      }
+    } catch (_) {}
     notifyListeners();
   }
 
@@ -62,6 +191,13 @@ class StaffAttendanceProvider with ChangeNotifier {
     if (_staff.any((s) => s.name == newName && s.id != updated.id)) return;
     final oldName = _staff[idx].name;
     _staff[idx] = updated;
+    // Firestore mirror
+    try {
+      final base = _userDoc();
+      if (base != null) {
+        base.collection('staff').doc(updated.id).set(updated.toJson());
+      }
+    } catch (_) {}
     // If name changed migrate attendance + salary records to new name key
     if (oldName != newName) {
       // Rebuild attendance entries with new name (since staffName is final)
@@ -74,6 +210,27 @@ class StaffAttendanceProvider with ChangeNotifier {
       if (_salaryRecords.containsKey(oldName)) {
         _salaryRecords[newName] = _salaryRecords.remove(oldName)!;
       }
+      // Update attendance/salary docs staffName field in Firestore (best-effort, async fire-and-forget)
+      Future.microtask(() async {
+        try {
+          final base = _userDoc();
+          if (base != null) {
+            final q = await base.collection('staff_attendance').where('staffName', isEqualTo: oldName).get();
+            final batch = FirebaseFirestore.instance.batch();
+            for (final d in q.docs) {
+              batch.set(d.reference, {...d.data(), 'staffName': newName});
+            }
+            await batch.commit();
+            // Update salary records staffName
+            final q2 = await base.collection('staff_salary_records').where('staffName', isEqualTo: oldName).get();
+            final batch2 = FirebaseFirestore.instance.batch();
+            for (final d in q2.docs) {
+              batch2.set(d.reference, {...d.data(), 'staffName': newName});
+            }
+            await batch2.commit();
+          }
+        } catch (_) {}
+      });
     }
     notifyListeners();
   }
@@ -89,6 +246,33 @@ class StaffAttendanceProvider with ChangeNotifier {
     _salaryRecords.remove(name);
     // Remove any revenue entries for this staff member's salaries
     _revenue?.removeByDescriptionPrefix('Staff Salary: $name ');
+    // Firestore mirror (delete staff and related docs)
+    Future.microtask(() async {
+      try {
+        final base = _userDoc();
+        if (base != null) {
+          // Delete staff doc (lookup by name if id unknown)
+          final qStaff = await base.collection('staff').where('name', isEqualTo: name).limit(1).get();
+          if (qStaff.docs.isNotEmpty) {
+            await qStaff.docs.first.reference.delete();
+          }
+          // Delete attendance docs
+          final qAtt = await base.collection('staff_attendance').where('staffName', isEqualTo: name).get();
+          final batch = FirebaseFirestore.instance.batch();
+          for (final d in qAtt.docs) {
+            batch.delete(d.reference);
+          }
+          await batch.commit();
+          // Delete salary records
+          final qSal = await base.collection('staff_salary_records').where('staffName', isEqualTo: name).get();
+          final batch2 = FirebaseFirestore.instance.batch();
+          for (final d in qSal.docs) {
+            batch2.delete(d.reference);
+          }
+          await batch2.commit();
+        }
+      } catch (_) {}
+    });
     notifyListeners();
   }
 
@@ -154,12 +338,14 @@ class StaffAttendanceProvider with ChangeNotifier {
   void setMonthlySalary(String staffName, int year, int month, double amount) {
     final rec = ensureSalaryRecord(staffName, year, month);
     rec.totalSalary = amount;
+    _saveSalaryRecord(staffName, rec);
     notifyListeners();
   }
 
   void setMonthlyDeduction(String staffName, int year, int month, double deduction) {
     final rec = ensureSalaryRecord(staffName, year, month);
     rec.deduction = deduction;
+    _saveSalaryRecord(staffName, rec);
     notifyListeners();
   }
 
@@ -179,6 +365,7 @@ class StaffAttendanceProvider with ChangeNotifier {
       _revenue!.removeByDescription(desc);
       _revenue!.addRevenue(patientId: 'staff', description: desc, amount: -amt);
     }
+    _saveSalaryRecord(staffName, rec);
     notifyListeners();
   }
 
@@ -189,6 +376,7 @@ class StaffAttendanceProvider with ChangeNotifier {
     rec.paymentDate = null;
     final desc = 'Staff Salary: $staffName $year-${month.toString().padLeft(2,'0')}';
     _revenue?.removeByDescription(desc);
+    _saveSalaryRecord(staffName, rec);
     notifyListeners();
   }
 
@@ -213,6 +401,7 @@ class StaffAttendanceProvider with ChangeNotifier {
   void setPaymentDate(String staffName, int year, int month, DateTime date) {
     final rec = ensureSalaryRecord(staffName, year, month);
     rec.paymentDate = date;
+    _saveSalaryRecord(staffName, rec);
     notifyListeners();
     // Best-effort background calendar update: if we're already signed in and
     // have an event id, update the event time/details to match the new date.
@@ -236,6 +425,7 @@ class StaffAttendanceProvider with ChangeNotifier {
   void setPaymentMode(String staffName, int year, int month, String mode) {
     final rec = ensureSalaryRecord(staffName, year, month);
     rec.paymentMode = mode;
+    _saveSalaryRecord(staffName, rec);
     notifyListeners();
   }
 
@@ -250,24 +440,30 @@ class StaffAttendanceProvider with ChangeNotifier {
       // none -> full present
       existing.setFull(true);
       _entries.add(existing);
+      _saveAttendance(existing);
     } else if (existing.isFullPresent) {
       // full present -> morning present only
       existing.morningPresent = true;
       existing.eveningPresent = null;
+      _saveAttendance(existing);
     } else if (existing.morningPresent == true && existing.eveningPresent == null) {
       // morning present only -> evening present only (representing morning absent/afternoon present)
       existing.morningPresent = null;
       existing.eveningPresent = true;
+      _saveAttendance(existing);
     } else if (existing.eveningPresent == true && existing.morningPresent == null) {
       // evening present only -> full absent
       existing.morningPresent = false;
       existing.eveningPresent = false;
+      _saveAttendance(existing);
     } else if (existing.isFullAbsent) {
       // full absent -> remove (none)
       _entries.remove(existing);
+      _deleteAttendance(existing);
     } else {
       // fallback: remove
       _entries.remove(existing);
+      _deleteAttendance(existing);
     }
     notifyListeners();
   }
@@ -280,6 +476,58 @@ class StaffAttendanceProvider with ChangeNotifier {
         orElse: () => StaffAttendanceEntry(staffName: '__none__', date: day));
     if (match.staffName == '__none__') return [null, null];
     return [match.morningPresent, match.eveningPresent];
+  }
+
+  /// Explicitly set morning/evening attendance for a given day.
+  /// Use true for present, false for absent, null for holiday/none.
+  void setSplit(String staffName, DateTime day, {bool? morning, bool? evening}) {
+    _ensureNameExists(staffName);
+    final existing = _entries.firstWhere(
+        (e) => e.staffName == staffName && e.date.year == day.year && e.date.month == day.month && e.date.day == day.day,
+        orElse: () => StaffAttendanceEntry(staffName: staffName, date: day));
+    if (!_entries.contains(existing)) {
+      _entries.add(existing);
+    }
+    existing.morningPresent = morning;
+    existing.eveningPresent = evening;
+    _saveAttendance(existing);
+    notifyListeners();
+  }
+
+  Future<void> _saveAttendance(StaffAttendanceEntry e) async {
+    try {
+      final base = _userDoc();
+      if (base == null) return;
+      await base.collection('staff_attendance').doc(e.id).set(e.toJson());
+    } catch (_) {}
+  }
+
+  Future<void> _deleteAttendance(StaffAttendanceEntry e) async {
+    try {
+      final base = _userDoc();
+      if (base == null) return;
+      await base.collection('staff_attendance').doc(e.id).delete();
+    } catch (_) {}
+  }
+
+  Future<void> _saveSalaryRecord(String staffName, MonthlySalaryRecord rec) async {
+    try {
+      final base = _userDoc();
+      if (base == null) return;
+      final key = '${rec.year}-${rec.month.toString().padLeft(2, '0')}';
+      await base.collection('staff_salary_records').doc('${staffName}_$key').set({
+            'staffName': staffName,
+            'year': rec.year,
+            'month': rec.month,
+            'totalSalary': rec.totalSalary,
+            'paid': rec.paid,
+            'paidAmount': rec.paidAmount,
+            'deduction': rec.deduction,
+            'paymentDate': rec.paymentDate?.toIso8601String(),
+            'paymentMode': rec.paymentMode,
+            'calendarEventId': rec.calendarEventId,
+          });
+    } catch (_) {}
   }
 }
 

@@ -8,7 +8,8 @@ import '../../providers/staff_attendance_provider.dart';
 /// This widget is intentionally separate from the interactive staff page widget
 /// so structural changes in one do not affect the other.
 class StaffAttendanceOverviewWidget extends StatefulWidget {
-  const StaffAttendanceOverviewWidget({super.key});
+  final bool interactive; // when true, allow marking via bottom sheet
+  const StaffAttendanceOverviewWidget({super.key, this.interactive = false});
   @override
   State<StaffAttendanceOverviewWidget> createState() => _StaffAttendanceOverviewWidgetState();
 }
@@ -216,9 +217,25 @@ class _StaffAttendanceOverviewWidgetState extends State<StaffAttendanceOverviewW
             height: gridHeight,
             child: _buildCalendarViewOnly(days, staffName, gridWidth: gridWidth, cellWidth: cellWidth, cellHeight: cellHeight, spacing: spacing, prov: prov),
           ),
-          const SizedBox(height: 8),
-          Text('Total Present: ${present.toStringAsFixed(present % 1 == 0 ? 0 : 1)} days,  Total Absent: ${absent.toStringAsFixed(absent % 1 == 0 ? 0 : 1)} days',
-              style: const TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 14),
+          Center(
+            child: SizedBox(
+              width: gridWidth,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.22)),
+                ),
+                child: Text(
+                  'Total Present: ${present.toStringAsFixed(present % 1 == 0 ? 0 : 1)} days,  Total Absent: ${absent.toStringAsFixed(absent % 1 == 0 ? 0 : 1)} days',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
           ]),
         ),
       ),
@@ -269,7 +286,7 @@ class _StaffAttendanceOverviewWidgetState extends State<StaffAttendanceOverviewW
             final isFutureInCurrentMonth = _month.year == DateTime.now().year && _month.month == DateTime.now().month && date.isAfter(DateTime.now());
             final bgColorNone = isFutureInCurrentMonth ? const Color(0xFFE5E5E5) : Colors.grey.shade200;
 
-            return Center(
+            final tile = Center(
               child: SizedBox(
                 width: cellWidth, height: cellHeight,
                 child: Stack(alignment: Alignment.center, children: [
@@ -278,9 +295,58 @@ class _StaffAttendanceOverviewWidgetState extends State<StaffAttendanceOverviewW
                 ]),
               ),
             );
+
+            if (prov == null || !widget.interactive) return tile;
+            // Interactive: tap to choose attendance state
+            return GestureDetector(
+              onTap: () => _showMarkSheet(context, prov, staffName, date),
+              child: tile,
+            );
           },
         ),
       ),
+    );
+  }
+
+  Future<void> _showMarkSheet(BuildContext context, StaffAttendanceProvider prov, String staffName, DateTime date) async {
+    await showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.check_circle, color: Color(0xFF8B27E2)),
+                title: const Text('Present'),
+                onTap: () { prov.setSplit(staffName, date, morning: true, evening: true); Navigator.pop(ctx); setState(() {}); },
+              ),
+              ListTile(
+                leading: const Icon(Icons.cancel, color: Color(0xFFD9B6FF)),
+                title: const Text('Absent'),
+                onTap: () { prov.setSplit(staffName, date, morning: false, evening: false); Navigator.pop(ctx); setState(() {}); },
+              ),
+              ListTile(
+                leading: const Icon(Icons.wb_sunny_outlined, color: Colors.amber),
+                title: const Text('Morning Present (Afternoon leave)'),
+                onTap: () { prov.setSplit(staffName, date, morning: true, evening: false); Navigator.pop(ctx); setState(() {}); },
+              ),
+              ListTile(
+                leading: const Icon(Icons.nightlight_round, color: Colors.indigo),
+                title: const Text('Afternoon Present (Morning leave)'),
+                onTap: () { prov.setSplit(staffName, date, morning: false, evening: true); Navigator.pop(ctx); setState(() {}); },
+              ),
+              ListTile(
+                leading: const Icon(Icons.event_busy, color: Colors.grey),
+                title: const Text('Clinic holiday'),
+                onTap: () { prov.setSplit(staffName, date, morning: null, evening: null); Navigator.pop(ctx); setState(() {}); },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
     );
   }
 
