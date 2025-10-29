@@ -52,6 +52,10 @@ class RevenueTrendCard extends StatelessWidget {
           final displayTotal = (todayTotal == 0) ? '00' : _shortNumber(todayTotal);
           // Compute effective height from parent constraints (SizedBox in dashboard sets this).
           final effectiveH = c.hasBoundedHeight && c.maxHeight.isFinite ? c.maxHeight : minHeight;
+          // Match PatientOverviewCard visuals: circle/avatar uses height * 0.62 and
+          // numeric font caps at 120 * 0.18 for consistent sizing across tiles.
+          final circleSize = effectiveH * 0.62;
+          final numberFontSize = (effectiveH.clamp(0.0, 120.0)) * 0.18;
           return ConstrainedBox(
             constraints: BoxConstraints(minHeight: minHeight, minWidth: c.maxWidth),
             child: Padding(
@@ -61,8 +65,8 @@ class RevenueTrendCard extends StatelessWidget {
                 children: [
                   // Left circular icon
                   Container(
-                    width: minHeight * 0.62,
-                    height: minHeight * 0.62,
+                    width: circleSize,
+                    height: circleSize,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       boxShadow: [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 8, offset: const Offset(0,2))],
@@ -84,7 +88,7 @@ class RevenueTrendCard extends StatelessWidget {
                       children: [
                         Text('Revenue', style: TextStyle(fontWeight: FontWeight.w700, fontSize: effectiveH * 0.10, color: Colors.black87)),
                         const SizedBox(height: 8),
-                        Text(displayTotal, style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w800, fontSize: minHeight * 0.18)),
+                        Text(displayTotal, style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w800, fontSize: numberFontSize)),
                       ],
                     ),
                   ),

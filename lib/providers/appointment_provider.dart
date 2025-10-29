@@ -13,15 +13,7 @@ class AppointmentProvider with ChangeNotifier {
 
   Future<void> ensureLoaded() async {
     if (_loaded) return;
-    try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid != null) {
-        final snap = await FirebaseFirestore.instance.collection('users').doc(uid).collection('appointments').get();
-        _appointments
-          ..clear()
-          ..addAll(snap.docs.map((d) => Appointment.fromJson(d.data())));
-      }
-    } catch (_) {}
+    await refresh();
     _loaded = true;
     notifyListeners();
   }
@@ -160,5 +152,18 @@ class AppointmentProvider with ChangeNotifier {
     final hour12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
     final period = hour >= 12 ? 'PM' : 'AM';
     return '${hour12.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} $period';
+  }
+
+  // Manual refresh callable from UI to re-pull from Firestore
+  Future<void> refresh() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        final snap = await FirebaseFirestore.instance.collection('users').doc(uid).collection('appointments').get();
+        _appointments
+          ..clear()
+          ..addAll(snap.docs.map((d) => Appointment.fromJson(d.data())));
+      }
+    } catch (_) {}
   }
 }

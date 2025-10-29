@@ -507,4 +507,51 @@ class DoctorProvider with ChangeNotifier {
           }, SetOptions(merge: true));
     } catch (_) {}
   }
+
+  // Manual refresh callable from UI; performs a one-time fetch even if listeners are active
+  Future<void> refresh() async {
+    final uid = _uid();
+    if (uid == null) return;
+    try {
+      final docsSnap = await _db.collection('users').doc(uid).collection('doctors').get();
+      final ledSnap = await _db.collection('users').doc(uid).collection('doctor_ledger').get();
+
+      final remoteDoctors = <Doctor>[];
+      for (final d in docsSnap.docs) {
+        final data = d.data();
+        final rulesMap = Map<String, dynamic>.from((data['rules'] as Map?) ?? {});
+        final rules = <String, PaymentRule>{};
+        rulesMap.forEach((key, v) {
+          final mv = Map<String, dynamic>.from(v as Map);
+          final mode = (mv['mode'] as String?) ?? 'percent';
+          final value = (mv['value'] as num).toDouble();
+          final price = mv['clinicPrice'] == null ? null : (mv['clinicPrice'] as num).toDouble();
+          rules[key] = mode == 'fixed' ? PaymentRule.fixed(value, clinicPrice: price) : PaymentRule.percent(value, clinicPrice: price);
+        });
+        remoteDoctors.add(Doctor(
+          id: data['id'] as String? ?? d.id,
+          name: (data['name'] as String?) ?? 'Doctor',
+          role: DoctorRole.values[(data['role'] as int?) ?? 0],
+          active: (data['active'] as bool?) ?? true,
+          photoPath: data['photoPath'] as String?,
+          rules: rules,
+        ));
+      }
+
+      final remoteLedger = <PaymentEntry>[];
+      for (final e in ledSnap.docs) {
+        remoteLedger.add(PaymentEntry.fromJson(e.data()));
+      }
+
+      _doctors
+        ..clear()
+        ..addEntries(remoteDoctors.map((d) => MapEntry(d.id, d)));
+      _ledger
+        ..clear()
+        ..addAll(remoteLedger);
+      _recomputeTotals();
+      notifyListeners();
+      await _persist();
+    } catch (_) {}
+  }
 }

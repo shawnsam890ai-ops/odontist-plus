@@ -29,7 +29,6 @@ import '../../models/revenue_entry.dart';
 // Removed fl_chart and revenue_entry imports after chart removal
 import '../../providers/auth_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../widgets/cases_overview_chart.dart';
 import '../widgets/revenue_trend_card.dart';
 import '../widgets/patient_overview_card.dart';
 import '../widgets/upcoming_schedule_panel.dart';
@@ -49,7 +48,7 @@ import '../../models/appointment.dart' as appt;
 import 'add_patient_page.dart';
 import '../../providers/theme_provider.dart';
 import '../../models/lab_vendor.dart';
-import '../../providers/license_provider.dart';
+// import '../../providers/license_provider.dart'; // unused in Dashboard; kept elsewhere
 
 /// Dashboard main page with side navigation and section placeholders.
 class DashboardPage extends StatefulWidget {
@@ -274,7 +273,7 @@ class _DashboardPageState extends State<DashboardPage> {
               // to access remaining icons. Reserve some trailing space so the
               // right-side toggle button doesn't overlap the last icon.
               final visibleSlots = 3;
-              final reservedTrailing = 48.0; // space for toggle overlay
+              final reservedTrailing = 48.0; // space for chevron overlay
               final slotWidth = (shellWidth - reservedTrailing) / visibleSlots;
               return SingleChildScrollView(
                 controller: _menuScroll,
@@ -609,6 +608,10 @@ class _DashboardPageState extends State<DashboardPage> {
           final wide = constraints.maxWidth >= 1100;
           final rightColWidth = wide ? 320.0 : 0.0; // narrower right rail per request
           final gaps = 16.0;
+          // Desktop layout tuning constants
+          const double _metricCardH = 170.0; // height used in _buildMetricsColumn
+          const double _metricSpacing = 12.0; // spacing between metric cards
+          const double _metricsTotalH = _metricCardH * 3 + _metricSpacing * 2; // patient + today + inventory
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // Title only; removed Customize button and mode
           Align(alignment: Alignment.centerLeft, child: Text('Overview', style: Theme.of(context).textTheme.headlineSmall)),
@@ -619,6 +622,7 @@ class _DashboardPageState extends State<DashboardPage> {
             const SizedBox(height: 12),
             _LargePanel(
               title: '',
+              interactive: false,
               child: SizedBox(
                 height: 260,
                 child: const UpcomingScheduleCompact(
@@ -629,6 +633,7 @@ class _DashboardPageState extends State<DashboardPage> {
             const SizedBox(height: 12),
             _LargePanel(
               title: 'Upcoming Appointment',
+              interactive: false,
               child: const SizedBox(
                 height: 220,
                 child: UpcomingAppointmentWidget(
@@ -639,63 +644,60 @@ class _DashboardPageState extends State<DashboardPage> {
             const SizedBox(height: 12),
             _LargePanel(
               title: '',
+              interactive: false,
               child: const SizedBox(height: 420, child: StaffAttendanceOverviewWidget()),
             ),
           ] else ...[
             // Wide: two columns; right column is vertical Upcoming Schedule
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              // Left column
+              // Left + center: metrics at fixed width, Staff Attendance fills remaining space
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  // Vertically stacked metrics
-                  _buildMetricsColumn(todaysRevenue, monthlyRevenue, patientProvider, inventoryProvider, revenueProvider),
-                  const SizedBox(height: 12),
-                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Expanded(
-                      child: _LargePanel(
-                        title: 'Cases Overview',
-                        child: SizedBox(
-                          height: 240,
-                          child: const Padding(
-                            padding: EdgeInsets.only(bottom: 6),
-                            child: Center(
-                              child: CasesOverviewChart(
-                                data: {
-                                  'Root Canal': 18,
-                                  'Orthodontic': 12,
-                                  'Prosthodontic': 9,
-                                  'Filling': 30,
-                                },
-                                showTitle: false,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  SizedBox(
+                    width: 320,
+                    child: _buildMetricsColumn(todaysRevenue, monthlyRevenue, patientProvider, inventoryProvider, revenueProvider),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _LargePanel(
+                      title: '',
+                      interactive: false,
+                      // Match the total height of the metrics stack so bottoms align
+                      child: const SizedBox(height: _metricsTotalH, child: StaffAttendanceOverviewWidget()),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _LargePanel(
-                        title: '',
-                        child: const SizedBox(height: 420, child: StaffAttendanceOverviewWidget()),
-                      ),
-                    ),
-                  ]),
+                  ),
                 ]),
               ),
               SizedBox(width: gaps),
               // Right column (vertical Upcoming Schedule)
               SizedBox(
                 width: rightColWidth,
-                child: _LargePanel(
-                  title: '',
-                  child: SizedBox(
-                    height: 560,
-                    child: const UpcomingScheduleCompact(
-                      padding: EdgeInsets.fromLTRB(8, 4, 8, 8),
-                    ),
-                  ),
-                ).withRadius(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _LargePanel(
+                      title: '',
+                      interactive: false,
+                      child: const SizedBox(
+                        height: 300, // reduced calendar height (was 560)
+                        child: UpcomingScheduleCompact(
+                          padding: EdgeInsets.fromLTRB(8, 4, 8, 8),
+                        ),
+                      ),
+                    ).withRadius(20),
+                    const SizedBox(height: 12),
+                    _LargePanel(
+                      title: '',
+                      interactive: false,
+                      child: const SizedBox(
+                        height: 170, // match inventory card height
+                        child: UpcomingAppointmentWidget(
+                          padding: EdgeInsets.all(12),
+                        ),
+                      ),
+                    ).withRadius(20),
+                  ],
+                ),
               ),
             ]),
           ],
@@ -732,7 +734,7 @@ class _DashboardPageState extends State<DashboardPage> {
     return LayoutBuilder(builder: (context, c) {
       // Revenue trend card becomes a responsive main tile; other metrics remain fixed width.
       // Keep revenue at a fixed small tile, but make patient card wider.
-      const double revenueWidth = 210.0;
+  // Removed unused revenueWidth constant after layout update.
       const double _patientAspect = 1.1; // PatientOverviewCard aspectRatio
     // Patient width: slightly reduced responsive tile (clamped to reasonable range)
     final double patientWidth = (c.maxWidth < 420)
@@ -801,11 +803,6 @@ class _DashboardPageState extends State<DashboardPage> {
       }
       return v.toStringAsFixed(0);
     }
-    final entries = [
-      ('Today', todaysRevenue, 'Revenue', Icons.today, todaysRevenue >= 0 ? Colors.green : Colors.red),
-      // Patients replaced by PatientOverviewCard below
-      ('Inventory', inventoryProvider.totalInventoryValue, 'Value', Icons.inventory_2, null),
-    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -817,28 +814,25 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
         const SizedBox(height: 12),
-        for (int i = 0; i < entries.length; i++) ...[
-          SizedBox(
-            width: 320,
-            height: 170,
-            child: entries[i].$1 == 'Inventory'
-                ? PatientOverviewCard(
-                    avatar: const AssetImage('assets/images/inventory_icon.png'),
-                    title: 'Inventory',
-                    subtitle: 'Value',
-                    numericLabel: _shortNumberLocal(entries[i].$2),
-                  )
-                : _DashMetricCard(
-                    title: entries[i].$1,
-                    value: entries[i].$2,
-                    subtitle: entries[i].$3,
-                    icon: entries[i].$4,
-                    valueColor: entries[i].$5,
-                    appearDelayMs: 60 * i,
-                  ),
+        SizedBox(
+          width: 320,
+          height: 170,
+          child: RevenueTrendCard(
+            months: 6,
+            overlayImage: const AssetImage('assets/images/revenue_icon.png'),
           ),
-          if (i != entries.length - 1) const SizedBox(height: 12),
-        ]
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: 320,
+          height: 170,
+          child: PatientOverviewCard(
+            avatar: const AssetImage('assets/images/inventory_icon.png'),
+            title: 'Inventory',
+            subtitle: 'Value',
+            numericLabel: _shortNumberLocal(inventoryProvider.totalInventoryValue),
+          ),
+        ),
       ],
     );
   }
@@ -1908,7 +1902,25 @@ class _DashboardPageState extends State<DashboardPage> {
         // the content and cause RenderOverflow errors.
         padding: EdgeInsets.only(bottom: media.padding.bottom + barHeight + 12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
+        Row(
+          children: [
+            Expanded(child: Text('Settings', style: Theme.of(context).textTheme.headlineSmall)),
+            Tooltip(
+              message: 'Refresh data',
+              waitDuration: const Duration(milliseconds: 250),
+              child: IconButton(
+                onPressed: _refreshing ? null : _refreshAllData,
+                icon: _refreshing
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
+                      )
+                    : const Icon(Icons.refresh),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 16),
         const Text('General configuration placeholders will appear here.'),
         const SizedBox(height: 12),
@@ -2366,6 +2378,32 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // removed legacy Lab Cost dialogs (moved to Labs registry UI)
 
+  // Trigger refresh across primary providers (Firestore-backed)
+  bool _refreshing = false;
+  Future<void> _refreshAllData() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(const SnackBar(content: Text('Syncing data…'), duration: Duration(seconds: 1)));
+    try {
+      final futures = <Future<void>>[];
+      try { futures.add(context.read<MedicineProvider>().refresh()); } catch (_) {}
+      try { futures.add(context.read<AppointmentProvider>().refresh()); } catch (_) {}
+      try { futures.add(context.read<DoctorProvider>().refresh()); } catch (_) {}
+      // For providers without explicit refresh, call ensureLoaded to no-op if already loaded
+      try { futures.add(context.read<LabRegistryProvider>().ensureLoaded()); } catch (_) {}
+      try { futures.add(context.read<RevenueProvider>().ensureLoaded()); } catch (_) {}
+      try { futures.add(context.read<PatientProvider>().ensureLoaded()); } catch (_) {}
+      // OptionsProvider requires defaults; skip explicit refresh here.
+      await Future.wait(futures);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(const SnackBar(content: Text('Data refreshed')));
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
   // ========= Reusable Dashboard Widgets =========
 }
 
@@ -2437,6 +2475,45 @@ class _SideMenuItemState extends State<_SideMenuItem> with SingleTickerProviderS
               ]
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  
+}
+
+class _RefreshButton extends StatefulWidget {
+  final Future<void> Function() onRefresh;
+  const _RefreshButton({required this.onRefresh});
+  @override
+  State<_RefreshButton> createState() => _RefreshButtonState();
+}
+
+class _RefreshButtonState extends State<_RefreshButton> {
+  bool _busy = false;
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surface,
+      elevation: 3,
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: _busy ? null : () async {
+          setState(() => _busy = true);
+          try { await widget.onRefresh(); } finally { if (mounted) setState(() => _busy = false); }
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            _busy
+                ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary))
+                : Icon(Icons.refresh, color: cs.primary),
+            const SizedBox(width: 8),
+            Text(_busy ? 'Refreshing…' : 'Refresh', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
+          ]),
         ),
       ),
     );
@@ -3637,7 +3714,9 @@ class _PatientOverviewCardWrapper extends StatelessWidget {
 class _LargePanel extends StatefulWidget {
   final String title;
   final Widget child;
-  const _LargePanel({required this.title, required this.child});
+  // When false, disables hover/touch tilt/press animations for a static panel.
+  final bool interactive;
+  const _LargePanel({required this.title, required this.child, this.interactive = true});
 
   @override
   State<_LargePanel> createState() => _LargePanelState();
@@ -3676,6 +3755,39 @@ class _LargePanelState extends State<_LargePanel> {
       ..rotateX(_pressed ? 0 : _tiltX)
       ..rotateY(_pressed ? 0 : _tiltY)
       ..translate(0.0, translateY);
+    if (!widget.interactive) {
+      // Static, non-interactive panel (no tilt, no press/hover effects)
+      return Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(widget is _RadiusLargePanel ? (widget as _RadiusLargePanel).radius : 20),
+          gradient: LinearGradient(
+            colors: [surface, surface.withOpacity(.96)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(.06), blurRadius: 18, offset: const Offset(0, 10)),
+          ],
+          border: Border.all(color: cs.outlineVariant.withOpacity(.25)),
+        ),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        child: LayoutBuilder(builder: (context, c) {
+          final hasHeader = widget.title.trim().isNotEmpty;
+          final header = hasHeader
+              ? Row(children: [
+                  Expanded(child: Text(widget.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis)),
+                ])
+              : const SizedBox.shrink();
+          final body = ClipRect(child: widget.child);
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (hasHeader) header,
+            if (hasHeader) const SizedBox(height: 8),
+            body,
+          ]);
+        }),
+      );
+    }
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() { _hovered = false; _pressed = false; _tiltX = 0; _tiltY = 0; }),

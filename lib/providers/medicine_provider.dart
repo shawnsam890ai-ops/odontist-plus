@@ -17,47 +17,7 @@ class MedicineProvider with ChangeNotifier {
     if (_loaded) return;
     await _repo.load();
     await _loadPendingDeletes();
-    // Firestore sync: pull remote if exists; else push local once, then start live listener
-    try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid != null) {
-        final col = FirebaseFirestore.instance.collection('users').doc(uid).collection('medicines');
-        final snap = await col.get();
-        if (snap.docs.isNotEmpty) {
-          // Apply tombstones: delete remotely if an id is marked pending delete locally
-          for (final d in snap.docs) {
-            final id = (d.data()['id'] as String?) ?? d.id;
-            if (_pendingDeletes.contains(id)) {
-              try {
-                await col.doc(id).delete();
-              } catch (_) {}
-            }
-          }
-          final filtered = snap.docs
-              .where((d) => !_pendingDeletes.contains((d.data()['id'] as String?) ?? d.id))
-              .map((d) => Medicine.fromJson(d.data()))
-              .toList();
-          // Replace local cache with filtered remote snapshot
-          await _repo.setAll(filtered);
-          // Clear tombstones that no longer exist remotely
-          final remoteIds = snap.docs.map((d) => (d.data()['id'] as String?) ?? d.id).toSet();
-          final removed = _pendingDeletes.where((id) => !remoteIds.contains(id)).toList();
-          if (removed.isNotEmpty) {
-            _pendingDeletes.removeAll(removed);
-            await _savePendingDeletes();
-          }
-        } else if (_repo.items.isNotEmpty) {
-          final batch = FirebaseFirestore.instance.batch();
-          for (final m in _repo.items) {
-            batch.set(col.doc(m.id), m.toJson());
-          }
-          await batch.commit();
-        }
-
-        // Start live listener (once)
-        _startRemoteListener(col);
-      }
-    } catch (_) {}
+    await _syncFromRemoteAndListen();
     _loaded = true;
     notifyListeners();
   }
@@ -135,6 +95,50 @@ class MedicineProvider with ChangeNotifier {
       }
       notifyListeners();
     });
+  }
+
+  // Manual refresh callable from UI
+  Future<void> refresh() async {
+    await _syncFromRemoteAndListen();
+  }
+
+  Future<void> _syncFromRemoteAndListen() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+      final col = FirebaseFirestore.instance.collection('users').doc(uid).collection('medicines');
+      final snap = await col.get();
+      if (snap.docs.isNotEmpty) {
+        // Apply tombstones: delete remotely if an id is marked pending delete locally
+        for (final d in snap.docs) {
+          final id = (d.data()['id'] as String?) ?? d.id;
+          if (_pendingDeletes.contains(id)) {
+            try {
+              await col.doc(id).delete();
+            } catch (_) {}
+          }
+        }
+        final filtered = snap.docs
+            .where((d) => !_pendingDeletes.contains((d.data()['id'] as String?) ?? d.id))
+            .map((d) => Medicine.fromJson(d.data()))
+            .toList();
+        await _repo.setAll(filtered);
+        // Clear tombstones that no longer exist remotely
+        final remoteIds = snap.docs.map((d) => (d.data()['id'] as String?) ?? d.id).toSet();
+        final removed = _pendingDeletes.where((id) => !remoteIds.contains(id)).toList();
+        if (removed.isNotEmpty) {
+          _pendingDeletes.removeAll(removed);
+          await _savePendingDeletes();
+        }
+      } else if (_repo.items.isNotEmpty) {
+        final batch = FirebaseFirestore.instance.batch();
+        for (final m in _repo.items) {
+          batch.set(col.doc(m.id), m.toJson());
+        }
+        await batch.commit();
+      }
+      _startRemoteListener(col);
+    } catch (_) {}
   }
 
   // Pending delete persistence -------------------------------------------------
