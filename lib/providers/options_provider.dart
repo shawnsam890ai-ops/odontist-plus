@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'patient_provider.dart';
 import '../models/patient.dart';
 import '../core/enums.dart';
@@ -31,6 +34,8 @@ class OptionsProvider extends ChangeNotifier {
 
   bool _loaded = false;
   bool get isLoaded => _loaded;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _optionsStream;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _sub;
 
   // Reference to patient provider (registered from UI) so we can check usage before deletion
   PatientProvider? _patientProvider;
@@ -113,6 +118,10 @@ class OptionsProvider extends ChangeNotifier {
     _sortList(natureOfWorkOptions);
     _sortList(toothShades);
     _loaded = true;
+    // After local/defaults, try to hydrate from Firestore if available.
+    await _loadFromFirestore();
+    // Start realtime listener so changes from other devices reflect immediately
+    _startListener();
     notifyListeners();
   }
 
@@ -135,6 +144,37 @@ class OptionsProvider extends ChangeNotifier {
       'natureOfWork': natureOfWorkOptions,
       'toothShades': toothShades,
     }));
+    // Firestore write-through (best-effort)
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('settings')
+            .doc('options')
+            .set({
+          'complaints': complaints,
+          'oralFindings': oralFindingsOptions,
+          'plan': planOptions,
+          'done': treatmentDoneOptions,
+          'medicines': medicineOptions,
+          'pastDental': pastDentalHistory,
+          'pastMedical': pastMedicalHistory,
+          'dynamicMedications': medicationOptions,
+          'drugAllergies': drugAllergyOptions,
+          'orthoDoctors': orthoDoctors,
+          'rcDoctors': rcDoctors,
+          'prosthoDoctors': prosthoDoctors,
+          'labNames': labNames,
+          'natureOfWork': natureOfWorkOptions,
+          'toothShades': toothShades,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } catch (_) {
+      // ignore online sync failure
+    }
   }
 
   Future<void> addValue(String listKey, String value) async {
@@ -326,5 +366,71 @@ class OptionsProvider extends ChangeNotifier {
       default:
         return false;
     }
+  }
+
+  Future<void> _loadFromFirestore() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('settings')
+          .doc('options')
+          .get();
+      if (!doc.exists) return;
+      final data = doc.data() ?? <String, dynamic>{};
+      // Only override if values exist in Firestore; otherwise keep local/defaults
+      complaints = (data['complaints'] as List<dynamic>? ?? complaints).cast<String>();
+      oralFindingsOptions = (data['oralFindings'] as List<dynamic>? ?? oralFindingsOptions).cast<String>();
+      planOptions = (data['plan'] as List<dynamic>? ?? planOptions).cast<String>();
+      treatmentDoneOptions = (data['done'] as List<dynamic>? ?? treatmentDoneOptions).cast<String>();
+      medicineOptions = (data['medicines'] as List<dynamic>? ?? medicineOptions).cast<String>();
+      pastDentalHistory = (data['pastDental'] as List<dynamic>? ?? pastDentalHistory).cast<String>();
+      pastMedicalHistory = (data['pastMedical'] as List<dynamic>? ?? pastMedicalHistory).cast<String>();
+      medicationOptions = (data['dynamicMedications'] as List<dynamic>? ?? medicationOptions).cast<String>();
+      drugAllergyOptions = (data['drugAllergies'] as List<dynamic>? ?? drugAllergyOptions).cast<String>();
+      orthoDoctors = (data['orthoDoctors'] as List<dynamic>? ?? orthoDoctors).cast<String>();
+      rcDoctors = (data['rcDoctors'] as List<dynamic>? ?? rcDoctors).cast<String>();
+      prosthoDoctors = (data['prosthoDoctors'] as List<dynamic>? ?? prosthoDoctors).cast<String>();
+      labNames = (data['labNames'] as List<dynamic>? ?? labNames).cast<String>();
+      natureOfWorkOptions = (data['natureOfWork'] as List<dynamic>? ?? natureOfWorkOptions).cast<String>();
+      toothShades = (data['toothShades'] as List<dynamic>? ?? toothShades).cast<String>();
+      // Keep lists sorted
+      _sortList(complaints);
+      _sortList(oralFindingsOptions);
+      _sortList(planOptions);
+      _sortList(treatmentDoneOptions);
+      _sortList(medicineOptions);
+      _sortList(pastDentalHistory);
+      _sortList(pastMedicalHistory);
+      _sortList(medicationOptions);
+      _sortList(drugAllergyOptions);
+      _sortList(orthoDoctors);
+      _sortList(rcDoctors);
+      _sortList(prosthoDoctors);
+      _sortList(labNames);
+      _sortList(natureOfWorkOptions);
+      _sortList(toothShades);
+    } catch (_) {}
+  }
+
+  void _startListener() {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+      _sub?.cancel();
+      _optionsStream = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('settings')
+          .doc('options')
+          .snapshots();
+      _sub = _optionsStream!.listen((snap) async {
+        if (!snap.exists) return;
+        await _loadFromFirestore();
+        notifyListeners();
+      });
+    } catch (_) {}
   }
 }

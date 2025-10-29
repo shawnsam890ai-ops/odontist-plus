@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/inventory_item.dart';
@@ -7,6 +8,8 @@ class InventoryProvider with ChangeNotifier {
   final List<InventoryItem> _items = [];
   final List<LabCostItem> _labCosts = [];
   bool _loaded = false;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _invSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _costSub;
 
   List<InventoryItem> get items => List.unmodifiable(_items);
   List<LabCostItem> get labCosts => List.unmodifiable(_labCosts);
@@ -42,10 +45,48 @@ class InventoryProvider with ChangeNotifier {
               cost: (m['cost'] as num?)?.toDouble() ?? 0,
             );
           }));
+
+        // Start realtime listeners
+        _startListeners(base);
       }
     } catch (_) {}
     _loaded = true;
     notifyListeners();
+  }
+
+  void _startListeners(DocumentReference<Map<String, dynamic>> base) {
+    try {
+      _invSub?.cancel();
+      _invSub = base.collection('inventory').snapshots().listen((snap) {
+        _items
+          ..clear()
+          ..addAll(snap.docs.map((d) {
+            final m = d.data();
+            return InventoryItem(
+              id: m['id'] as String? ?? d.id,
+              name: (m['name'] as String?) ?? '',
+              quantity: (m['quantity'] as num?)?.toInt() ?? 0,
+              unitCost: (m['unitCost'] as num?)?.toDouble() ?? 0,
+            );
+          }));
+        notifyListeners();
+      });
+
+      _costSub?.cancel();
+      _costSub = base.collection('lab_costs').snapshots().listen((snap) {
+        _labCosts
+          ..clear()
+          ..addAll(snap.docs.map((d) {
+            final m = d.data();
+            return LabCostItem(
+              id: m['id'] as String? ?? d.id,
+              description: (m['description'] as String?) ?? '',
+              cost: (m['cost'] as num?)?.toDouble() ?? 0,
+            );
+          }));
+        notifyListeners();
+      });
+    } catch (_) {}
   }
 
   void addItem(InventoryItem item) {
@@ -148,4 +189,11 @@ class InventoryProvider with ChangeNotifier {
 
   double get totalInventoryValue => _items.fold(0.0, (p, e) => p + e.total);
   double get totalLabCost => _labCosts.fold(0.0, (p, e) => p + e.cost);
+
+  @override
+  void dispose() {
+    _invSub?.cancel();
+    _costSub?.cancel();
+    super.dispose();
+  }
 }

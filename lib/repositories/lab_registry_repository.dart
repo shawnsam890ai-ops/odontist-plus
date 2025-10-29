@@ -22,6 +22,11 @@ class LabRegistryRepository {
     await prefs.setString(_key, jsonEncode(_labs.map((e) => e.toJson()).toList()));
   }
 
+  Future<void> replaceAll(List<LabVendor> labs) async {
+    _labs = List.from(labs);
+    await _persist();
+  }
+
   Future<void> addLab(LabVendor lab) async {
     _labs.add(lab);
     await _persist();

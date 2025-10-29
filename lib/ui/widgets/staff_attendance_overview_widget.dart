@@ -140,7 +140,7 @@ class _StaffAttendanceOverviewWidgetState extends State<StaffAttendanceOverviewW
       absent = 0;
     }
 
-    return Card(
+    Widget contentCard = Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
@@ -240,6 +240,31 @@ class _StaffAttendanceOverviewWidgetState extends State<StaffAttendanceOverviewW
         ),
       ),
     );
+
+    // On wide/desktop screens, center the whole widget and constrain max width
+    return LayoutBuilder(builder: (context, c) {
+      final w = c.maxWidth;
+      double? maxW;
+      if (w >= 1600) {
+        maxW = 980;
+      } else if (w >= 1200) {
+        maxW = 920;
+      } else if (w >= 900) {
+        maxW = 820;
+      } else if (w >= 700) {
+        maxW = 640;
+      } else {
+        maxW = null; // small screens keep full width
+      }
+      if (maxW == null) return contentCard;
+      return Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxW),
+          child: contentCard,
+        ),
+      );
+    });
   }
 
   Widget _buildCalendarViewOnly(List<DateTime> days, String staffName, {required double gridWidth, required double cellWidth, required double cellHeight, required double spacing, StaffAttendanceProvider? prov}) {

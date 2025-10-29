@@ -82,7 +82,7 @@ enum DashboardSection {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  DashboardSection _section = DashboardSection.staffAttendance; // default to Staff view
+  DashboardSection _section = DashboardSection.overview; // default to Overview
   // Always full-screen; provide a bottom-centered menu with a hide toggle
   bool _menuHidden = false;
   final ScrollController _menuScroll = ScrollController();

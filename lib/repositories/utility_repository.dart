@@ -55,6 +55,28 @@ class UtilityRepository {
     await prefs.setString(_kBills, jsonEncode(_bills.map((e) => e.toJson()).toList()));
   }
 
+  // Replace full or partial datasets from a remote source without triggering external writes
+  Future<void> replaceServices(List<UtilityService> services) async {
+    _services
+      ..clear()
+      ..addAll(services);
+    await _persist();
+  }
+
+  Future<void> replacePayments(List<UtilityPayment> payments) async {
+    _payments
+      ..clear()
+      ..addAll(payments);
+    await _persist();
+  }
+
+  Future<void> replaceBills(List<BillEntry> bills) async {
+    _bills
+      ..clear()
+      ..addAll(bills);
+    await _persist();
+  }
+
   Future<void> addService(UtilityService s) async {
     _services.add(s);
     await _persist();

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 // table_calendar removed from this page
@@ -123,7 +122,7 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
               physics: const AlwaysScrollableScrollPhysics(),
               itemCount: patients.length,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (_, i) => _buildPatientCard(patients[i]),
+              itemBuilder: (_, i) => _centerListItem(_buildPatientCard(patients[i])),
             );
 
       // Fallback list for embedded usage where the parent provides scrolling
@@ -136,7 +135,7 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
               physics: const NeverScrollableScrollPhysics(),
               itemCount: patients.length,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (_, i) => _buildPatientCard(patients[i]),
+              itemBuilder: (_, i) => _centerListItem(_buildPatientCard(patients[i])),
             );
 
       final content = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -266,6 +265,32 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
       checkmarkColor: Colors.white,
       backgroundColor: Colors.white,
       side: BorderSide(color: _border),
+    );
+  }
+
+  /// Center each patient card and constrain its max width on wide screens so
+  /// the list doesn't feel overly stretched on desktop.
+  Widget _centerListItem(Widget child) {
+    final w = MediaQuery.of(context).size.width;
+    // Pick a comfortable max width for cards depending on viewport.
+    double maxW;
+    if (w >= 1600) {
+      maxW = 980;
+    } else if (w >= 1200) {
+      maxW = 920;
+    } else if (w >= 900) {
+      maxW = 820;
+    } else if (w >= 700) {
+      maxW = 640;
+    } else {
+      maxW = double.infinity; // mobile: full width
+    }
+    return Align(
+      alignment: Alignment.center,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxW),
+        child: child,
+      ),
     );
   }
 
@@ -430,13 +455,6 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('WhatsApp open failed: $e')));
     }
-  }
-
-  String _nextApptLabel(Patient p) {
-    // Placeholder: In absence of persistent appointments per patient, show last session or '-'
-    if (p.sessions.isEmpty) return '-';
-    final latest = p.sessions.map((s) => s.date).reduce((a, b) => a.isAfter(b) ? a : b);
-    return DateFormat('MMM d, h:mm a').format(latest);
   }
 
 }

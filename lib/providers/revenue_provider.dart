@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../repositories/revenue_repository.dart';
@@ -7,6 +8,7 @@ import '../models/revenue_entry.dart';
 class RevenueProvider extends ChangeNotifier {
   final RevenueRepository _repo = RevenueRepository();
   bool _loaded = false;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _revSub;
 
   List<RevenueEntry> get entries => _repo.entries;
   bool get isLoaded => _loaded;
@@ -19,22 +21,39 @@ class RevenueProvider extends ChangeNotifier {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
-        final snap = await FirebaseFirestore.instance.collection('users').doc(uid).collection('revenue').get();
+        final userDoc = FirebaseFirestore.instance.collection('users').doc(uid);
+        final col = userDoc.collection('revenue');
+        final snap = await col.get();
         if (snap.docs.isNotEmpty) {
           final items = snap.docs.map((d) => RevenueEntry.fromJson(d.data())).toList();
           await _repo.replaceAll(items);
+          _startListener(col);
         } else if (_repo.entries.isNotEmpty) {
           final batch = FirebaseFirestore.instance.batch();
-          final col = FirebaseFirestore.instance.collection('users').doc(uid).collection('revenue');
           for (final e in _repo.entries) {
             batch.set(col.doc(e.id), e.toJson());
           }
           await batch.commit();
+          _startListener(col);
+        } else {
+          // Nothing local and nothing remote; still start listener for future updates
+          _startListener(col);
         }
       }
     } catch (_) {}
     _loaded = true;
     notifyListeners();
+  }
+
+  void _startListener(CollectionReference<Map<String, dynamic>> col) {
+    try {
+      _revSub?.cancel();
+      _revSub = col.orderBy('date', descending: false).snapshots().listen((snap) async {
+        final items = snap.docs.map((d) => RevenueEntry.fromJson(d.data())).toList();
+        await _repo.replaceAll(items);
+        notifyListeners();
+      });
+    } catch (_) {}
   }
 
   Future<void> addRevenue({required String patientId, required String description, required double amount}) async {
@@ -134,5 +153,11 @@ class RevenueProvider extends ChangeNotifier {
     }
     if (ok) notifyListeners();
     return ok;
+  }
+
+  @override
+  void dispose() {
+    _revSub?.cancel();
+    super.dispose();
   }
 }

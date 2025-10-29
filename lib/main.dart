@@ -97,6 +97,8 @@ class DentalClinicApp extends StatelessWidget {
             ctx.read<MedicineProvider>().ensureLoaded();
             // Load utilities
             ctx.read<UtilityProvider>().ensureLoaded();
+            // Load inventory
+            ctx.read<InventoryProvider>().ensureLoaded();
             // Load appointments from Firestore
             ctx.read<AppointmentProvider>().ensureLoaded();
             // Initialize local notifications

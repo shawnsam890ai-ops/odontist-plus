@@ -45,6 +45,33 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
   // Status filter: null -> All
   appt.AppointmentStatus? _statusFilter;
 
+  // Centers and constrains wide sections to avoid full-bleed stretch on desktop
+  Widget _centerSection(Widget child) {
+    return LayoutBuilder(builder: (context, c) {
+      final w = c.maxWidth;
+      double? maxW;
+      if (w >= 1600) {
+        maxW = 980;
+      } else if (w >= 1200) {
+        maxW = 920;
+      } else if (w >= 900) {
+        maxW = 820;
+      } else if (w >= 700) {
+        maxW = 640;
+      } else {
+        maxW = null; // full width on small screens
+      }
+      if (maxW == null) return child;
+      return Align(
+        alignment: Alignment.center,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxW),
+          child: child,
+        ),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final patientProvider = context.watch<PatientProvider>();
@@ -115,20 +142,25 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
           _StatusItem('Attended', appt.AppointmentStatus.attended),
           _StatusItem('Missed', appt.AppointmentStatus.missed),
         ];
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(children: [
-            for (final it in items) ...[
-              Padding(
-                padding: const EdgeInsets.only(right: 8.0),
-                child: ChoiceChip(
-                  label: Text(it.label),
-                  selected: _statusFilter == it.value,
-                  onSelected: (_) => setState(() => _statusFilter = it.value),
-                ),
-              ),
-            ],
-          ]),
+        return _centerSection(
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+              child: Row(children: [
+                for (final it in items) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: ChoiceChip(
+                      label: Text(it.label),
+                      selected: _statusFilter == it.value,
+                      onSelected: (_) => setState(() => _statusFilter = it.value),
+                    ),
+                  ),
+                ],
+              ]),
+            ),
+          ),
         );
       }
 
@@ -140,7 +172,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
           'January','February','March','April','May','June','July','August','September','October','November','December'
         ];
         final monthLabel = '${months[m.month - 1]} ${m.year}';
-        return LayoutBuilder(
+        return _centerSection(LayoutBuilder(
           builder: (context, constraints) {
             final narrow = constraints.maxWidth.isFinite && constraints.maxWidth < 380;
             final arrowSize = narrow ? 32.0 : 36.0;
@@ -233,7 +265,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
               ),
             );
           },
-        );
+        ));
       }
 
       String? _purposeForNextAppointment(TreatmentSession s) {
@@ -275,7 +307,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
           return DateTime(d.year, d.month, d.day);
         });
         
-        return Container(
+        return _centerSection(Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -383,7 +415,7 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
               ),
             ],
           ),
-        );
+        ));
       }
 
       Widget _dayChip(DateTime d, DateTime selected, DateTime todayKey, [double width = 56]) {
@@ -449,13 +481,13 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
         return ListView.separated(
           itemCount: entries.length,
           separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (_, i) => _appointmentCard(entries[i]),
+          itemBuilder: (_, i) => _centerListItem(_appointmentCard(entries[i])),
         );
       }
 
       Widget _emptyBar() {
-        return Center(
-          child: Container(
+        return _centerListItem(
+          Container(
             height: 60,
             margin: const EdgeInsets.symmetric(horizontal: 0),
             decoration: _barDecoration(),
@@ -465,6 +497,33 @@ class _UpcomingSchedulePanelState extends State<UpcomingSchedulePanel> {
             ]),
           ),
         );
+      }
+
+      // Center and constrain list items on wide screens to avoid stretched look
+      Widget _centerListItem(Widget child) {
+        return LayoutBuilder(builder: (context, c) {
+          final w = c.maxWidth;
+          double? maxW;
+          if (w >= 1600) {
+            maxW = 980;
+          } else if (w >= 1200) {
+            maxW = 920;
+          } else if (w >= 900) {
+            maxW = 820;
+          } else if (w >= 700) {
+            maxW = 640;
+          } else {
+            maxW = null; // use full width on small screens
+          }
+          if (maxW == null) return child;
+          return Align(
+            alignment: Alignment.center,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxW),
+              child: child,
+            ),
+          );
+        });
       }
 
       BoxDecoration _barDecoration({bool highlighted = false}) {

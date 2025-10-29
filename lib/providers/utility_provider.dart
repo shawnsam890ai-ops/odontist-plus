@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../repositories/utility_repository.dart';
@@ -11,6 +12,9 @@ class UtilityProvider with ChangeNotifier {
   final UtilityRepository _repo = UtilityRepository();
   final RevenueProvider revenue;
   bool _loaded = false;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _svcSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _paySub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _billSub;
 
   UtilityProvider({required this.revenue});
 
@@ -51,6 +55,8 @@ class UtilityProvider with ChangeNotifier {
           for (final d in bSnap.docs) {
             await _repo.addBill(BillEntry.fromJson(d.data()));
           }
+          // Start realtime listeners after initial pull
+          _startListeners(base);
         } else if (_repo.services.isNotEmpty || _repo.payments.isNotEmpty || _repo.bills.isNotEmpty) {
           final batch = FirebaseFirestore.instance.batch();
           for (final s in _repo.services) {
@@ -63,11 +69,36 @@ class UtilityProvider with ChangeNotifier {
             batch.set(base.collection('utility_bills').doc(b.id), b.toJson());
           }
           await batch.commit();
+          // Start realtime listeners regardless to pick up future changes
+          _startListeners(base);
         }
       }
     } catch (_) {}
     _loaded = true;
     notifyListeners();
+  }
+
+  void _startListeners(DocumentReference<Map<String, dynamic>> base) {
+    try {
+      _svcSub?.cancel();
+      _svcSub = base.collection('utility_services').snapshots().listen((snap) async {
+        final list = snap.docs.map((d) => UtilityService.fromJson(d.data())).toList();
+        await _repo.replaceServices(list);
+        notifyListeners();
+      });
+      _paySub?.cancel();
+      _paySub = base.collection('utility_payments').snapshots().listen((snap) async {
+        final list = snap.docs.map((d) => UtilityPayment.fromJson(d.data())).toList();
+        await _repo.replacePayments(list);
+        notifyListeners();
+      });
+      _billSub?.cancel();
+      _billSub = base.collection('utility_bills').snapshots().listen((snap) async {
+        final list = snap.docs.map((d) => BillEntry.fromJson(d.data())).toList();
+        await _repo.replaceBills(list);
+        notifyListeners();
+      });
+    } catch (_) {}
   }
 
   Future<void> addService(String name, {String? regNumber}) async {
@@ -232,5 +263,13 @@ class UtilityProvider with ChangeNotifier {
       }
     } catch (_) {}
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _svcSub?.cancel();
+    _paySub?.cancel();
+    _billSub?.cancel();
+    super.dispose();
   }
 }

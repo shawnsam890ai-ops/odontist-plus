@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../repositories/lab_registry_repository.dart';
@@ -7,6 +8,7 @@ import '../models/lab_vendor.dart';
 class LabRegistryProvider with ChangeNotifier {
   final LabRegistryRepository _repo = LabRegistryRepository();
   bool _loaded = false;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _labSub;
 
   List<LabVendor> get labs => _repo.labs;
 
@@ -21,23 +23,32 @@ class LabRegistryProvider with ChangeNotifier {
         final snap = await col.get();
         if (snap.docs.isNotEmpty) {
           // Replace local by clearing then adding
-          for (final l in List<LabVendor>.from(_repo.labs)) {
-            await _repo.deleteLab(l.id);
-          }
-          for (final d in snap.docs) {
-            await _repo.addLab(LabVendor.fromJson(d.data()));
-          }
+          final list = snap.docs.map((d) => LabVendor.fromJson(d.data())).toList();
+          await _repo.replaceAll(list);
+          _startListener(col);
         } else if (_repo.labs.isNotEmpty) {
           final batch = FirebaseFirestore.instance.batch();
           for (final l in _repo.labs) {
             batch.set(col.doc(l.id), l.toJson());
           }
           await batch.commit();
+          _startListener(col);
         }
       }
     } catch (_) {}
     _loaded = true;
     notifyListeners();
+  }
+
+  void _startListener(CollectionReference<Map<String, dynamic>> col) {
+    try {
+      _labSub?.cancel();
+      _labSub = col.snapshots().listen((snap) async {
+        final list = snap.docs.map((d) => LabVendor.fromJson(d.data())).toList();
+        await _repo.replaceAll(list);
+        notifyListeners();
+      });
+    } catch (_) {}
   }
 
   Future<void> addLab(String name, String address, {String? labPhone, String? staffName, String? staffPhone}) async {
@@ -109,5 +120,11 @@ class LabRegistryProvider with ChangeNotifier {
       }
     } catch (_) {}
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _labSub?.cancel();
+    super.dispose();
   }
 }
