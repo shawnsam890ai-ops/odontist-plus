@@ -1,39 +1,50 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../repositories/medicine_repository.dart';
 import '../models/medicine.dart';
 
 class MedicineProvider with ChangeNotifier {
   final MedicineRepository _repo = MedicineRepository();
   bool _loaded = false;
+  bool _listening = false;
+  final Set<String> _pendingDeletes = <String>{};
 
   List<Medicine> get medicines => _repo.items;
 
   Future<void> ensureLoaded() async {
     if (_loaded) return;
     await _repo.load();
-    // Firestore sync: pull remote if exists; else push local once
+    await _loadPendingDeletes();
+    // Firestore sync: pull remote if exists; else push local once, then start live listener
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
         final col = FirebaseFirestore.instance.collection('users').doc(uid).collection('medicines');
         final snap = await col.get();
         if (snap.docs.isNotEmpty) {
-          final items = snap.docs.map((d) => Medicine.fromJson(d.data())).toList();
-          // Replace local cache
-          // There is no replaceAll in repo; rebuild storage by clearing and re-adding
-          for (final m in List<Medicine>.from(_repo.items)) {
-            await _repo.delete(m.id);
+          // Apply tombstones: delete remotely if an id is marked pending delete locally
+          for (final d in snap.docs) {
+            final id = (d.data()['id'] as String?) ?? d.id;
+            if (_pendingDeletes.contains(id)) {
+              try {
+                await col.doc(id).delete();
+              } catch (_) {}
+            }
           }
-          for (final m in items) {
-            await _repo.add(
-              name: m.name,
-              storeAmount: m.storeAmount,
-              mrp: m.mrp,
-              strips: m.stripsAvailable,
-              unitsPerStrip: m.unitsPerStrip,
-            );
+          final filtered = snap.docs
+              .where((d) => !_pendingDeletes.contains((d.data()['id'] as String?) ?? d.id))
+              .map((d) => Medicine.fromJson(d.data()))
+              .toList();
+          // Replace local cache with filtered remote snapshot
+          await _repo.setAll(filtered);
+          // Clear tombstones that no longer exist remotely
+          final remoteIds = snap.docs.map((d) => (d.data()['id'] as String?) ?? d.id).toSet();
+          final removed = _pendingDeletes.where((id) => !remoteIds.contains(id)).toList();
+          if (removed.isNotEmpty) {
+            _pendingDeletes.removeAll(removed);
+            await _savePendingDeletes();
           }
         } else if (_repo.items.isNotEmpty) {
           final batch = FirebaseFirestore.instance.batch();
@@ -42,14 +53,17 @@ class MedicineProvider with ChangeNotifier {
           }
           await batch.commit();
         }
+
+        // Start live listener (once)
+        _startRemoteListener(col);
       }
     } catch (_) {}
     _loaded = true;
     notifyListeners();
   }
 
-  Future<void> addMedicine({required String name, required double storeAmount, required double mrp, required int strips, int unitsPerStrip = 10}) async {
-    final m = await _repo.add(name: name, storeAmount: storeAmount, mrp: mrp, strips: strips, unitsPerStrip: unitsPerStrip);
+  Future<void> addMedicine({required String name, required double storeAmount, required double mrp, required int strips, int unitsPerStrip = 10, int freeStrips = 0, int looseTabs = 0}) async {
+    final m = await _repo.add(name: name, storeAmount: storeAmount, mrp: mrp, strips: strips, unitsPerStrip: unitsPerStrip, freeStrips: freeStrips, looseTabs: looseTabs);
     // Mirror to Firestore
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -60,8 +74,8 @@ class MedicineProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateMedicine(String id, {String? name, double? storeAmount, double? mrp, int? strips, int? unitsPerStrip}) async {
-    await _repo.update(id, name: name, storeAmount: storeAmount, mrp: mrp, strips: strips, unitsPerStrip: unitsPerStrip);
+  Future<void> updateMedicine(String id, {String? name, double? storeAmount, double? mrp, int? strips, int? unitsPerStrip, int? freeStrips, int? looseTabs}) async {
+    await _repo.update(id, name: name, storeAmount: storeAmount, mrp: mrp, strips: strips, unitsPerStrip: unitsPerStrip, freeStrips: freeStrips, looseTabs: looseTabs);
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
@@ -78,8 +92,67 @@ class MedicineProvider with ChangeNotifier {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
         await FirebaseFirestore.instance.collection('users').doc(uid).collection('medicines').doc(id).delete();
+        // If remote delete succeeds, ensure tombstone cleared
+        _pendingDeletes.remove(id);
+        await _savePendingDeletes();
+      } else {
+        // Not signed in: queue tombstone so it doesn't reappear on next sync
+        _pendingDeletes.add(id);
+        await _savePendingDeletes();
       }
-    } catch (_) {}
+    } catch (_) {
+      // Network/permission issue: mark tombstone so it won't resurrect from remote
+      _pendingDeletes.add(id);
+      await _savePendingDeletes();
+    }
     notifyListeners();
+  }
+
+  void _startRemoteListener(CollectionReference<Map<String, dynamic>> col) {
+    if (_listening) return;
+    _listening = true;
+    col.orderBy('name').snapshots().listen((snap) async {
+      // Apply tombstones on live updates too
+      for (final d in snap.docs) {
+        final id = (d.data()['id'] as String?) ?? d.id;
+        if (_pendingDeletes.contains(id)) {
+          try {
+            await col.doc(id).delete();
+          } catch (_) {}
+        }
+      }
+      final items = snap.docs
+          .where((d) => !_pendingDeletes.contains((d.data()['id'] as String?) ?? d.id))
+          .map((d) => Medicine.fromJson(d.data()))
+          .toList();
+      await _repo.setAll(items);
+      // Remove tombstones that no longer exist remotely
+      final remoteIds = snap.docs.map((d) => (d.data()['id'] as String?) ?? d.id).toSet();
+      final removed = _pendingDeletes.where((id) => !remoteIds.contains(id)).toList();
+      if (removed.isNotEmpty) {
+        _pendingDeletes.removeAll(removed);
+        await _savePendingDeletes();
+      }
+      notifyListeners();
+    });
+  }
+
+  // Pending delete persistence -------------------------------------------------
+  static const _kPendingDeleteKey = 'med_del_pending_v1';
+  Future<void> _loadPendingDeletes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList(_kPendingDeleteKey) ?? const [];
+      _pendingDeletes
+        ..clear()
+        ..addAll(list);
+    } catch (_) {}
+  }
+
+  Future<void> _savePendingDeletes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_kPendingDeleteKey, _pendingDeletes.toList());
+    } catch (_) {}
   }
 }

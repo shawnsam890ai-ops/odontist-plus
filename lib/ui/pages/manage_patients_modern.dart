@@ -114,12 +114,26 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: BorderSide(color: _primary)),
       );
 
+      // Base list used in non-embedded contexts where scrolling is desired.
+      final scrollableList = patients.isEmpty
+          ? const Center(child: Text('No patients'))
+          : ListView.separated(
+              padding: const EdgeInsets.only(bottom: 16),
+              shrinkWrap: false,
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: patients.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (_, i) => _buildPatientCard(patients[i]),
+            );
+
+      // Fallback list for embedded usage where the parent provides scrolling
+      // and we must avoid unbounded height errors.
       final listWidget = patients.isEmpty
           ? const Center(child: Text('No patients'))
           : ListView.separated(
               padding: const EdgeInsets.only(bottom: 16),
-              shrinkWrap: stacked,
-              physics: stacked ? const NeverScrollableScrollPhysics() : null,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
               itemCount: patients.length,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (_, i) => _buildPatientCard(patients[i]),
@@ -149,10 +163,19 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
           Expanded(
             child: context.responsiveCenter(
               maxWidth: 1200,
-              child: listWidget,
+              child: scrollableList,
+            ),
+          )
+        else if (!widget.embedded)
+          // On narrow screens (stacked) in standalone mode, allow vertical scroll.
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: context.gutter),
+              child: scrollableList,
             ),
           )
         else
+          // Embedded mode: parent handles scrolling; keep list non-scrollable.
           Padding(
             padding: EdgeInsets.symmetric(horizontal: context.gutter),
             child: listWidget,

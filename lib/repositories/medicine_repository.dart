@@ -24,21 +24,28 @@ class MedicineRepository {
     await prefs.setString(_key, jsonEncode(_items.map((e) => e.toJson()).toList()));
   }
 
-  Future<Medicine> add({required String name, required double storeAmount, required double mrp, required int strips, int unitsPerStrip = 10}) async {
+  Future<Medicine> add({String? id, required String name, required double storeAmount, required double mrp, required int strips, int unitsPerStrip = 10, int freeStrips = 0, int looseTabs = 0}) async {
     final m = Medicine(
-      id: _uuid.v4(),
+      id: id ?? _uuid.v4(),
       name: name,
       storeAmount: storeAmount,
       mrp: mrp,
       stripsAvailable: strips,
       unitsPerStrip: unitsPerStrip,
+      freeStrips: freeStrips,
+      looseTabs: looseTabs,
     );
     _items.add(m);
     await _persist();
     return m;
   }
 
-  Future<void> update(String id, {String? name, double? storeAmount, double? mrp, int? strips, int? unitsPerStrip}) async {
+  Future<void> setAll(List<Medicine> items) async {
+    _items = List<Medicine>.from(items);
+    await _persist();
+  }
+
+  Future<void> update(String id, {String? name, double? storeAmount, double? mrp, int? strips, int? unitsPerStrip, int? freeStrips, int? looseTabs}) async {
     final i = _items.indexWhere((e) => e.id == id);
     if (i == -1) return;
     final cur = _items[i];
@@ -49,6 +56,8 @@ class MedicineRepository {
       mrp: mrp ?? cur.mrp,
       stripsAvailable: strips ?? cur.stripsAvailable,
       unitsPerStrip: unitsPerStrip ?? cur.unitsPerStrip,
+      freeStrips: freeStrips ?? cur.freeStrips,
+      looseTabs: looseTabs ?? cur.looseTabs,
     );
     await _persist();
   }

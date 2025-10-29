@@ -5,6 +5,8 @@ import '../models/payment_entry.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'doctor_attendance_provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class DoctorProvider with ChangeNotifier {
   final Map<String, Doctor> _doctors = {};
@@ -12,6 +14,14 @@ class DoctorProvider with ChangeNotifier {
   double _totalDoctor = 0;
   double _totalClinic = 0;
   bool _requireAttendance = false;
+
+  // Firebase
+  final FirebaseFirestore _db;
+  final FirebaseAuth _auth;
+  bool _remoteListening = false;
+  DoctorProvider({FirebaseFirestore? db, FirebaseAuth? auth})
+      : _db = db ?? FirebaseFirestore.instance,
+        _auth = auth ?? FirebaseAuth.instance;
 
   List<Doctor> get doctors => _doctors.values.toList(growable: false);
   List<PaymentEntry> get ledger => List.unmodifiable(_ledger);
@@ -37,6 +47,8 @@ class DoctorProvider with ChangeNotifier {
   void addDoctor(Doctor d) {
     _doctors[d.id] = d;
     notifyListeners();
+    _persist();
+    _writeDoctorRemote(d);
   }
 
   void updateDoctor(String id, {String? name, DoctorRole? role, bool? active, String? photoPath}) {
@@ -47,11 +59,15 @@ class DoctorProvider with ChangeNotifier {
     if (active != null) d.active = active;
     if (photoPath != null) d.photoPath = photoPath;
     notifyListeners();
+    _persist();
+    _writeDoctorRemote(d);
   }
 
   void removeDoctor(String id) {
     _doctors.remove(id);
     notifyListeners();
+    _persist();
+    _deleteDoctorRemote(id);
   }
 
   void setRule(String doctorId, String procedureKey, PaymentRule rule) {
@@ -59,6 +75,8 @@ class DoctorProvider with ChangeNotifier {
     if (d == null) return;
     d.rules[procedureKey] = rule;
     notifyListeners();
+    _persist();
+    _writeDoctorRemote(d);
   }
 
   void removeRule(String doctorId, String procedureKey) {
@@ -66,6 +84,8 @@ class DoctorProvider with ChangeNotifier {
     if (d == null) return;
     d.rules.remove(procedureKey);
     notifyListeners();
+    _persist();
+    _writeDoctorRemote(d);
   }
 
   // Compute split based on a doctor's rule for procedure; fallback: all clinic.
@@ -97,6 +117,7 @@ class DoctorProvider with ChangeNotifier {
     _requireAttendance = v;
     notifyListeners();
     _persist();
+    _writeSettingsRemote();
   }
 
   // Record a payment entry into ledger. Optionally check attendance
@@ -138,6 +159,7 @@ class DoctorProvider with ChangeNotifier {
     _recomputeTotals();
     notifyListeners();
     _persist();
+    _writeLedgerRemote(entry);
     return null;
   }
 
@@ -177,6 +199,7 @@ class DoctorProvider with ChangeNotifier {
     _recomputeTotals();
     notifyListeners();
     _persist();
+    _writeLedgerRemote(entry);
   }
 
   // Overload with payout mode
@@ -199,6 +222,7 @@ class DoctorProvider with ChangeNotifier {
     _recomputeTotals();
     notifyListeners();
     _persist();
+    _writeLedgerRemote(entry);
   }
 
   // Delete a ledger entry by id
@@ -209,6 +233,7 @@ class DoctorProvider with ChangeNotifier {
     _recomputeTotals();
     notifyListeners();
     _persist();
+    _deleteLedgerRemote(entryId);
   }
 
   // Ledger filters -----------------------------------------------------------
@@ -297,6 +322,9 @@ class DoctorProvider with ChangeNotifier {
     // Ensure payouts are excluded and totals are consistent on load
     _recomputeTotals();
     notifyListeners();
+
+    // Attempt remote sync and live listeners
+    await _syncWithRemote();
   }
 
   Future<void> _persist() async {
@@ -319,5 +347,164 @@ class DoctorProvider with ChangeNotifier {
     // Ledger
     final ledList = _ledger.map((e) => e.toJson()).toList();
     await prefs.setString(_kLedger, jsonEncode(ledList));
+  }
+
+  // ---------- Firebase helpers ----------
+  String? _uid() => _auth.currentUser?.uid;
+
+  Future<void> _syncWithRemote() async {
+    if (_remoteListening) return;
+    final uid = _uid();
+    if (uid == null) return;
+    try {
+      // Load remote doctors and ledger
+      final docsSnap = await _db.collection('users').doc(uid).collection('doctors').get();
+      final ledSnap = await _db.collection('users').doc(uid).collection('doctor_ledger').get();
+
+      final remoteDoctors = <Doctor>[];
+      for (final d in docsSnap.docs) {
+        final data = d.data();
+        final rulesMap = Map<String, dynamic>.from((data['rules'] as Map?) ?? {});
+        final rules = <String, PaymentRule>{};
+        rulesMap.forEach((key, v) {
+          final mv = Map<String, dynamic>.from(v as Map);
+          final mode = (mv['mode'] as String?) ?? 'percent';
+          final value = (mv['value'] as num).toDouble();
+          final price = mv['clinicPrice'] == null ? null : (mv['clinicPrice'] as num).toDouble();
+          rules[key] = mode == 'fixed' ? PaymentRule.fixed(value, clinicPrice: price) : PaymentRule.percent(value, clinicPrice: price);
+        });
+        remoteDoctors.add(Doctor(
+          id: data['id'] as String? ?? d.id,
+          name: (data['name'] as String?) ?? 'Doctor',
+          role: DoctorRole.values[(data['role'] as int?) ?? 0],
+          active: (data['active'] as bool?) ?? true,
+          photoPath: data['photoPath'] as String?,
+          rules: rules,
+        ));
+      }
+
+      final remoteLedger = <PaymentEntry>[];
+      for (final e in ledSnap.docs) {
+        remoteLedger.add(PaymentEntry.fromJson(e.data()));
+      }
+
+      final hasRemote = remoteDoctors.isNotEmpty || remoteLedger.isNotEmpty;
+      final hasLocal = _doctors.isNotEmpty || _ledger.isNotEmpty;
+      if (!hasRemote && hasLocal) {
+        // Push local to remote (first sync scenario)
+        for (final d in _doctors.values) {
+          await _writeDoctorRemote(d);
+        }
+        for (final e in _ledger) {
+          await _writeLedgerRemote(e);
+        }
+        await _writeSettingsRemote();
+      } else if (hasRemote) {
+        // Override local with remote
+        _doctors
+          ..clear()
+          ..addEntries(remoteDoctors.map((d) => MapEntry(d.id, d)));
+        _ledger
+          ..clear()
+          ..addAll(remoteLedger);
+        _recomputeTotals();
+        notifyListeners();
+        await _persist();
+      }
+
+      // Start live listeners for real-time sync
+      _db.collection('users').doc(uid).collection('doctors').snapshots().listen((snap) {
+        _doctors.clear();
+        for (final d in snap.docs) {
+          final data = d.data();
+          final rulesMap = Map<String, dynamic>.from((data['rules'] as Map?) ?? {});
+          final rules = <String, PaymentRule>{};
+          rulesMap.forEach((key, v) {
+            final mv = Map<String, dynamic>.from(v as Map);
+            final mode = (mv['mode'] as String?) ?? 'percent';
+            final value = (mv['value'] as num).toDouble();
+            final price = mv['clinicPrice'] == null ? null : (mv['clinicPrice'] as num).toDouble();
+            rules[key] = mode == 'fixed' ? PaymentRule.fixed(value, clinicPrice: price) : PaymentRule.percent(value, clinicPrice: price);
+          });
+          _doctors[data['id'] as String? ?? d.id] = Doctor(
+            id: data['id'] as String? ?? d.id,
+            name: (data['name'] as String?) ?? 'Doctor',
+            role: DoctorRole.values[(data['role'] as int?) ?? 0],
+            active: (data['active'] as bool?) ?? true,
+            photoPath: data['photoPath'] as String?,
+            rules: rules,
+          );
+        }
+        notifyListeners();
+        _persist();
+      });
+
+      _db.collection('users').doc(uid).collection('doctor_ledger').orderBy('date').snapshots().listen((snap) {
+        _ledger
+          ..clear()
+          ..addAll(snap.docs.map((d) => PaymentEntry.fromJson(d.data())));
+        _recomputeTotals();
+        notifyListeners();
+        _persist();
+      });
+
+      _remoteListening = true;
+    } catch (_) {
+      // Ignore sync errors; app will continue with local cache
+    }
+  }
+
+  Future<void> _writeDoctorRemote(Doctor d) async {
+    final uid = _uid();
+    if (uid == null) return;
+    try {
+  final doc = {
+        'id': d.id,
+        'name': d.name,
+        'role': d.role.index,
+        'active': d.active,
+        'photoPath': d.photoPath,
+    'rules': d.rules.map((k, r) => MapEntry(k, {
+      'mode': r.mode == PaymentMode.fixed ? 'fixed' : 'percent',
+      'value': r.value,
+      'clinicPrice': r.clinicPrice,
+    })),
+      };
+      await _db.collection('users').doc(uid).collection('doctors').doc(d.id).set(doc);
+    } catch (_) {}
+  }
+
+  Future<void> _deleteDoctorRemote(String id) async {
+    final uid = _uid();
+    if (uid == null) return;
+    try {
+      await _db.collection('users').doc(uid).collection('doctors').doc(id).delete();
+    } catch (_) {}
+  }
+
+  Future<void> _writeLedgerRemote(PaymentEntry e) async {
+    final uid = _uid();
+    if (uid == null) return;
+    try {
+      await _db.collection('users').doc(uid).collection('doctor_ledger').doc(e.id).set(e.toJson());
+    } catch (_) {}
+  }
+
+  Future<void> _deleteLedgerRemote(String id) async {
+    final uid = _uid();
+    if (uid == null) return;
+    try {
+      await _db.collection('users').doc(uid).collection('doctor_ledger').doc(id).delete();
+    } catch (_) {}
+  }
+
+  Future<void> _writeSettingsRemote() async {
+    final uid = _uid();
+    if (uid == null) return;
+    try {
+      await _db.collection('users').doc(uid).collection('settings').doc('doctor').set({
+            'requireAttendance': _requireAttendance,
+          }, SetOptions(merge: true));
+    } catch (_) {}
   }
 }
