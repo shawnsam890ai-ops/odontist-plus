@@ -544,6 +544,12 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
                 icon: const Icon(Icons.chat, size: 18),
                 label: const Text('WhatsApp'),
               ),
+              // Add Bill for patient
+              OutlinedButton.icon(
+                onPressed: () => _showAddPatientBillDialog(patient),
+                icon: const Icon(Icons.receipt_long, size: 18),
+                label: const Text('Add Bill'),
+              ),
               OutlinedButton.icon(
                 onPressed: () => Navigator.of(context).pushNamed(EditPatientPage.routeName, arguments: {'patientId': patient.id}),
                 icon: const Icon(Icons.manage_accounts, size: 18),
@@ -563,6 +569,179 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
       ),
     );
   }
+
+  Future<void> _showAddPatientBillDialog(Patient patient) async {
+    final treatmentCtrl = TextEditingController();
+    final amountCtrl = TextEditingController();
+    final modeCtrl = TextEditingController();
+    DateTime payDate = DateTime.now();
+    // Auto serial: count existing revenue entries for this patient with Bill prefix
+    final rev = context.read<RevenueProvider>();
+    final existing = rev.entries.where((e) => e.patientId == patient.id && e.description.startsWith('Bill:')).length;
+    final serialNo = existing + 1;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setSt) {
+          return AlertDialog(
+            title: const Text('Add Patient Bill'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(children: [
+                    Expanded(child: Text('Sl No: $serialNo')),
+                  ]),
+                  const SizedBox(height: 8),
+                  TextField(controller: treatmentCtrl, decoration: const InputDecoration(labelText: 'Treatment Done')),
+                  const SizedBox(height: 8),
+                  TextField(controller: amountCtrl, decoration: const InputDecoration(labelText: 'Payment made (₹)'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+                  const SizedBox(height: 8),
+                  TextField(controller: modeCtrl, decoration: const InputDecoration(labelText: 'Mode of payment (Cash/UPI/Card)')),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Expanded(child: Text('Date of payment: ${payDate.day}/${payDate.month}/${payDate.year}')),
+                    TextButton(
+                      onPressed: () async {
+                        final picked = await showDatePicker(context: ctx, firstDate: DateTime(2020), lastDate: DateTime.now().add(const Duration(days: 365)), initialDate: payDate);
+                        if (picked != null) setSt(() => payDate = picked);
+                      },
+                      child: const Text('Change'),
+                    )
+                  ])
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.picture_as_pdf),
+                label: const Text('Export PDF'),
+                onPressed: () async {
+                  final treatment = treatmentCtrl.text.trim();
+                  final amt = double.tryParse(amountCtrl.text.trim()) ?? 0;
+                  final mode = modeCtrl.text.trim().isEmpty ? '—' : modeCtrl.text.trim();
+                  await _exportPatientBillPdf(patient: patient, serial: serialNo, treatment: treatment, amount: amt, mode: mode, date: payDate);
+                },
+              ),
+              FilledButton.icon(
+                icon: const Icon(Icons.save_alt),
+                label: const Text('Save & Export'),
+                onPressed: () async {
+                  final treatment = treatmentCtrl.text.trim();
+                  final amt = double.tryParse(amountCtrl.text.trim()) ?? 0;
+                  final mode = modeCtrl.text.trim().isEmpty ? '—' : modeCtrl.text.trim();
+                  // Log into revenue as positive amount
+                  if (amt != 0) {
+                    await context.read<RevenueProvider>().addRevenue(patientId: patient.id, description: 'Bill: $treatment ($mode)', amount: amt);
+                  }
+                  await _exportPatientBillPdf(patient: patient, serial: serialNo, treatment: treatment, amount: amt, mode: mode, date: payDate);
+                  if (mounted) Navigator.pop(ctx);
+                },
+              ),
+            ],
+          );
+        });
+      },
+    );
+  }
+
+  Future<void> _exportPatientBillPdf({
+    required Patient patient,
+    required int serial,
+    required String treatment,
+    required double amount,
+    required String mode,
+    required DateTime date,
+  }) async {
+    final doc = pw.Document();
+
+    // Reuse header/footer loading logic similar to prescription printing
+    Future<pw.Widget?> loadAssetImage(String assetPath) async {
+      try {
+        final data = await rootBundle.load(assetPath);
+        final bytes = data.buffer.asUint8List();
+        final image = pw.MemoryImage(bytes);
+        return pw.Image(image, fit: pw.BoxFit.contain, height: 80);
+      } catch (_) { return null; }
+    }
+    Future<pw.Widget?> loadFileImage(String filePath) async {
+      try {
+        final file = File(filePath);
+        if (!await file.exists()) return null;
+        final bytes = await file.readAsBytes();
+        final image = pw.MemoryImage(bytes);
+        return pw.Image(image, fit: pw.BoxFit.contain, height: 80);
+      } catch (_) { return null; }
+    }
+    Future<pw.Widget?> resolveImage(String base) async {
+      final candidates = <String>['assets/images/$base.png','assets/images/$base.jpg','assets/images/$base.jpeg'];
+      for (final c in candidates) { final w = await loadAssetImage(c); if (w != null) return w; }
+      return null;
+    }
+    final themeProv = context.read<ThemeProvider>();
+    Future<pw.Widget?> loadFromSetting(String? path, String legacyBase) async {
+      if (path != null && path.isNotEmpty) {
+        if (path.startsWith('asset:')) {
+          return await loadAssetImage(path.substring('asset:'.length));
+        } else { return await loadFileImage(path); }
+      }
+      return await resolveImage(legacyBase);
+    }
+    final headerImage = await loadFromSetting(themeProv.rxHeaderPath, 'clinic_header');
+    final footerImage = await loadFromSetting(themeProv.rxFooterPath, 'clinic_footer');
+
+    final demographics = [
+      'Name: ${patient.name}',
+      'Age/Sex: ${patient.age}/${patient.sex.label}',
+      if (patient.address.trim().isNotEmpty) 'Address: ${patient.address}',
+      'Date: ${date.toLocal().toString().split(' ').first}',
+    ].join('\n');
+
+    doc.addPage(
+      pw.MultiPage(
+        margin: const pw.EdgeInsets.all(24),
+        header: (ctx) => headerImage == null ? pw.SizedBox() : pw.Column(children: [headerImage, pw.Divider(thickness: 1)]),
+        footer: (ctx) => footerImage == null ? pw.SizedBox() : pw.Column(children: [pw.Divider(thickness: 1), footerImage]),
+        build: (ctx) => [
+          pw.Text('BILL / RECEIPT', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 8),
+          pw.Text(demographics, style: const pw.TextStyle(fontSize: 10)),
+          pw.SizedBox(height: 12),
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey),
+            children: [
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                children: [
+                  _pdfHeaderCell('Sl No'),
+                  _pdfHeaderCell('Treatment Done'),
+                  _pdfHeaderCell('Payment Made'),
+                  _pdfHeaderCell('Mode'),
+                  _pdfHeaderCell('Date'),
+                ],
+              ),
+              pw.TableRow(children: [
+                _pdfCell(serial.toString()),
+                _pdfCell(treatment.isEmpty ? '—' : treatment),
+                _pdfCell('₹${amount.toStringAsFixed(0)}'),
+                _pdfCell(mode),
+                _pdfCell('${date.day}/${date.month}/${date.year}'),
+              ]),
+            ],
+          ),
+          pw.SizedBox(height: 8),
+          pw.Align(alignment: pw.Alignment.centerRight, child: pw.Text('Total: ₹${amount.toStringAsFixed(0)}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold))),
+        ],
+      ),
+    );
+
+    await Printing.layoutPdf(onLayout: (format) async => doc.save());
+  }
+
+  pw.Widget _pdfHeaderCell(String text) => pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(text, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)));
+  pw.Widget _pdfCell(String text) => pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(text));
   Widget _aiInsightsBanner(Patient patient) {
     final ai = AiInsightsService();
     // Build a temporary session snapshot from current UI selections for plan priority
