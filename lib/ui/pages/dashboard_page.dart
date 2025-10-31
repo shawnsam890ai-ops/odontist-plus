@@ -3131,6 +3131,11 @@ class _RevenueListPanelState extends State<_RevenueListPanel> {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    IconButton(
+                      tooltip: 'View details',
+                      icon: const Icon(Icons.visibility_outlined),
+                      onPressed: () => _showRevenueEntryDetails(e),
+                    ),
                     Text(
                       '${e.amount >= 0 ? '+' : ''}₹${e.amount.toStringAsFixed(0)}',
                       style: TextStyle(color: amtColor, fontWeight: FontWeight.w700),
@@ -3230,6 +3235,21 @@ class _RevenueListPanelState extends State<_RevenueListPanel> {
     }
   }
 
+  String? _doctorForSession(TreatmentSession s) {
+    switch (s.type) {
+      case TreatmentType.general:
+        return s.generalDoctorInCharge;
+      case TreatmentType.orthodontic:
+        return s.orthoDoctorInCharge;
+      case TreatmentType.rootCanal:
+        return s.rootCanalDoctorInCharge;
+      case TreatmentType.prosthodontic:
+        return s.prosthodonticDoctorInCharge;
+      case TreatmentType.labWork:
+        return null;
+    }
+  }
+
   String _doneSummary(List<ToothTreatmentDoneEntry> done) {
     final items = <String>[];
     for (final d in done.take(2)) {
@@ -3296,9 +3316,131 @@ class _RevenueListPanelState extends State<_RevenueListPanel> {
     return months[(m - 1) % 12];
   }
 
+  void _showRevenueEntryDetails(RevenueEntry e) {
+    final patients = context.read<PatientProvider>();
+    final p = patients.byId(e.patientId);
+    TreatmentSession? session;
+    const prefix = 'Clinic revenue (ledger): ';
+    if (e.description.startsWith(prefix) && p != null) {
+      final tag = e.description.substring(prefix.length);
+      final sessionId = _extractSessionId(tag);
+      if (sessionId != null) {
+        session = p.sessions.where((s) => s.id == sessionId).cast<TreatmentSession?>().firstOrNull;
+      }
+    }
+
+    String fmt(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    final dateStr = fmt(session?.date ?? e.date);
+    final patientIdStr = p?.displayNumber.toString() ?? '—';
+    final patientNameStr = p?.name ?? '—';
+    final chiefComplaintStr = (session?.chiefComplaint?.complaints.isNotEmpty == true)
+        ? session!.chiefComplaint!.complaints.first
+        : '—';
+    final treatmentDoneStr = (session != null && session!.treatmentsDone.isNotEmpty)
+        ? _doneSummary(session!.treatmentsDone)
+        : '—';
+    final doctorStr = session == null ? '—' : (_doctorForSession(session!) ?? '—');
+    final paymentStr = '${e.amount >= 0 ? '+' : ''}₹${e.amount.toStringAsFixed(0)}';
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Entry details'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _kv('Patient ID', patientIdStr),
+              _kv('Patient name', patientNameStr),
+              _kv('Date of treatment', dateStr),
+              _kv('Chief complaint', chiefComplaintStr),
+              _kv('Treatment done', treatmentDoneStr),
+              _kv('Payment done', paymentStr),
+              _kv('Doctor in charge', doctorStr),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  Widget _kv(String k, String v) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 160, child: Text(k, style: const TextStyle(fontWeight: FontWeight.w600))),
+          const SizedBox(width: 8),
+          Expanded(child: Text(v)),
+        ],
+      ),
+    );
+  }
+
   Future<void> _exportPdf(List<RevenueEntry> list, {required DateTime start, required DateTime end}) async {
-    // Basic PDF export using printing + pw (already imported in file)
-  final doc = pw.Document();
+    // Enhanced PDF export: map internal tags to patient/session details and embed a Unicode font for the ₹ symbol
+    final patientProvider = context.read<PatientProvider>();
+
+    String fmtDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+    List<List<String>> rows = [];
+    for (final e in list) {
+      // Defaults from entry
+      String dateStr = fmtDate(e.date);
+      String patientIdStr = '';
+      String chiefComplaintStr = '';
+      String treatmentDoneStr = '';
+      String doctorStr = '';
+
+      final patient = patientProvider.byId(e.patientId);
+      if (patient != null) {
+        patientIdStr = '${patient.displayNumber}';
+      }
+
+      const prefix = 'Clinic revenue (ledger): ';
+      if (e.description.startsWith(prefix) && patient != null) {
+        final tag = e.description.substring(prefix.length);
+        final sessionId = _extractSessionId(tag);
+        final s = sessionId == null
+            ? null
+            : (patient.sessions.where((s) => s.id == sessionId).cast<TreatmentSession?>().firstOrNull ??
+                (patient.sessions.isNotEmpty ? patient.sessions.first : null));
+        if (s != null) {
+          dateStr = fmtDate(s.date);
+          final cc = s.chiefComplaint?.complaints;
+          if (cc != null && cc.isNotEmpty) {
+            chiefComplaintStr = cc.first;
+          }
+          if (s.treatmentsDone.isNotEmpty) {
+            treatmentDoneStr = _doneSummary(s.treatmentsDone);
+          } else {
+            // fallback to purpose (plans) if no treatmentsDone
+            treatmentDoneStr = _sessionPurpose(s);
+          }
+          doctorStr = _doctorForSession(s) ?? '';
+        }
+      }
+
+  // Use 'Rs' prefix to avoid missing glyphs when PDF viewers lack the ₹ glyph
+  final amountStr = '${e.amount >= 0 ? '+' : ''}Rs ${e.amount.toStringAsFixed(0)}';
+
+      rows.add([
+        dateStr,
+        patientIdStr,
+        chiefComplaintStr,
+        treatmentDoneStr,
+        doctorStr,
+        amountStr,
+      ]);
+    }
+
+    final doc = pw.Document();
     doc.addPage(
       pw.MultiPage(
         build: (context) {
@@ -3307,16 +3449,9 @@ class _RevenueListPanelState extends State<_RevenueListPanel> {
             pw.Text(title, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 12),
             pw.Table.fromTextArray(
-              headers: ['Date','Description','Amount'],
-              data: [
-                for (final e in list)
-                  [
-                    '${e.date.year}-${e.date.month.toString().padLeft(2,'0')}-${e.date.day.toString().padLeft(2,'0')}',
-                    e.description,
-                    '${e.amount >= 0 ? '+' : ''}₹${e.amount.toStringAsFixed(0)}',
-                  ]
-              ],
-            )
+              headers: ['Date of treatment', 'Patient ID', 'Chief complaint', 'Treatment done', 'Doctor in charge', 'Amount'],
+              data: rows,
+            ),
           ];
         },
       ),
