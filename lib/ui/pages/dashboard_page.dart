@@ -87,6 +87,8 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _menuHidden = false;
   final ScrollController _menuScroll = ScrollController();
   final ScrollController _managePatientsScroll = ScrollController();
+  // Inventory UI state
+  String? _invSelectedCategory; // Instruments | Materials | null => all
 
   @override
   void initState() {
@@ -955,51 +957,91 @@ class _DashboardPageState extends State<DashboardPage> {
   // ============== Inventory ==============
   Widget _inventorySection() {
     final inventoryProvider = context.watch<InventoryProvider>();
+    // ensure data is loaded
+    if (!inventoryProvider.isLoaded) {
+      inventoryProvider.ensureLoaded();
+    }
+    // Big clickable category boxes with background images
+    Widget categoryBox({required String label, required String asset, required IconData fallbackIcon}) {
+      final selected = _invSelectedCategory == label;
+      final theme = Theme.of(context);
+      return InkWell(
+        onTap: () {
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => _InventoryCategoryPage(category: label),
+          ));
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            width: 520,
+            height: 380,
+            decoration: BoxDecoration(
+              border: Border.all(color: selected ? theme.colorScheme.primary : theme.dividerColor, width: selected ? 2 : 1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Background image (with graceful fallback if asset is missing)
+                Image.asset(
+                  'assets/images/' + asset,
+                  fit: BoxFit.cover,
+                  errorBuilder: (c, e, s) => Container(
+                    color: theme.colorScheme.surfaceVariant,
+                    alignment: Alignment.center,
+                    child: Icon(fallbackIcon, size: 48, color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+                // Dim gradient for text readability
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0x00000000),
+                        Color(0x99000000),
+                      ],
+                    ),
+                  ),
+                ),
+                // Label
+                Positioned(
+                  left: 20,
+                  right: 20,
+                  bottom: 20,
+                  child: Text(
+                    label,
+                    style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    final filteredItems = _invSelectedCategory == null
+        ? inventoryProvider.items
+        : inventoryProvider.items.where((e) => e.category == _invSelectedCategory).toList();
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
         Text('Clinic Inventory', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 12),
-        Row(children: [
-          ElevatedButton.icon(onPressed: () => _showAddInventoryDialog(), icon: const Icon(Icons.add), label: const Text('Add Item')),
-          const SizedBox(width: 12),
-          Text('Total Inv: ₹${inventoryProvider.totalInventoryValue.toStringAsFixed(0)}')
-        ]),
-        const SizedBox(height: 16),
+        const SizedBox(height: 32),
+        // Only the two boxes should be visible here - centered
         Expanded(
-          child: context.responsiveCenter(
-            maxWidth: 1100,
-            child: Card(
-              child: Column(
-                children: [
-                  const ListTile(title: Text('Inventory Items')),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: inventoryProvider.items.isEmpty
-                        ? const Center(child: Text('No items'))
-                        : ListView.builder(
-                            itemCount: inventoryProvider.items.length,
-                            itemBuilder: (c, i) {
-                              final item = inventoryProvider.items[i];
-                              return ListTile(
-                                title: Text(item.name),
-                                subtitle: Text('Qty: ${item.quantity}  Unit: ₹${item.unitCost.toStringAsFixed(0)}  Total: ₹${item.total.toStringAsFixed(0)}'),
-                                trailing: PopupMenuButton<String>(
-                                  onSelected: (v) {
-                                    if (v == 'edit') _showEditInventoryDialog(item.id, item.name, item.quantity, item.unitCost);
-                                    if (v == 'delete') inventoryProvider.removeItem(item.id);
-                                  },
-                                  itemBuilder: (_) => const [
-                                    PopupMenuItem(value: 'edit', child: Text('Edit')),
-                                    PopupMenuItem(value: 'delete', child: Text('Delete')),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
+          child: Center(
+            child: Wrap(
+              spacing: 30,
+              runSpacing: 30,
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                categoryBox(label: 'Instruments', asset: 'instruments_bg.jpg', fallbackIcon: Icons.handyman_outlined),
+                categoryBox(label: 'Materials', asset: 'materials_bg.jpg', fallbackIcon: Icons.inventory_2_outlined),
+              ],
             ),
           ),
         ),
@@ -2419,17 +2461,94 @@ class _DashboardPageState extends State<DashboardPage> {
     final nameCtrl = TextEditingController();
     final qtyCtrl = TextEditingController(text: '0');
     final costCtrl = TextEditingController(text: '0');
+    String category = 'Instruments';
+    String subCategory = 'Diagnostic Instruments';
+    final unitCtrl = TextEditingController(text: 'pcs');
+    DateTime? expiry;
+    final supplierCtrl = TextEditingController();
+    final reorderCtrl = TextEditingController(text: '0');
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Add Inventory Item'),
         content: SizedBox(
-          width: 320,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
+          width: 420,
+          child: StatefulBuilder(builder: (context, setSt) {
+            List<String> subsFor(String cat) {
+              if (cat == 'Materials') {
+                return const [
+                  'Restorative Materials',
+                  'Impression Materials',
+                  'Endodontic Materials',
+                  'Prosthodontic Materials',
+                  'Preventive Materials',
+                  'Surgical Materials',
+                  'Disposables',
+                ];
+              }
+              return const [
+                'Diagnostic Instruments',
+                'Rotary Instruments',
+                'Surgical Instruments',
+                'Endodontic Instruments',
+                'Periodontal Instruments',
+                'Prosthodontic Instruments',
+              ];
+            }
+            final subs = subsFor(category);
+            if (!subs.contains(subCategory)) subCategory = subs.first;
+            return Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name')),
             TextField(controller: qtyCtrl, decoration: const InputDecoration(labelText: 'Quantity'), keyboardType: TextInputType.number),
             TextField(controller: costCtrl, decoration: const InputDecoration(labelText: 'Unit Cost'), keyboardType: TextInputType.number),
-          ]),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: category,
+              decoration: const InputDecoration(labelText: 'Category'),
+              items: const [
+                DropdownMenuItem(value: 'Instruments', child: Text('Instruments')),
+                DropdownMenuItem(value: 'Materials', child: Text('Materials')),
+              ],
+              onChanged: (v) => setSt(() => category = v ?? category),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: subCategory,
+              decoration: const InputDecoration(labelText: 'Subcategory'),
+              items: subs.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+              onChanged: (v) => setSt(() => subCategory = v ?? subCategory),
+            ),
+            const SizedBox(height: 8),
+            TextField(controller: unitCtrl, decoration: const InputDecoration(labelText: 'Unit (pcs/box/bottle/etc.)')),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(
+                child: TextField(controller: supplierCtrl, decoration: const InputDecoration(labelText: 'Supplier (optional)')),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(
+                child: TextField(controller: reorderCtrl, decoration: const InputDecoration(labelText: 'Reorder level'), keyboardType: TextInputType.number),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: expiry ?? DateTime.now(),
+                      firstDate: DateTime(DateTime.now().year - 1),
+                      lastDate: DateTime(DateTime.now().year + 10),
+                    );
+                    if (picked != null) setSt(() => expiry = picked);
+                  },
+                  child: Text(expiry == null ? 'Expiry date (optional)' : '${expiry!.year}-${expiry!.month.toString().padLeft(2, '0')}-${expiry!.day.toString().padLeft(2, '0')}'),
+                ),
+              ),
+            ]),
+          ]);
+          }),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
@@ -2439,7 +2558,18 @@ class _DashboardPageState extends State<DashboardPage> {
               if (name.isEmpty) return;
               final qty = int.tryParse(qtyCtrl.text) ?? 0;
               final cost = double.tryParse(costCtrl.text) ?? 0;
-              context.read<InventoryProvider>().addItem(InventoryItem(name: name, quantity: qty, unitCost: cost));
+              final reorder = int.tryParse(reorderCtrl.text) ?? 0;
+              context.read<InventoryProvider>().addItem(InventoryItem(
+                    name: name,
+                    quantity: qty,
+                    unitCost: cost,
+                    category: category,
+                    subCategory: subCategory,
+                    unit: unitCtrl.text.trim().isEmpty ? 'pcs' : unitCtrl.text.trim(),
+                    expiryDate: expiry,
+                    supplierName: supplierCtrl.text.trim(),
+                    reorderLevel: reorder,
+                  ));
               Navigator.pop(context);
             },
             child: const Text('Add'),
@@ -2453,6 +2583,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final nameCtrl = TextEditingController(text: name);
     final qtyCtrl = TextEditingController(text: quantity.toString());
     final costCtrl = TextEditingController(text: unitCost.toString());
+    // For now keep edit dialog minimal; advanced edit can be added similarly if needed.
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -4553,6 +4684,208 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
     );
   }
 
+}
+
+// ============== Inventory Category Page ==============
+class _InventoryCategoryPage extends StatefulWidget {
+  final String category; // Instruments | Materials
+  const _InventoryCategoryPage({required this.category});
+
+  @override
+  State<_InventoryCategoryPage> createState() => _InventoryCategoryPageState();
+}
+
+class _InventoryCategoryPageState extends State<_InventoryCategoryPage> {
+  @override
+  void initState() {
+    super.initState();
+    // ensure provider loads
+    final prov = context.read<InventoryProvider>();
+    if (!prov.isLoaded) {
+      // fire and forget
+      prov.ensureLoaded();
+    }
+  }
+
+  void _addItemDialog() {
+    final nameCtrl = TextEditingController();
+    final qtyCtrl = TextEditingController(text: '0');
+    final costCtrl = TextEditingController(text: '0');
+    String category = widget.category; // fixed based on page
+    String subCategory = category == 'Materials' ? 'Restorative Materials' : 'Diagnostic Instruments';
+    final unitCtrl = TextEditingController(text: 'pcs');
+    DateTime? expiry;
+    final supplierCtrl = TextEditingController();
+    final reorderCtrl = TextEditingController(text: '0');
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Add ${widget.category.substring(0, 1).toUpperCase()}${widget.category.substring(1)} Item'),
+        content: SizedBox(
+          width: 420,
+          child: StatefulBuilder(builder: (context, setSt) {
+            List<String> subsFor(String cat) {
+              if (cat == 'Materials') {
+                return const [
+                  'Restorative Materials',
+                  'Impression Materials',
+                  'Endodontic Materials',
+                  'Prosthodontic Materials',
+                  'Preventive Materials',
+                  'Surgical Materials',
+                  'Disposables',
+                ];
+              }
+              return const [
+                'Diagnostic Instruments',
+                'Rotary Instruments',
+                'Surgical Instruments',
+                'Endodontic Instruments',
+                'Periodontal Instruments',
+                'Prosthodontic Instruments',
+              ];
+            }
+            final subs = subsFor(category);
+            if (!subs.contains(subCategory)) subCategory = subs.first;
+            return Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name')),
+              TextField(controller: qtyCtrl, decoration: const InputDecoration(labelText: 'Quantity'), keyboardType: TextInputType.number),
+              TextField(controller: costCtrl, decoration: const InputDecoration(labelText: 'Unit Cost'), keyboardType: TextInputType.number),
+              const SizedBox(height: 8),
+              // Category is fixed but visible
+              DropdownButtonFormField<String>(
+                value: category,
+                decoration: const InputDecoration(labelText: 'Category'),
+                items: const [
+                  DropdownMenuItem(value: 'Instruments', child: Text('Instruments')),
+                  DropdownMenuItem(value: 'Materials', child: Text('Materials')),
+                ],
+                onChanged: (v) => setSt(() => category = v ?? category),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: subCategory,
+                decoration: const InputDecoration(labelText: 'Subcategory'),
+                items: subs.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                onChanged: (v) => setSt(() => subCategory = v ?? subCategory),
+              ),
+              const SizedBox(height: 8),
+              TextField(controller: unitCtrl, decoration: const InputDecoration(labelText: 'Unit (pcs/box/bottle/etc.)')),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(
+                  child: TextField(controller: supplierCtrl, decoration: const InputDecoration(labelText: 'Supplier (optional)')),
+                ),
+              ]),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(
+                  child: TextField(controller: reorderCtrl, decoration: const InputDecoration(labelText: 'Reorder level'), keyboardType: TextInputType.number),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: expiry ?? DateTime.now(),
+                        firstDate: DateTime(DateTime.now().year - 1),
+                        lastDate: DateTime(DateTime.now().year + 10),
+                      );
+                      if (picked != null) setSt(() => expiry = picked);
+                    },
+                    child: Text(expiry == null
+                        ? 'Expiry date (optional)'
+                        : '${expiry!.year}-${expiry!.month.toString().padLeft(2, '0')}-${expiry!.day.toString().padLeft(2, '0')}'),
+                  ),
+                ),
+              ]),
+            ]);
+          }),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              final qty = int.tryParse(qtyCtrl.text) ?? 0;
+              final cost = double.tryParse(costCtrl.text) ?? 0;
+              final reorder = int.tryParse(reorderCtrl.text) ?? 0;
+              context.read<InventoryProvider>().addItem(InventoryItem(
+                    name: name,
+                    quantity: qty,
+                    unitCost: cost,
+                    category: category,
+                    subCategory: subCategory,
+                    unit: unitCtrl.text.trim().isEmpty ? 'pcs' : unitCtrl.text.trim(),
+                    expiryDate: expiry,
+                    supplierName: supplierCtrl.text.trim(),
+                    reorderLevel: reorder,
+                  ));
+              Navigator.pop(context);
+            },
+            child: const Text('Add'),
+          )
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final inventoryProvider = context.watch<InventoryProvider>();
+    final items = inventoryProvider.items.where((e) => e.category == widget.category).toList();
+    return Scaffold(
+      appBar: AppBar(title: Text('${widget.category}')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _addItemDialog,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Item'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: context.responsiveCenter(
+          maxWidth: 1100,
+          child: Card(
+            clipBehavior: Clip.antiAlias,
+            child: items.isEmpty
+                ? Center(child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text('No items in ${widget.category}'),
+                  ))
+                : ListView.separated(
+                    itemCount: items.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (c, i) {
+                      final item = items[i];
+                      return ListTile(
+                        title: Text(item.name),
+                        subtitle: Text('Qty: ${item.quantity}  Unit: ₹${item.unitCost.toStringAsFixed(0)}  Total: ₹${item.total.toStringAsFixed(0)}\n${item.subCategory} • ${item.unit}'),
+                        isThreeLine: true,
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (v) {
+                            if (v == 'edit') {
+                              // reuse existing minimal edit
+                              final state = context.findAncestorStateOfType<_DashboardPageState>();
+                              state?._showEditInventoryDialog(item.id, item.name, item.quantity, item.unitCost);
+                            }
+                            if (v == 'delete') context.read<InventoryProvider>().removeItem(item.id);
+                          },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(value: 'edit', child: Text('Edit')),
+                            PopupMenuItem(value: 'delete', child: Text('Delete')),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _CategoryTotalChip extends StatelessWidget {

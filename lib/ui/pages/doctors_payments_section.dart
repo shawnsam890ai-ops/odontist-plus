@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'dart:io';
 import '../../providers/doctor_provider.dart';
 import '../../providers/doctor_attendance_provider.dart';
@@ -8,6 +10,9 @@ import '../../models/doctor.dart';
 import '../../models/payment_rule.dart';
 import '../../models/procedures.dart';
 import '../../models/payment_entry.dart';
+import '../../models/treatment_session.dart' show TreatmentSession, ToothTreatmentDoneEntry;
+import '../../models/patient.dart';
+import '../../providers/patient_provider.dart';
 import '../../core/upi_launcher.dart' as upi;
 
 class DoctorsPaymentsSection extends StatelessWidget {
@@ -506,12 +511,9 @@ class _LedgerSection extends StatelessWidget {
                       label: const Text('Make Payment'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () {
-                        final csv = provider.exportCsv(entries);
-                        _showCsvDialog(context, csv);
-                      },
-                      icon: const Icon(Icons.download),
-                      label: const Text('Export CSV'),
+                      onPressed: () => _exportLedgerPdf(context, entries),
+                      icon: const Icon(Icons.picture_as_pdf),
+                      label: const Text('Export PDF'),
                     ),
                   ]),
                 ]);
@@ -527,12 +529,9 @@ class _LedgerSection extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton.icon(
-                    onPressed: () {
-                      final csv = provider.exportCsv(entries);
-                      _showCsvDialog(context, csv);
-                    },
-                    icon: const Icon(Icons.download),
-                    label: const Text('Export CSV'),
+                    onPressed: () => _exportLedgerPdf(context, entries),
+                    icon: const Icon(Icons.picture_as_pdf),
+                    label: const Text('Export PDF'),
                   ),
                 ]),
               ]);
@@ -608,25 +607,35 @@ class _LedgerSection extends StatelessWidget {
               return ListTile(
                 title: Text('${d?.name ?? e.doctorId} • ${isPayout ? 'PAYOUT' : e.procedureKey.toUpperCase()} • ${isPayout ? '₹${e.doctorShare.toStringAsFixed(0)}' : '₹${e.amountReceived.toStringAsFixed(0)}'}'),
                 subtitle: Text(friendly),
-                trailing: IconButton(
-                  tooltip: 'Delete entry',
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () async {
-                    final ok = await showDialog<bool>(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        title: const Text('Delete entry?'),
-                        content: const Text('This will permanently remove the ledger entry.'),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-                        ],
-                      ),
-                    );
-                    if (ok == true) {
-                      context.read<DoctorProvider>().deleteLedgerEntry(e.id);
-                    }
-                  },
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'View details',
+                      icon: const Icon(Icons.visibility_outlined),
+                      onPressed: () => _showLedgerEntryDetails(context, e),
+                    ),
+                    IconButton(
+                      tooltip: 'Delete entry',
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Delete entry?'),
+                            content: const Text('This will permanently remove the ledger entry.'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                              ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+                            ],
+                          ),
+                        );
+                        if (ok == true) {
+                          context.read<DoctorProvider>().deleteLedgerEntry(e.id);
+                        }
+                      },
+                    ),
+                  ],
                 ),
               );
             },
@@ -662,6 +671,168 @@ class _LedgerSection extends StatelessWidget {
     // Prefer showing patient name if available; otherwise hide the opaque rx tag.
     if (e.patient != null && e.patient!.isNotEmpty) return e.patient;
     return null;
+  }
+
+  Future<void> _exportLedgerPdf(BuildContext context, List<PaymentEntry> entries) async {
+    final patientProvider = context.read<PatientProvider>();
+    final doctorProvider = context.read<DoctorProvider>();
+
+    String fmt(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+    List<List<String>> rows = [];
+    for (final e in entries) {
+      // Resolve doctor
+      final doctorName = doctorProvider.byId(e.doctorId)?.name ?? '—';
+
+      // Resolve patient + session (rx tag in note) similar to dialog
+      String? sessionId;
+      if (e.note != null && e.note!.startsWith('rx:')) {
+        final rest = e.note!.substring(3);
+        final parts = rest.split(':');
+        if (parts.isNotEmpty) sessionId = parts.first;
+      }
+      Patient? patient;
+      TreatmentSession? session;
+      if (sessionId != null) {
+        for (final p in patientProvider.patients) {
+          TreatmentSession? match;
+          for (final s in p.sessions) {
+            if (s.id == sessionId) { match = s; break; }
+          }
+          if (match != null) { patient = p; session = match; break; }
+        }
+      }
+      if (patient == null && e.patient != null) {
+        final nameLower = e.patient!.toLowerCase();
+        for (final p in patientProvider.patients) {
+          if (p.name.toLowerCase() == nameLower) { patient = p; break; }
+        }
+      }
+
+      final pid = patient?.displayNumber.toString() ?? '—';
+      final pname = patient?.name ?? (e.patient ?? '—');
+      final date = fmt(session?.date ?? e.date);
+      final done = (session != null && session!.treatmentsDone.isNotEmpty) ? _doneSummary(session!.treatmentsDone) : '—';
+      final doctor = doctorName;
+      final payout = e.type == EntryType.payout ? 'Rs ${e.doctorShare.toStringAsFixed(0)}' : '';
+
+      rows.add([pid, pname, date, done, doctor, payout]);
+    }
+
+    final doc = pw.Document();
+    doc.addPage(
+      pw.MultiPage(
+        build: (context) => [
+          pw.Text('Doctors Payments Ledger', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 12),
+          pw.Table.fromTextArray(
+            headers: ['Patient ID', 'Patient name', 'Date of treatment', 'Treatment done', 'Doctor in charge', 'Payment made to doctor'],
+            data: rows,
+          ),
+        ],
+      ),
+    );
+    await Printing.layoutPdf(onLayout: (format) async => doc.save());
+  }
+
+  void _showLedgerEntryDetails(BuildContext context, PaymentEntry e) {
+    final doctorProvider = context.read<DoctorProvider>();
+    final patientProvider = context.read<PatientProvider>();
+    final doctorName = doctorProvider.byId(e.doctorId)?.name ?? '—';
+
+    // Attempt to resolve patient + session from note (rx:<sessionId>:..)
+    String? sessionId;
+    if (e.note != null && e.note!.startsWith('rx:')) {
+      final rest = e.note!.substring(3);
+      final parts = rest.split(':');
+      if (parts.isNotEmpty) sessionId = parts.first;
+    }
+    Patient? patient;
+    TreatmentSession? session;
+    if (sessionId != null) {
+      // brute force scan across patients to find the session id
+      for (final p in patientProvider.patients) {
+        TreatmentSession? match;
+        for (final s in p.sessions) {
+          if (s.id == sessionId) { match = s; break; }
+        }
+        if (match != null) { patient = p; session = match; break; }
+      }
+    }
+    // Fallback: try match by patient name field in entry
+    if (patient == null && e.patient != null) {
+      final nameLower = e.patient!.toLowerCase();
+      for (final p in patientProvider.patients) {
+        if (p.name.toLowerCase() == nameLower) { patient = p; break; }
+      }
+    }
+
+    String fmt(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    final dateStr = fmt(session?.date ?? e.date);
+    final patientIdStr = patient?.displayNumber.toString() ?? '—';
+    final patientNameStr = patient?.name ?? (e.patient ?? '—');
+    final chiefComplaintStr = (session?.chiefComplaint?.complaints.isNotEmpty == true)
+        ? session!.chiefComplaint!.complaints.first
+        : '—';
+    final treatmentDoneStr = (session != null && session!.treatmentsDone.isNotEmpty)
+        ? _doneSummary(session!.treatmentsDone)
+        : '—';
+    final paymentStr = '₹${(e.type == EntryType.payout ? e.doctorShare : e.amountReceived).toStringAsFixed(0)}';
+    final clinicRevStr = e.type == EntryType.payment ? '₹${e.clinicShare.toStringAsFixed(0)}' : '—';
+    final doctorRevStr = e.type == EntryType.payment ? '₹${e.doctorShare.toStringAsFixed(0)}' : '—';
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Ledger entry details'),
+        content: SizedBox(
+          width: 540,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _kv('Patient ID', patientIdStr),
+              _kv('Patient name', patientNameStr),
+              _kv('Date of treatment', dateStr),
+              _kv('Chief complaint', chiefComplaintStr),
+              _kv('Treatment done', treatmentDoneStr),
+              _kv('Payment done', paymentStr),
+              _kv('Clinic revenue', clinicRevStr),
+              _kv('Doctor revenue', doctorRevStr),
+              _kv('Doctor in charge', doctorName),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  String _doneSummary(List<ToothTreatmentDoneEntry> done) {
+    final items = <String>[];
+    for (final d in done.take(2)) {
+      final tooth = d.toothNumber.isNotEmpty ? '${d.toothNumber}: ' : '';
+      items.add('$tooth${d.treatment}');
+    }
+    var s = items.join(', ');
+    if (done.length > 2) s += ' …';
+    return s.isEmpty ? '—' : s;
+  }
+
+  Widget _kv(String k, String v) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 160, child: Text(k, style: const TextStyle(fontWeight: FontWeight.w600))),
+          const SizedBox(width: 8),
+          Expanded(child: Text(v)),
+        ],
+      ),
+    );
   }
 }
 

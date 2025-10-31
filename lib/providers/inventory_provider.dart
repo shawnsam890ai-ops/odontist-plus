@@ -25,15 +25,7 @@ class InventoryProvider with ChangeNotifier {
         final invSnap = await base.collection('inventory').get();
         _items
           ..clear()
-          ..addAll(invSnap.docs.map((d) {
-            final m = d.data();
-            return InventoryItem(
-              id: m['id'] as String? ?? d.id,
-              name: (m['name'] as String?) ?? '',
-              quantity: (m['quantity'] as num?)?.toInt() ?? 0,
-              unitCost: (m['unitCost'] as num?)?.toDouble() ?? 0,
-            );
-          }));
+          ..addAll(invSnap.docs.map((d) => InventoryItem.fromJson(d.data())));
         final costSnap = await base.collection('lab_costs').get();
         _labCosts
           ..clear()
@@ -60,15 +52,7 @@ class InventoryProvider with ChangeNotifier {
       _invSub = base.collection('inventory').snapshots().listen((snap) {
         _items
           ..clear()
-          ..addAll(snap.docs.map((d) {
-            final m = d.data();
-            return InventoryItem(
-              id: m['id'] as String? ?? d.id,
-              name: (m['name'] as String?) ?? '',
-              quantity: (m['quantity'] as num?)?.toInt() ?? 0,
-              unitCost: (m['unitCost'] as num?)?.toDouble() ?? 0,
-            );
-          }));
+          ..addAll(snap.docs.map((d) => InventoryItem.fromJson(d.data())));
         notifyListeners();
       });
 
@@ -95,34 +79,47 @@ class InventoryProvider with ChangeNotifier {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
-        FirebaseFirestore.instance.collection('users').doc(uid).collection('inventory').doc(item.id).set({
-          'id': item.id,
-          'name': item.name,
-          'quantity': item.quantity,
-          'unitCost': item.unitCost,
-        });
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('inventory')
+            .doc(item.id)
+            .set(item.toJson());
       }
     } catch (_) {}
     notifyListeners();
   }
 
-  void updateItem(String id, {int? quantity, double? unitCost, String? name}) {
+  void updateItem(String id, {int? quantity, double? unitCost, String? name, String? category, String? subCategory, String? unit, DateTime? expiryDate, String? supplierName, int? reorderLevel}) {
     final idx = _items.indexWhere((e) => e.id == id);
     if (idx == -1) return;
     final item = _items[idx];
     if (quantity != null) item.quantity = quantity;
     if (unitCost != null) item.unitCost = unitCost;
-    if (name != null && name.trim().isNotEmpty) _items[idx] = InventoryItem(id: item.id, name: name.trim(), quantity: item.quantity, unitCost: item.unitCost);
+    final newName = (name != null && name.trim().isNotEmpty) ? name.trim() : item.name;
+    _items[idx] = InventoryItem(
+      id: item.id,
+      name: newName,
+      quantity: item.quantity,
+      unitCost: item.unitCost,
+      category: category ?? item.category,
+      subCategory: subCategory ?? item.subCategory,
+      unit: unit ?? item.unit,
+      expiryDate: expiryDate ?? item.expiryDate,
+      supplierName: supplierName ?? item.supplierName,
+      reorderLevel: reorderLevel ?? item.reorderLevel,
+      lastUpdated: DateTime.now(),
+    );
     // Mirror to Firestore
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
-        FirebaseFirestore.instance.collection('users').doc(uid).collection('inventory').doc(id).set({
-          'id': _items[idx].id,
-          'name': _items[idx].name,
-          'quantity': _items[idx].quantity,
-          'unitCost': _items[idx].unitCost,
-        });
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('inventory')
+            .doc(id)
+            .set(_items[idx].toJson());
       }
     } catch (_) {}
     notifyListeners();
