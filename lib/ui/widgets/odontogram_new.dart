@@ -72,8 +72,7 @@ class _OdontogramState extends State<Odontogram> {
   Widget build(BuildContext context) {
     // Ensure cached computed data is up to date
     _ensureCache();
-    final summaries = _cachedSummaries!;
-    final doneSet = summaries.entries.where((e) => e.value.doneCount > 0).map((e) => e.key).toSet();
+  final summaries = _cachedSummaries!;
     final criticalFindings = summaries.entries.where((e) => e.value.hasCriticalFinding).map((e) => e.key).toSet();
     final anyFindings = summaries.entries.where((e) => e.value.findingsCount > 0 && !e.value.hasCriticalFinding).map((e) => e.key).toSet();
 
@@ -142,8 +141,8 @@ class _OdontogramState extends State<Odontogram> {
                     child: SizedBox.fromSize(
                       size: _data.size,
                       child: Stack(children: [
-                        // Enamel/base layer (static for given patient state)
-                        CustomPaint(size: _data.size, painter: _ToothFillPainter(_data.teeth, skipFill: doneSet), isComplex: true, willChange: false),
+                        // Enamel/base layer (always draw enamel; marks indicate findings/done)
+                        CustomPaint(size: _data.size, painter: _ToothFillPainter(_data.teeth, skipFill: const {}), isComplex: true, willChange: false),
                         // Per-tooth letter/short-code marks
                         IgnorePointer(child: CustomPaint(size: _data.size, painter: _ToothMarkPainter(_data.teeth, toothMarks), isComplex: true, willChange: false)),
                         // Hit-test & selection overlay
@@ -862,8 +861,38 @@ Map<String, List<_Mark>> _computeToothMarks(Patient patient) {
     if (t.contains('root stump')) out.add(_Mark('Rs', yellow));
     if (t.contains('cervical abrasion') || (t.contains('abrasion') && t.contains('cervical'))) out.add(_Mark('CA', yellow));
     if (t.contains('ellis')) {
-      final match = RegExp(r'e\s*([1-9])').firstMatch(t);
-      if (match != null) out.add(_Mark('E${match.group(1)}', brown));
+      int? ellis;
+      // 1) Common phrasing: "Ellis class 2" / "Ellis Class 2"
+      final mClassNum = RegExp(r'ellis[^0-9]{0,12}([1-8])').firstMatch(t);
+      if (mClassNum != null) {
+        ellis = int.tryParse(mClassNum.group(1)!);
+      }
+      // 2) Roman numerals: "Ellis class II" etc. (I..VIII)
+      if (ellis == null) {
+        final mRoman = RegExp(r'ellis[^a-z0-9]{0,12}(i{1,3}|iv|v|vi{0,3}|vii|viii)\b').firstMatch(t);
+        if (mRoman != null) {
+          final s = mRoman.group(1)!.toLowerCase();
+          const map = {
+            'i': 1,
+            'ii': 2,
+            'iii': 3,
+            'iv': 4,
+            'v': 5,
+            'vi': 6,
+            'vii': 7,
+            'viii': 8,
+          };
+          ellis = map[s];
+        }
+      }
+      // 3) Fallback: if someone typed "E2" in finding text
+      if (ellis == null) {
+        final mE = RegExp(r'\be\s*([1-8])\b').firstMatch(t);
+        if (mE != null) ellis = int.tryParse(mE.group(1)!);
+      }
+      if (ellis != null && ellis >= 1 && ellis <= 8) {
+        out.add(_Mark('E$ellis', brown));
+      }
     }
     if (RegExp(r'\bg[1-3]\b').hasMatch(t) || t.contains('grade 1') || t.contains('grade 2') || t.contains('grade 3')) {
       String grade = 'G1';
@@ -877,6 +906,7 @@ Map<String, List<_Mark>> _computeToothMarks(Patient patient) {
   }
 
   for (final s in patient.sessions) {
+    // Show abbreviations for Oral Findings only (including investigations and RC findings)
     for (final f in s.oralExamFindings) {
       for (final m in parse(f.finding)) add(f.toothNumber, m);
     }
@@ -886,18 +916,11 @@ Map<String, List<_Mark>> _computeToothMarks(Patient patient) {
     for (final f in s.rootCanalFindings) {
       for (final m in parse(f.finding)) add(f.toothNumber, m);
     }
-    for (final p in s.toothPlans) {
-      for (final m in parse(p.plan)) add(p.toothNumber, m);
-    }
+    // And abbreviations for Treatment Done
     for (final d in s.treatmentsDone) {
       for (final m in parse(d.treatment)) add(d.toothNumber, m);
     }
-    for (final p in s.rootCanalPlans) {
-      for (final m in parse(p.plan)) add(p.toothNumber, m);
-    }
-    for (final p in s.prosthodonticPlans) {
-      for (final m in parse(p.plan)) add(p.toothNumber, m);
-    }
+    // Explicitly exclude Treatment Plan marks from the diagram per user request.
   }
   // limit to first two marks per tooth to avoid clutter
   for (final e in map.entries) {

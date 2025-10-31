@@ -102,6 +102,9 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
       patients = patients.where((p) => p.sessions.any(sessionMatches)).toList();
     }
 
+    // Sort by MRN (displayNumber) ascending so list shows MRN: 0001, 0002, ...
+    patients.sort((a, b) => a.displayNumber.compareTo(b.displayNumber));
+
     return LayoutBuilder(builder: (context, c) {
       final stacked = widget.embedded || c.maxWidth < 700;
       final searchDecoration = InputDecoration(
@@ -196,7 +199,7 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
       final e = _dateRange!.end;
       return '${s.month}/${s.day} - ${e.month}/${e.day}';
     }
-    return Wrap(
+    final group = Wrap(
       spacing: 8,
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -246,6 +249,19 @@ class _ManagePatientsModernBodyState extends State<ManagePatientsModernBody> {
             label: const Text('Clear filters'),
           ),
       ],
+    );
+
+    // Enwrap the controls in a single background color container
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _border),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))],
+      ),
+      child: group,
     );
   }
 
