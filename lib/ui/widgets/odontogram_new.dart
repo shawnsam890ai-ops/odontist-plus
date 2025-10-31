@@ -1009,4 +1009,3 @@ class _ToothHighlightPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ToothHighlightPainter oldDelegate) => !mapEquals(oldDelegate.teeth, teeth) || !setEquals(oldDelegate.highlighted, highlighted);
 }
-

@@ -17,6 +17,8 @@ class OptionsProvider extends ChangeNotifier {
   List<String> planOptions = [];
   List<String> treatmentDoneOptions = [];
   List<String> medicineOptions = [];
+  // New: dynamic list of medicine contents (active ingredients)
+  List<String> medicineContents = [];
   List<String> pastDentalHistory = [];
   List<String> pastMedicalHistory = [];
   List<String> medicationOptions = [];
@@ -52,7 +54,8 @@ class OptionsProvider extends ChangeNotifier {
     required List<String> defaultPastDental,
     required List<String> defaultPastMedical,
     required List<String> defaultMedicationOptions,
-    required List<String> defaultDrugAllergies,
+  required List<String> defaultDrugAllergies,
+  List<String>? defaultMedicineContents,
     List<String>? defaultOrthoDoctors, // optional to avoid forcing callers now
     List<String>? defaultRcDoctors,
     List<String>? defaultProsthoDoctors,
@@ -70,7 +73,8 @@ class OptionsProvider extends ChangeNotifier {
   oralFindingsOptions = (map['oralFindings'] as List<dynamic>? ?? []).cast<String>();
         planOptions = (map['plan'] as List<dynamic>? ?? []).cast<String>();
         treatmentDoneOptions = (map['done'] as List<dynamic>? ?? []).cast<String>();
-        medicineOptions = (map['medicines'] as List<dynamic>? ?? []).cast<String>();
+  medicineOptions = (map['medicines'] as List<dynamic>? ?? []).cast<String>();
+  medicineContents = (map['medicineContents'] as List<dynamic>? ?? []).cast<String>();
         pastDentalHistory = (map['pastDental'] as List<dynamic>? ?? []).cast<String>();
         pastMedicalHistory = (map['pastMedical'] as List<dynamic>? ?? []).cast<String>();
         medicationOptions = (map['dynamicMedications'] as List<dynamic>? ?? []).cast<String>();
@@ -89,7 +93,8 @@ class OptionsProvider extends ChangeNotifier {
   if (oralFindingsOptions.isEmpty) oralFindingsOptions = List.from(defaultOralFindings);
     if (planOptions.isEmpty) planOptions = List.from(defaultPlan);
     if (treatmentDoneOptions.isEmpty) treatmentDoneOptions = List.from(defaultTreatmentDone);
-    if (medicineOptions.isEmpty) medicineOptions = List.from(defaultMedicines);
+  if (medicineOptions.isEmpty) medicineOptions = List.from(defaultMedicines);
+  if (medicineContents.isEmpty && (defaultMedicineContents != null)) medicineContents = List.from(defaultMedicineContents);
     if (pastDentalHistory.isEmpty) pastDentalHistory = List.from(defaultPastDental);
     if (pastMedicalHistory.isEmpty) pastMedicalHistory = List.from(defaultPastMedical);
     if (medicationOptions.isEmpty) medicationOptions = List.from(defaultMedicationOptions);
@@ -106,7 +111,8 @@ class OptionsProvider extends ChangeNotifier {
   _sortList(oralFindingsOptions);
     _sortList(planOptions);
     _sortList(treatmentDoneOptions);
-    _sortList(medicineOptions);
+  _sortList(medicineOptions);
+  _sortList(medicineContents);
     _sortList(pastDentalHistory);
     _sortList(pastMedicalHistory);
     _sortList(medicationOptions);
@@ -132,7 +138,8 @@ class OptionsProvider extends ChangeNotifier {
       'oralFindings': oralFindingsOptions,
       'plan': planOptions,
       'done': treatmentDoneOptions,
-      'medicines': medicineOptions,
+  'medicines': medicineOptions,
+  'medicineContents': medicineContents,
       'pastDental': pastDentalHistory,
       'pastMedical': pastMedicalHistory,
       'dynamicMedications': medicationOptions,
@@ -159,6 +166,7 @@ class OptionsProvider extends ChangeNotifier {
           'plan': planOptions,
           'done': treatmentDoneOptions,
           'medicines': medicineOptions,
+          'medicineContents': medicineContents,
           'pastDental': pastDentalHistory,
           'pastMedical': pastMedicalHistory,
           'dynamicMedications': medicationOptions,

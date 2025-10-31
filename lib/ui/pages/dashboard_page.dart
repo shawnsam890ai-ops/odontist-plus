@@ -1530,6 +1530,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void _showAddMedicineDialog() {
     final nameCtrl = TextEditingController();
+    String? selectedContent;
     final storeCtrl = TextEditingController(text: '0');
     final mrpCtrl = TextEditingController(text: '0');
     final stripsCtrl = TextEditingController(text: '0');
@@ -1538,13 +1539,28 @@ class _DashboardPageState extends State<DashboardPage> {
     final looseTabsCtrl = TextEditingController(text: '0');
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Add Medicine'),
-        content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Medicine name')),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Add Medicine'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Medicine name')),
+                const SizedBox(height: 8),
+                Builder(builder: (ctx2){
+                  final opt = ctx2.watch<OptionsProvider>();
+                  return InkWell(
+                    onTap: () async {
+                      final picked = await _openContentPicker(opt, initial: selectedContent);
+                      if (picked != null) setState(()=> selectedContent = picked);
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'Content (active ingredient)'),
+                      child: Text(selectedContent ?? 'Select', style: TextStyle(color: selectedContent==null? Colors.grey : null)),
+                    ),
+                  );
+                }),
               const SizedBox(height: 8),
               TextField(controller: storeCtrl, decoration: const InputDecoration(labelText: 'Store amount (cost per strip)'), keyboardType: TextInputType.number),
               const SizedBox(height: 8),
@@ -1561,7 +1577,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               final name = nameCtrl.text.trim();
@@ -1575,6 +1591,7 @@ class _DashboardPageState extends State<DashboardPage> {
               final looseTabs = int.tryParse(looseTabsCtrl.text.trim()) ?? 0;
               await context.read<MedicineProvider>().addMedicine(
                 name: name, 
+                content: selectedContent,
                 storeAmount: store, 
                 mrp: mrp, 
                 strips: strips, 
@@ -1590,11 +1607,13 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ],
       ),
+      ),
     );
   }
 
   Future<void> _showEditMedicineDialog(Medicine m) async {
     final nameCtrl = TextEditingController(text: m.name);
+    String? selectedContent = m.content;
     final storeCtrl = TextEditingController(text: m.storeAmount.toStringAsFixed(0));
     final mrpCtrl = TextEditingController(text: m.mrp.toStringAsFixed(0));
     final stripsCtrl = TextEditingController(text: m.stripsAvailable.toString());
@@ -1603,13 +1622,28 @@ class _DashboardPageState extends State<DashboardPage> {
     final looseTabsCtrl = TextEditingController(text: m.looseTabs.toString());
     await showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Edit Medicine'),
-        content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Medicine name')),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Edit Medicine'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Medicine name')),
+                const SizedBox(height: 8),
+                Builder(builder: (ctx2){
+                  final opt = ctx2.watch<OptionsProvider>();
+                  return InkWell(
+                    onTap: () async {
+                      final picked = await _openContentPicker(opt, initial: selectedContent);
+                      if (picked != null) setState(()=> selectedContent = picked);
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'Content (active ingredient)'),
+                      child: Text(selectedContent ?? 'Select', style: TextStyle(color: selectedContent==null? Colors.grey : null)),
+                    ),
+                  );
+                }),
               const SizedBox(height: 8),
               TextField(controller: storeCtrl, decoration: const InputDecoration(labelText: 'Store amount (cost per strip)'), keyboardType: TextInputType.number),
               const SizedBox(height: 8),
@@ -1626,7 +1660,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               final name = nameCtrl.text.trim();
@@ -1640,6 +1674,7 @@ class _DashboardPageState extends State<DashboardPage> {
               await context.read<MedicineProvider>().updateMedicine(
                     m.id,
                     name: name,
+        content: selectedContent,
                     storeAmount: store,
                     mrp: mrp,
                     strips: strips,
@@ -1657,6 +1692,74 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ],
       ),
+      ),
+    );
+  }
+
+  Future<String?> _openContentPicker(OptionsProvider opt, {String? initial}) async {
+    final controller = TextEditingController();
+    String query = '';
+    String? localSelected = initial;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSB) {
+        final merged = <String>{...opt.medicineContents}.toList()
+          ..sort((a,b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        final filtered = merged.where((s) => s.toLowerCase().contains(query.toLowerCase())).toList();
+        return AlertDialog(
+          title: const Text('Select Content'),
+          content: SizedBox(
+            width: 400,
+            height: 480,
+            child: Column(
+              children: [
+                TextField(
+                  decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search contents'),
+                  onChanged: (v) => setSB(() => query = v),
+                ),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      decoration: const InputDecoration(hintText: 'Add new content'),
+                      onSubmitted: (_) async {
+                        final val = controller.text.trim();
+                        if (val.isNotEmpty) { await opt.addValue('medicineContents', val); controller.clear(); setSB((){}); }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(onPressed: () async { final val = controller.text.trim(); if (val.isNotEmpty) { await opt.addValue('medicineContents', val); controller.clear(); setSB((){});} }, child: const Text('Add'))
+                ]),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: filtered.length,
+                    itemBuilder: (c,i){
+                      final item = filtered[i];
+                      final isFromOptions = opt.medicineContents.any((e) => e.toLowerCase() == item.toLowerCase());
+                      return ListTile(
+                        leading: Radio<String>(value: item, groupValue: localSelected, onChanged: (v)=> setSB(()=> localSelected = v)),
+                        title: Text(item),
+                        trailing: isFromOptions ? IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () async {
+                          final ok = await opt.removeValue('medicineContents', item);
+                          if (ok) { if (localSelected == item) localSelected = null; setSB((){}); }
+                        }) : null,
+                        onTap: () => setSB(()=> localSelected = item),
+                      );
+                    },
+                  ),
+                )
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, localSelected), child: const Text('Select')),
+          ],
+        );
+      }),
     );
   }
 

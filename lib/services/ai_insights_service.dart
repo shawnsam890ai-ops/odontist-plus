@@ -9,7 +9,171 @@ class AiInsight {
   AiInsight(this.title, this.message, {this.severity = 'info'});
 }
 
+class ContraindicationResult {
+  final String message; // short red banner message
+  final String details; // brief reason and source notes
+  const ContraindicationResult(this.message, {this.details = ''});
+}
+
 class AiInsightsService {
+
+  /// Returns a short contraindication result for a single medicine against
+  /// the patient's allergies/history/active meds. Null when no clear stop.
+  /// This is a conservative surface check and does NOT replace clinical judgment.
+  ContraindicationResult? contraindicationFor(Patient p, String medicine) {
+    final m = medicine.toLowerCase();
+    bool any(List<String> list, List<String> keys) =>
+        list.map((e) => e.toLowerCase()).any((h) => keys.any((k) => h.contains(k)));
+
+    // Helpers for drug families
+    bool isNSAID() => ['ibuprofen','diclofenac','ketorolac','piroxicam','nimesulide','mefenamic','etoricoxib','aceclofenac'].any(m.contains);
+    bool isPenicillin() => ['amoxicillin','penicillin','amoxycillin'].any(m.contains);
+    bool isCephalosporin() => ['cef','cefixime','cefdinir','ceftriax','cephal'].any(m.contains);
+    bool isFluoroquinolone() => ['ofloxacin','ciprofloxacin','levofloxacin','moxifloxacin'].any(m.contains);
+    bool isNitroimidazole() => ['metronidazole','ornidazole','tinidazole'].any(m.contains);
+    bool isOpioid() => ['tramadol','codeine'].any(m.contains);
+    bool isPPI() => ['omeprazole','esomeprazole','pantoprazole','rabeprazole','lansoprazole'].any(m.contains);
+
+    // Allergies
+    final allergies = p.drugAllergies.map((e) => e.toLowerCase()).toList();
+    if (allergies.any((a) => a.contains('penicillin')) && (isPenicillin() || m.contains('clavulan'))) {
+      return const ContraindicationResult(
+        'Current medication is contraindicated (penicillin allergy).',
+        details: 'Beta-lactam cross-reactivity. Refer: FDA labeling; WHO ATC allergy cautions.',
+      );
+    }
+    // Check for NSAID class allergy OR specific NSAID drug allergies
+    if (isNSAID() && (allergies.any((a) => a.contains('nsaid')) || allergies.any((a) => m.contains(a)))) {
+      return const ContraindicationResult(
+        'Current medication is contraindicated (NSAID allergy).',
+        details: 'Risk of hypersensitivity reactions. Refer: FDA NSAID class labeling.',
+      );
+    }
+    if (allergies.any((a) => a.contains('ceph')) && isCephalosporin()) {
+      return const ContraindicationResult(
+        'Current medication is contraindicated (cephalosporin allergy).',
+        details: 'Cross-reactivity within beta-lactams. Refer: FDA cephalosporin labeling.',
+      );
+    }
+    // General check: if patient allergic to specific drug and medicine contains that exact drug
+    for (final allergy in allergies) {
+      if (allergy.isNotEmpty && m.contains(allergy.trim())) {
+        return ContraindicationResult(
+          'Current medication is contraindicated (allergy to ${allergy.trim()}).',
+          details: 'Patient has documented allergy to this medication. Review allergy details and select alternative.',
+        );
+      }
+    }
+
+    // Past medical/dental history keywords
+    final history = [...p.pastMedicalHistory, ...p.pastDentalHistory].map((e)=>e.toLowerCase()).toList();
+    bool has(List<String> keys) => history.any((h) => keys.any((k) => h.contains(k)));
+
+    // Renal disease vs NSAIDs and some antibiotics
+    if (has(['ckd','chronic kidney','renal failure','kidney disease']) && isNSAID()) {
+      return const ContraindicationResult(
+        'Current medication is contraindicated in CKD/renal disease (NSAID).',
+        details: 'NSAIDs reduce renal perfusion; AKI risk. Refer: FDA NSAID warning; NICE CKD guidance.',
+      );
+    }
+    // Peptic ulcer / gastritis vs NSAIDs
+    if (has(['peptic ulcer','pud','gastric ulcer','gastritis','gi bleed']) && isNSAID()) {
+      return const ContraindicationResult(
+        'Current medication is contraindicated in ulcer/gastritis (NSAID).',
+        details: 'GI bleeding/perforation risk. Refer: FDA NSAID boxed warning; NICE CKS dyspepsia/ulcer.',
+      );
+    }
+    // Severe liver disease vs hepatotoxic agents
+    if (has(['cirrhosis','severe liver','hepatic failure','hepatitis']) && (m.contains('nimesulide') || isNitroimidazole())) {
+      return const ContraindicationResult(
+        'Current medication is contraindicated in severe hepatic impairment.',
+        details: 'Hepatotoxicity/altered metabolism. Refer: DrugBank/NICE monographs for nimesulide/nitroimidazoles.',
+      );
+    }
+
+    // Pregnancy/breastfeeding flags
+    if (p.pregnant && (isNSAID() || isFluoroquinolone())) {
+      return const ContraindicationResult(
+        'Current medication is contraindicated in pregnancy.',
+        details: 'NSAIDs (ductus closure in late gestation); fluoroquinolones (cartilage toxicity). Refer: FDA pregnancy labeling.',
+      );
+    }
+    if (p.breastfeeding && isNitroimidazole()) {
+      return const ContraindicationResult(
+        'Current medication may be contraindicated during breastfeeding.',
+        details: 'Metronidazole/ornidazole excreted in milk; consider timing/alternatives. Refer: LactMed/FDA.',
+      );
+    }
+
+    // QT risk with domperidone/fluoroquinolones in cardiac history
+    if (has(['long qt','arrhythmia','heart failure']) && (m.contains('domperidone') || isFluoroquinolone())) {
+      return const ContraindicationResult(
+        'Current medication is contraindicated with QT/arrhythmia risk.',
+        details: 'Domperidone/fluoroquinolones prolong QT. Refer: EMA/FDA safety communications.',
+      );
+    }
+
+    // Opioid cautions in seizure disorder
+    if (has(['seizure','epilep']) && isOpioid()) {
+      return const ContraindicationResult(
+        'Current medication is contraindicated in seizure disorder (opioid).',
+        details: 'Tramadol lowers seizure threshold. Refer: FDA tramadol labeling.',
+      );
+    }
+
+    // ---- Interactions with current medications (bleeding risk / dual therapy) ----
+    final meds = p.currentMedications.map((e)=> e.toLowerCase()).toList();
+    bool onAnticoagulant = any(meds, ['warfarin','aceno','apixaban','rivaroxaban','edoxaban','dabigatran']);
+    bool onAntiplatelet = any(meds, ['aspirin','clopidogrel','prasugrel','ticagrelor']);
+    bool onSSRI = any(meds, ['sertraline','fluoxetine','paroxetine','citalopram','escitalopram']);
+    bool onDomperidone = any(meds, ['domperidone']);
+    bool onTizanidine = any(meds, ['tizanidine']);
+
+    // NSAIDs + anticoagulant/antiplatelet/SSRI -> bleeding
+    if (isNSAID() && (onAnticoagulant || onAntiplatelet || onSSRI)) {
+      return const ContraindicationResult(
+        'Current medication increases bleeding risk.',
+        details: 'NSAIDs with anticoagulants/antiplatelets/SSRIs ↑ GI bleeding. Refer: FDA NSAID safety; NICE CKS; DrugBank interactions.',
+      );
+    }
+    // Warfarin + metronidazole
+    if (onAnticoagulant && isNitroimidazole()) {
+      return const ContraindicationResult(
+        'Current medication interacts with warfarin (↑INR).',
+        details: 'Metronidazole inhibits warfarin metabolism. Refer: FDA warfarin/Flagyl labeling; RxClass.',
+      );
+    }
+    // Macrolide (azithro) + domperidone -> QT
+    if (onDomperidone && (m.contains('azithromycin') || m.contains('clarithromycin') || m.contains('erythromycin'))) {
+      return const ContraindicationResult(
+        'Current medication + domperidone: QT prolongation risk.',
+        details: 'Avoid co‑administration. Refer: EMA/FDA domperidone/macrolide safety notices.',
+      );
+    }
+    // Fluoroquinolone + tizanidine (notably ciprofloxacin); conservative for class
+    if (onTizanidine && isFluoroquinolone()) {
+      return const ContraindicationResult(
+        'Avoid with tizanidine: hypotension/sedation risk.',
+        details: 'Fluoroquinolones inhibit tizanidine metabolism (class caution). Refer: Ciprofloxacin label; DrugBank.',
+      );
+    }
+    // Dual therapy: second NSAID or second PPI
+    if (isNSAID() && any(meds, ['ibuprofen','diclofenac','ketorolac','piroxicam','nimesulide','mefenamic','etoricoxib','aceclofenac'])) {
+      return const ContraindicationResult(
+        'Avoid dual NSAID therapy.',
+        details: 'No added benefit; ↑ GI/renal adverse events. Refer: NICE/WHO analgesia guidance.',
+      );
+    }
+    if (isPPI() && any(meds, ['omeprazole','esomeprazole','pantoprazole','rabeprazole','lansoprazole'])) {
+      return const ContraindicationResult(
+        'Avoid duplicate PPI therapy.',
+        details: 'Use single PPI; long‑term risks include fractures, hypomagnesemia. Refer: FDA PPI labeling.',
+      );
+    }
+
+    // Default: no hard stop
+    return null;
+  }
   // Medicine safety checks based on patient flags/history
   List<AiInsight> checkPrescriptionSafety(Patient p, List<PrescriptionItem> items) {
     final out = <AiInsight>[];

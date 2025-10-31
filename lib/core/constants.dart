@@ -30,6 +30,36 @@ class AppConstants {
     'Paracetamol 500mg', 'Ibuprofen 400mg', 'Amoxicillin 500mg', 'Vitamin C'
   ];
 
+  // Default set of medicine contents (active ingredients)
+  static const medicineContents = [
+    'Paracetamol',
+    'Ibuprofen',
+    'Diclofenac',
+    'Ketorolac',
+    'Mefenamic Acid',
+    'Etoricoxib',
+    'Aceclofenac',
+    'Amoxicillin',
+    'Amoxicillin + Clavulanate',
+    'Azithromycin',
+    'Clarithromycin',
+    'Metronidazole',
+    'Ornidazole',
+    'Tinidazole',
+    'Ofloxacin',
+    'Ciprofloxacin',
+    'Levofloxacin',
+    'Moxifloxacin',
+    'Cefixime',
+    'Ceftriaxone',
+    'Tramadol',
+    'Codeine',
+    'Omeprazole',
+    'Pantoprazole',
+    'Rabeprazole',
+    'Esomeprazole',
+  ];
+
   static const orthodonticTreatmentOptions = [
     'Banding', 'Bonding', 'Archwire change', 'Bracket reposition', 'Debonding'
   ];

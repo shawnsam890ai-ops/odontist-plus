@@ -19,7 +19,6 @@ class LabProvider extends ChangeNotifier {
         final snap = await col.get();
         if (snap.docs.isNotEmpty) {
           // Replace local by rehydrating repository
-          final works = snap.docs.map((d) => LabWork.fromJson(d.data())).toList();
           // Clear and repopulate
           for (final w in _repo.byPatient('__all__')) {
             // no direct clear API; ignore and overwrite by adding unique items

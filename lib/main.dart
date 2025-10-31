@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/app_router.dart';
+import 'core/constants.dart';
 import 'providers/patient_provider.dart';
 import 'providers/revenue_provider.dart';
 import 'providers/lab_provider.dart';
@@ -80,6 +81,24 @@ class DentalClinicApp extends StatelessWidget {
             // Load patients from storage/Firestore
             pats.ensureLoaded();
             opt.registerPatientProvider(pats);
+            // Load OptionsProvider with defaults (including medicine contents)
+            opt.ensureLoaded(
+              defaultComplaints: AppConstants.chiefComplaints,
+              defaultOralFindings: AppConstants.oralFindings,
+              defaultPlan: AppConstants.generalTreatmentPlanOptions,
+              defaultTreatmentDone: AppConstants.generalTreatmentDoneOptions,
+              defaultMedicines: AppConstants.prescriptionMedicines,
+              defaultPastDental: AppConstants.pastDentalHistoryOptions,
+              defaultPastMedical: AppConstants.pastMedicalHistoryOptions,
+              defaultMedicationOptions: AppConstants.medicationOptions,
+              defaultDrugAllergies: AppConstants.drugAllergyOptions,
+              defaultMedicineContents: AppConstants.medicineContents,
+              defaultRcDoctors: const [],
+              defaultProsthoDoctors: const [],
+              defaultLabNames: const ['Maxima Lab', 'Crown Lab', 'Digital Dental Lab'],
+              defaultNatureOfWork: const ['PFM Crown', 'Zirconia Crown', 'Sunflex RPD', 'Metal Partial', 'Complete Denture', 'Bridge Work'],
+              defaultToothShades: const ['A1', 'A2', 'A3', 'B1', 'B2', 'C1', 'C2'],
+            );
             // Register revenue into providers that need cross-updates
             final rev = ctx.read<RevenueProvider>();
             pats.registerRevenueProvider(rev);

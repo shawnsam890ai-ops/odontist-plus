@@ -22,8 +22,8 @@ class MedicineProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addMedicine({required String name, required double storeAmount, required double mrp, required int strips, int unitsPerStrip = 10, int freeStrips = 0, int looseTabs = 0}) async {
-    final m = await _repo.add(name: name, storeAmount: storeAmount, mrp: mrp, strips: strips, unitsPerStrip: unitsPerStrip, freeStrips: freeStrips, looseTabs: looseTabs);
+  Future<void> addMedicine({required String name, String? content, required double storeAmount, required double mrp, required int strips, int unitsPerStrip = 10, int freeStrips = 0, int looseTabs = 0}) async {
+    final m = await _repo.add(name: name, content: content, storeAmount: storeAmount, mrp: mrp, strips: strips, unitsPerStrip: unitsPerStrip, freeStrips: freeStrips, looseTabs: looseTabs);
     // Mirror to Firestore
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -34,8 +34,8 @@ class MedicineProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateMedicine(String id, {String? name, double? storeAmount, double? mrp, int? strips, int? unitsPerStrip, int? freeStrips, int? looseTabs}) async {
-    await _repo.update(id, name: name, storeAmount: storeAmount, mrp: mrp, strips: strips, unitsPerStrip: unitsPerStrip, freeStrips: freeStrips, looseTabs: looseTabs);
+  Future<void> updateMedicine(String id, {String? name, String? content, double? storeAmount, double? mrp, int? strips, int? unitsPerStrip, int? freeStrips, int? looseTabs}) async {
+    await _repo.update(id, name: name, content: content, storeAmount: storeAmount, mrp: mrp, strips: strips, unitsPerStrip: unitsPerStrip, freeStrips: freeStrips, looseTabs: looseTabs);
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {

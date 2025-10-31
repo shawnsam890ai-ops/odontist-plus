@@ -3190,6 +3190,47 @@ class _PatientDetailPageState extends State<PatientDetailPage> with TickerProvid
             ),
           ],
         ),
+        // Inline contraindication warning for the currently selected medicine
+        Builder(builder: (ctx){
+          final patient = context.read<PatientProvider>().byId(widget.patientId!);
+          if (patient == null) return const SizedBox.shrink();
+          final warn = _rxSelectedMedicine == null ? null : (){
+            final brand = _rxSelectedMedicine!;
+            // Prefer content from inventory if available; fallback to brand name
+            try {
+              final inv = context.read<MedicineProvider>().medicines;
+              final matches = inv.where((e) => e.name.toLowerCase() == brand.toLowerCase());
+              if (matches.isNotEmpty) {
+                final found = matches.first;
+                if ((found.content != null) && found.content!.trim().isNotEmpty) {
+                  return AiInsightsService().contraindicationFor(patient, found.content!);
+                }
+              }
+            } catch (_) {}
+            return AiInsightsService().contraindicationFor(patient, brand);
+          }();
+          if (warn == null) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(children: [
+              const Icon(Icons.error_outline, color: Colors.redAccent, size: 16),
+              const SizedBox(width: 6),
+              Flexible(child: Text(warn.message, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600))),
+              const SizedBox(width: 8),
+              TextButton(
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0), minimumSize: const Size(0, 0)),
+                onPressed: warn.details.isEmpty ? null : () {
+                  showDialog(context: ctx, builder: (c) => AlertDialog(
+                    title: const Text('Why flagged'),
+                    content: Text(warn.details),
+                    actions: [TextButton(onPressed: ()=> Navigator.of(c).pop(), child: const Text('Close'))],
+                  ));
+                },
+                child: const Text('Details', style: TextStyle(color: Colors.redAccent, fontSize: 12, decoration: TextDecoration.underline)),
+              ),
+            ]),
+          );
+        }),
         const SizedBox(height: 8),
         Row(
           children: [
