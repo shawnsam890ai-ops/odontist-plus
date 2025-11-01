@@ -51,13 +51,21 @@ class DoctorProvider with ChangeNotifier {
     _writeDoctorRemote(d);
   }
 
-  void updateDoctor(String id, {String? name, DoctorRole? role, bool? active, String? photoPath}) {
+  void updateDoctor(String id, {String? name, DoctorRole? role, bool? active, String? photoPath, DoctorSex? sex, int? age, DateTime? dob, String? phone, String? address, String? registrationNumber, String? registeredState, EmploymentType? employmentType}) {
     final d = _doctors[id];
     if (d == null) return;
     if (name != null) d.name = name;
     if (role != null) d.role = role;
     if (active != null) d.active = active;
     if (photoPath != null) d.photoPath = photoPath;
+    if (sex != null) d.sex = sex;
+    if (age != null) d.age = age;
+    if (dob != null) d.dob = dob;
+    if (phone != null) d.phone = phone;
+    if (address != null) d.address = address;
+    if (registrationNumber != null) d.registrationNumber = registrationNumber;
+    if (registeredState != null) d.registeredState = registeredState;
+    if (employmentType != null) d.employmentType = employmentType;
     notifyListeners();
     _persist();
     _writeDoctorRemote(d);
@@ -277,14 +285,16 @@ class DoctorProvider with ChangeNotifier {
   }
 
   // Persistence --------------------------------------------------------------
-  static const _kDoctors = 'doctors_v1';
+  static const _kDoctors = 'doctors_v2';
   static const _kLedger = 'ledger_v1';
   static const _kRequireAttendance = 'doc_require_attendance_v1';
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     _requireAttendance = prefs.getBool(_kRequireAttendance) ?? false;
-    final docStr = prefs.getString(_kDoctors);
+    String? docStr = prefs.getString(_kDoctors);
+    // Backward-compat: read v1 if v2 missing
+    docStr ??= prefs.getString('doctors_v1');
     if (docStr != null && docStr.isNotEmpty) {
       final List<dynamic> list = List<dynamic>.from(jsonDecode(docStr));
       _doctors.clear();
@@ -294,8 +304,36 @@ class DoctorProvider with ChangeNotifier {
         final id = map['id'] as String;
         final name = map['name'] as String;
         final roleIndex = map['role'] as int;
-  final active = map['active'] as bool;
-  final photoPath = map['photoPath'] as String?;
+        final active = (map['active'] as bool? ) ?? true;
+        final photoPath = map['photoPath'] as String?;
+        // New optional profile fields (v2)
+        DoctorSex sex = DoctorSex.male;
+        final rawSex = map['sex'];
+        if (rawSex is String) {
+          switch (rawSex.toLowerCase()) {
+            case 'female': sex = DoctorSex.female; break;
+            case 'other': sex = DoctorSex.other; break;
+            default: sex = DoctorSex.male; break;
+          }
+        } else if (rawSex is int) {
+          sex = DoctorSex.values[(rawSex).clamp(0, DoctorSex.values.length-1)];
+        }
+        final int? age = (map['age'] is num) ? (map['age'] as num).toInt() : null;
+        final DateTime? dob = map['dob'] is String ? DateTime.tryParse(map['dob'] as String) : null;
+        final String? phone = map['phone'] as String?;
+        final String? address = map['address'] as String?;
+        final String? registrationNumber = map['registrationNumber'] as String?;
+        final String? registeredState = map['registeredState'] as String?;
+        EmploymentType employmentType = EmploymentType.consultant;
+        final rawEmp = map['employmentType'];
+        if (rawEmp is String) {
+          switch (rawEmp.toLowerCase()) {
+            case 'permanent': employmentType = EmploymentType.permanent; break;
+            case 'consultant': employmentType = EmploymentType.consultant; break;
+          }
+        } else if (rawEmp is int) {
+          employmentType = EmploymentType.values[(rawEmp).clamp(0, EmploymentType.values.length-1)];
+        }
         final rawRules = Map<String, dynamic>.from(map['rules'] as Map);
         final rules = <String, PaymentRule>{};
         rawRules.forEach((k, v) {
@@ -305,7 +343,22 @@ class DoctorProvider with ChangeNotifier {
           final price = mv['clinicPrice'] == null ? null : (mv['clinicPrice'] as num).toDouble();
           rules[k] = (mode == 'fixed') ? PaymentRule.fixed(value, clinicPrice: price) : PaymentRule.percent(value, clinicPrice: price);
         });
-        _doctors[id] = Doctor(id: id, name: name, role: DoctorRole.values[roleIndex], rules: rules, active: active, photoPath: photoPath);
+        _doctors[id] = Doctor(
+          id: id,
+          name: name,
+          role: DoctorRole.values[roleIndex],
+          rules: rules,
+          active: active,
+          photoPath: photoPath,
+          sex: sex,
+          age: age,
+          dob: dob,
+          phone: phone,
+          address: address,
+          registrationNumber: registrationNumber,
+          registeredState: registeredState,
+          employmentType: employmentType,
+        );
       }
     }
     final ledStr = prefs.getString(_kLedger);
@@ -331,18 +384,27 @@ class DoctorProvider with ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kRequireAttendance, _requireAttendance);
     // Doctors
-    final docsList = _doctors.values.map((d) => {
-          'id': d.id,
-          'name': d.name,
-          'role': d.role.index,
-          'active': d.active,
-      'photoPath': d.photoPath,
-          'rules': d.rules.map((key, r) => MapEntry(key, {
-                'mode': r.mode == PaymentMode.fixed ? 'fixed' : 'percent',
-                'value': r.value,
-                'clinicPrice': r.clinicPrice,
-              })),
-        });
+      final docsList = _doctors.values.map((d) => {
+        'id': d.id,
+        'name': d.name,
+        'role': d.role.index,
+        'active': d.active,
+        'photoPath': d.photoPath,
+        // New fields (v2)
+        'sex': d.sex.name,
+        'age': d.age,
+        'dob': d.dob?.toIso8601String(),
+        'phone': d.phone,
+        'address': d.address,
+        'registrationNumber': d.registrationNumber,
+        'registeredState': d.registeredState,
+        'employmentType': d.employmentType.name,
+        'rules': d.rules.map((key, r) => MapEntry(key, {
+          'mode': r.mode == PaymentMode.fixed ? 'fixed' : 'percent',
+          'value': r.value,
+          'clinicPrice': r.clinicPrice,
+        })),
+      });
     await prefs.setString(_kDoctors, jsonEncode(docsList.toList()));
     // Ledger
     final ledList = _ledger.map((e) => e.toJson()).toList();
@@ -373,13 +435,31 @@ class DoctorProvider with ChangeNotifier {
           final price = mv['clinicPrice'] == null ? null : (mv['clinicPrice'] as num).toDouble();
           rules[key] = mode == 'fixed' ? PaymentRule.fixed(value, clinicPrice: price) : PaymentRule.percent(value, clinicPrice: price);
         });
+        // New optional fields
+        DoctorSex sex = DoctorSex.male;
+        final rawSex = data['sex'];
+        if (rawSex is String) {
+          switch (rawSex.toLowerCase()) { case 'female': sex = DoctorSex.female; break; case 'other': sex = DoctorSex.other; break; default: sex = DoctorSex.male; }
+        } else if (rawSex is int) { sex = DoctorSex.values[(rawSex).clamp(0, DoctorSex.values.length-1)]; }
+        EmploymentType emp = EmploymentType.consultant;
+        final rawEmp = data['employmentType'];
+        if (rawEmp is String) { emp = rawEmp.toLowerCase() == 'permanent' ? EmploymentType.permanent : EmploymentType.consultant; }
+        else if (rawEmp is int) { emp = EmploymentType.values[(rawEmp).clamp(0, EmploymentType.values.length-1)]; }
         remoteDoctors.add(Doctor(
-          id: data['id'] as String? ?? d.id,
+          id: (data['id'] as String?) ?? d.id,
           name: (data['name'] as String?) ?? 'Doctor',
           role: DoctorRole.values[(data['role'] as int?) ?? 0],
           active: (data['active'] as bool?) ?? true,
           photoPath: data['photoPath'] as String?,
           rules: rules,
+          sex: sex,
+          age: (data['age'] as num?)?.toInt(),
+          dob: data['dob'] is String ? DateTime.tryParse(data['dob'] as String) : null,
+          phone: data['phone'] as String?,
+          address: data['address'] as String?,
+          registrationNumber: data['registrationNumber'] as String?,
+          registeredState: data['registeredState'] as String?,
+          employmentType: emp,
         ));
       }
 
@@ -426,13 +506,30 @@ class DoctorProvider with ChangeNotifier {
             final price = mv['clinicPrice'] == null ? null : (mv['clinicPrice'] as num).toDouble();
             rules[key] = mode == 'fixed' ? PaymentRule.fixed(value, clinicPrice: price) : PaymentRule.percent(value, clinicPrice: price);
           });
-          _doctors[data['id'] as String? ?? d.id] = Doctor(
-            id: data['id'] as String? ?? d.id,
+          DoctorSex sex = DoctorSex.male;
+          final rawSex = data['sex'];
+          if (rawSex is String) {
+            switch (rawSex.toLowerCase()) { case 'female': sex = DoctorSex.female; break; case 'other': sex = DoctorSex.other; break; default: sex = DoctorSex.male; }
+          } else if (rawSex is int) { sex = DoctorSex.values[(rawSex).clamp(0, DoctorSex.values.length-1)]; }
+          EmploymentType emp = EmploymentType.consultant;
+          final rawEmp = data['employmentType'];
+          if (rawEmp is String) { emp = rawEmp.toLowerCase() == 'permanent' ? EmploymentType.permanent : EmploymentType.consultant; }
+          else if (rawEmp is int) { emp = EmploymentType.values[(rawEmp).clamp(0, EmploymentType.values.length-1)]; }
+          _doctors[(data['id'] as String?) ?? d.id] = Doctor(
+            id: (data['id'] as String?) ?? d.id,
             name: (data['name'] as String?) ?? 'Doctor',
             role: DoctorRole.values[(data['role'] as int?) ?? 0],
             active: (data['active'] as bool?) ?? true,
             photoPath: data['photoPath'] as String?,
             rules: rules,
+            sex: sex,
+            age: (data['age'] as num?)?.toInt(),
+            dob: data['dob'] is String ? DateTime.tryParse(data['dob'] as String) : null,
+            phone: data['phone'] as String?,
+            address: data['address'] as String?,
+            registrationNumber: data['registrationNumber'] as String?,
+            registeredState: data['registeredState'] as String?,
+            employmentType: emp,
           );
         }
         notifyListeners();
@@ -458,12 +555,20 @@ class DoctorProvider with ChangeNotifier {
     final uid = _uid();
     if (uid == null) return;
     try {
-  final doc = {
+      final doc = {
         'id': d.id,
         'name': d.name,
         'role': d.role.index,
         'active': d.active,
         'photoPath': d.photoPath,
+        'sex': d.sex.name,
+        'age': d.age,
+        'dob': d.dob?.toIso8601String(),
+        'phone': d.phone,
+        'address': d.address,
+        'registrationNumber': d.registrationNumber,
+        'registeredState': d.registeredState,
+        'employmentType': d.employmentType.name,
     'rules': d.rules.map((k, r) => MapEntry(k, {
       'mode': r.mode == PaymentMode.fixed ? 'fixed' : 'percent',
       'value': r.value,
@@ -528,13 +633,30 @@ class DoctorProvider with ChangeNotifier {
           final price = mv['clinicPrice'] == null ? null : (mv['clinicPrice'] as num).toDouble();
           rules[key] = mode == 'fixed' ? PaymentRule.fixed(value, clinicPrice: price) : PaymentRule.percent(value, clinicPrice: price);
         });
+        DoctorSex sex = DoctorSex.male;
+        final rawSex = data['sex'];
+        if (rawSex is String) {
+          switch (rawSex.toLowerCase()) { case 'female': sex = DoctorSex.female; break; case 'other': sex = DoctorSex.other; break; default: sex = DoctorSex.male; }
+        } else if (rawSex is int) { sex = DoctorSex.values[(rawSex).clamp(0, DoctorSex.values.length-1)]; }
+        EmploymentType emp = EmploymentType.consultant;
+        final rawEmp = data['employmentType'];
+        if (rawEmp is String) { emp = rawEmp.toLowerCase() == 'permanent' ? EmploymentType.permanent : EmploymentType.consultant; }
+        else if (rawEmp is int) { emp = EmploymentType.values[(rawEmp).clamp(0, EmploymentType.values.length-1)]; }
         remoteDoctors.add(Doctor(
-          id: data['id'] as String? ?? d.id,
+          id: (data['id'] as String?) ?? d.id,
           name: (data['name'] as String?) ?? 'Doctor',
           role: DoctorRole.values[(data['role'] as int?) ?? 0],
           active: (data['active'] as bool?) ?? true,
           photoPath: data['photoPath'] as String?,
           rules: rules,
+          sex: sex,
+          age: (data['age'] as num?)?.toInt(),
+          dob: data['dob'] is String ? DateTime.tryParse(data['dob'] as String) : null,
+          phone: data['phone'] as String?,
+          address: data['address'] as String?,
+          registrationNumber: data['registrationNumber'] as String?,
+          registeredState: data['registeredState'] as String?,
+          employmentType: emp,
         ));
       }
 

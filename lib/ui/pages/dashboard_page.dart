@@ -4,6 +4,7 @@ import 'dart:ui' show FontFeature;
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/patient_provider.dart';
 import '../../providers/revenue_provider.dart';
 import '../../models/treatment_session.dart';
@@ -462,15 +463,22 @@ class _DashboardPageState extends State<DashboardPage> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(
-          children: [
-            Expanded(child: Text('Appointments', style: Theme.of(context).textTheme.headlineSmall)),
-            FilledButton.icon(
-              onPressed: () => _openAddAppointmentDialog(context),
-              icon: const Icon(Icons.add),
-              label: const Text('Add Appointment'),
+        Align(
+          alignment: Alignment.center,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              borderRadius: BorderRadius.circular(12),
             ),
-          ],
+            child: Text(
+              'Appointments',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
         ),
         const SizedBox(height: 12),
         Expanded(
@@ -620,7 +628,23 @@ class _DashboardPageState extends State<DashboardPage> {
           const double _metricsTotalH = _metricCardH * 3 + _metricSpacing * 2; // patient + today + inventory
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // Title only; removed Customize button and mode
-          Align(alignment: Alignment.centerLeft, child: Text('Overview', style: Theme.of(context).textTheme.headlineSmall)),
+          Align(
+            alignment: Alignment.center,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'Dashboard',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
           const SizedBox(height: 16),
           if (!wide) ...[
             // Non-wide: stack panels vertically to avoid row overflow on phones
@@ -895,7 +919,23 @@ class _DashboardPageState extends State<DashboardPage> {
       final w = media.size.width;
       // Treat narrow phones as width < 420
       final isPhone = w < 420;
-      final header = Text('Revenue', style: Theme.of(context).textTheme.headlineSmall);
+      final header = Align(
+        alignment: Alignment.center,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            'Revenue',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      );
       final tiles = Wrap(spacing: 16, runSpacing: 16, children: [
         _DashCard(title: "Today's Revenue", value: todaysStr, icon: Icons.today, width: 220, valueColor: todaysRevenue >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/money_bag.png'), minHeight: 130),
         _DashCard(title: 'Monthly Revenue', value: monthlyStr, icon: Icons.calendar_month, width: 220, valueColor: monthlyRevenue >= 0 ? Colors.green : Colors.red, overlayImage: const AssetImage('assets/images/coin_gear.png'), minHeight: 130),
@@ -947,13 +987,61 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // ============== Staff Attendance ==============
   Widget _staffAttendanceSection() {
-    return const MonthlyAttendanceView();
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Align(
+            alignment: Alignment.center,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'Staff Panel',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const Expanded(child: MonthlyAttendanceView()),
+      ],
+    );
   }
 
   // ============== Doctors Attendance ==============
   Widget _doctorsAttendanceSection() {
     // Use the new doctors payments section (includes list, rules, calculator)
-    return const DoctorsPaymentsSection();
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Align(
+            alignment: Alignment.center,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'Doctors Panel',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const Expanded(child: DoctorsPaymentsSection()),
+      ],
+    );
   }
 
   // ============== Inventory ==============
@@ -987,7 +1075,7 @@ class _DashboardPageState extends State<DashboardPage> {
               children: [
                 // Background image (with graceful fallback if asset is missing)
                 Image.asset(
-                  'assets/images/' + asset,
+                  asset,
                   fit: BoxFit.cover,
                   errorBuilder: (c, e, s) => Container(
                     color: theme.colorScheme.surfaceVariant,
@@ -1030,7 +1118,23 @@ class _DashboardPageState extends State<DashboardPage> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        Text('Clinic Inventory', style: Theme.of(context).textTheme.headlineSmall),
+        Align(
+          alignment: Alignment.center,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              'Clinic Inventory',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
         const SizedBox(height: 32),
         // Only the two boxes should be visible here - centered
         Expanded(
@@ -1041,8 +1145,8 @@ class _DashboardPageState extends State<DashboardPage> {
               alignment: WrapAlignment.center,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                categoryBox(label: 'Instruments', asset: 'instruments_bg.jpg', fallbackIcon: Icons.handyman_outlined),
-                categoryBox(label: 'Materials', asset: 'materials_bg.jpg', fallbackIcon: Icons.inventory_2_outlined),
+                categoryBox(label: 'Instruments', asset: 'assets/images/instruments_bg.jpg', fallbackIcon: Icons.handyman_outlined),
+                categoryBox(label: 'Materials', asset: 'assets/images/materials_bg.jpg', fallbackIcon: Icons.inventory_2_outlined),
               ],
             ),
           ),
@@ -1132,7 +1236,23 @@ class _DashboardPageState extends State<DashboardPage> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        Text('Utility & Bills', style: Theme.of(context).textTheme.headlineSmall),
+        Align(
+          alignment: Alignment.center,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              'Utility & Bills',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
         const SizedBox(height: 32),
         // Only the two boxes should be visible here - centered
         Expanded(
@@ -1392,7 +1512,23 @@ class _DashboardPageState extends State<DashboardPage> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Labs', style: Theme.of(context).textTheme.headlineSmall),
+        Align(
+          alignment: Alignment.center,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              'Labs',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
         const SizedBox(height: 12),
         Row(children: [
           ElevatedButton.icon(onPressed: _showAddLabDialog, icon: const Icon(Icons.add_business), label: const Text('Add Lab')),
@@ -1522,7 +1658,23 @@ class _DashboardPageState extends State<DashboardPage> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Medicines', style: Theme.of(context).textTheme.headlineSmall),
+        Align(
+          alignment: Alignment.center,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              'Medicines',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
         const SizedBox(height: 12),
         Row(children: [
           ElevatedButton.icon(onPressed: _showAddMedicineDialog, icon: const Icon(Icons.add), label: const Text('Add Medicine')),
@@ -2029,193 +2181,115 @@ class _DashboardPageState extends State<DashboardPage> {
   // ============== Settings ==============
   Widget _settingsSection() {
     final themeProv = context.watch<ThemeProvider>();
-    final appSettings = context.watch<AppSettingsProvider>();
-    // When forceWhiteText is ON, show white foreground for texts/icons in the
-    // Settings section (which is laid on the background image), while keeping
-    // text inside surfaced containers elsewhere black via their own theming.
-    final useWhite = themeProv.forceWhiteText;
-    final baseTheme = Theme.of(context);
-    final cs = baseTheme.colorScheme;
-    final whiteTextTheme = baseTheme.textTheme.apply(
-      bodyColor: Colors.white,
-      displayColor: Colors.white,
-      decorationColor: Colors.white70,
-    );
-    // Override ChipTheme so that chip labels remain dark on their surface.
-    final chipTheme = baseTheme.chipTheme.copyWith(
-      labelStyle: TextStyle(color: cs.onSurface),
-    );
-    final media = MediaQuery.of(context);
-    final barHeight = context.scale(context.isPhone ? 96 : 110);
-    return Theme(
-      data: useWhite ? baseTheme.copyWith(textTheme: whiteTextTheme, chipTheme: chipTheme) : baseTheme,
-      child: DefaultTextStyle.merge(
-        style: TextStyle(color: useWhite ? Colors.white : null),
-        child: IconTheme(
-          data: IconTheme.of(context).copyWith(color: useWhite ? Colors.white70 : null),
-          child: Padding(
+    
+    // Big clickable category boxes with background images
+    Widget categoryBox({required String label, required IconData icon, required String asset}) {
+      final theme = Theme.of(context);
+      return InkWell(
+        onTap: () {
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => _SettingsCategoryPage(category: label),
+          ));
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            width: 520,
+            height: 380,
+            decoration: BoxDecoration(
+              border: Border.all(color: theme.dividerColor, width: 1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Background image (with graceful fallback if asset is missing)
+                Image.asset(
+                  asset,
+                  fit: BoxFit.cover,
+                  errorBuilder: (c, e, s) => Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          theme.colorScheme.primaryContainer,
+                          theme.colorScheme.secondaryContainer,
+                        ],
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(icon, size: 120, color: theme.colorScheme.onPrimaryContainer.withOpacity(0.3)),
+                  ),
+                ),
+                // Dim gradient for text readability
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0x00000000),
+                        Color(0x99000000),
+                      ],
+                    ),
+                  ),
+                ),
+                // Label
+                Positioned(
+                  left: 20,
+                  right: 20,
+                  bottom: 20,
+                  child: Text(
+                    label,
+                    style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    
+    return Padding(
       padding: const EdgeInsets.all(16),
-      child: SingleChildScrollView(
-        // leave room at the bottom so the floating bottom menu doesn't overlap
-        // the content and cause RenderOverflow errors.
-        padding: EdgeInsets.only(bottom: media.padding.bottom + barHeight + 12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(
-          children: [
-            Expanded(child: Text('Settings', style: Theme.of(context).textTheme.headlineSmall)),
-            Tooltip(
-              message: 'Refresh data',
-              waitDuration: const Duration(milliseconds: 250),
-              child: IconButton(
-                onPressed: _refreshing ? null : _refreshAllData,
-                icon: _refreshing
-                    ? SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
-                      )
-                    : const Icon(Icons.refresh),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Align(
+          alignment: Alignment.center,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              'Settings',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
               ),
             ),
-          ],
+          ),
         ),
-        const SizedBox(height: 16),
-        const Text('General configuration placeholders will appear here.'),
-        const SizedBox(height: 12),
-        // Communication settings
-        Text('Communication', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(child: Text('Default country code for phone numbers')),
-          SizedBox(
-            width: 120,
-            child: TextField(
-              controller: TextEditingController(text: '+${appSettings.defaultCountryCode}')
-                ..selection = TextSelection.fromPosition(TextPosition(offset: ('+${appSettings.defaultCountryCode}').length)),
-              decoration: const InputDecoration(prefixText: ''),
-              onSubmitted: (v) => appSettings.setDefaultCountryCode(v),
-              onChanged: (v) {},
+        const SizedBox(height: 32),
+        // Only the two boxes should be visible here - centered
+        Expanded(
+          child: Center(
+            child: Wrap(
+              spacing: 30,
+              runSpacing: 30,
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                categoryBox(label: 'App Settings', icon: Icons.settings_outlined, asset: 'assets/images/app_settings_bg.jpg'),
+                categoryBox(label: 'Personal Profile', icon: Icons.person_outline, asset: 'assets/images/personal_profile_bg.png'),
+              ],
             ),
-          )
-        ]),
-        const SizedBox(height: 12),
-        Text('Theme', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          _themeChoiceChip('Green', ThemePreset.green, themeProv),
-          _themeChoiceChip('Purple', ThemePreset.purple, themeProv),
-          _themeChoiceChip('Red', ThemePreset.red, themeProv),
-          ActionChip(
-            label: const Text('Custom…'),
-            avatar: const Icon(Icons.color_lens_outlined),
-            onPressed: () => _showCustomThemeDialog(themeProv),
           ),
-        ]),
-        const SizedBox(height: 24),
-        // Printing (Rx) header/footer images
-        Text('Printing', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            _rxImagePreview(themeProv.rxHeaderPath),
-            const SizedBox(width: 8),
-            Expanded(child: Text('Rx header image: ${themeProv.hasRxHeader ? (themeProv.rxHeaderPath!.startsWith('asset:') ? themeProv.rxHeaderPath!.substring(6) : themeProv.rxHeaderPath) : 'Not set'}', overflow: TextOverflow.ellipsis)),
-            TextButton.icon(
-              onPressed: () => _showRxImagePicker(isHeader: true, themeProv: themeProv),
-              icon: const Icon(Icons.image_outlined),
-              label: const Text('Change'),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: themeProv.hasRxHeader ? () => themeProv.setRxHeaderImagePath(null) : null,
-              icon: const Icon(Icons.restore),
-              label: const Text('Clear'),
-            ),
-          ]),
-          const SizedBox(height: 8),
-          Row(children: [
-            _rxImagePreview(themeProv.rxFooterPath),
-            const SizedBox(width: 8),
-            Expanded(child: Text('Rx footer image: ${themeProv.hasRxFooter ? (themeProv.rxFooterPath!.startsWith('asset:') ? themeProv.rxFooterPath!.substring(6) : themeProv.rxFooterPath) : 'Not set'}', overflow: TextOverflow.ellipsis)),
-            TextButton.icon(
-              onPressed: () => _showRxImagePicker(isHeader: false, themeProv: themeProv),
-              icon: const Icon(Icons.image_outlined),
-              label: const Text('Change'),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: themeProv.hasRxFooter ? () => themeProv.setRxFooterImagePath(null) : null,
-              icon: const Icon(Icons.restore),
-              label: const Text('Clear'),
-            ),
-          ]),
-        ]),
-        const SizedBox(height: 24),
-        // Background image controls
-        Text('Background', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(
-            child: Text(themeProv.isDefaultBackground ? 'Default background selected' : 'Preset background selected'),
-          ),
-          TextButton.icon(
-            onPressed: () => _showBackgroundPicker(themeProv),
-            icon: const Icon(Icons.image_outlined),
-            label: const Text('Change'),
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: () => themeProv.setBackgroundImageAsset(ThemeProvider.defaultBackgroundAsset),
-            icon: const Icon(Icons.restore),
-            label: const Text('Reset to default'),
-          ),
-        ]),
-        const SizedBox(height: 24),
-        // Contrast controls
-        Text('Contrast', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(child: Text('Force white text (useful for dark backgrounds)')),
-          Switch(
-            value: themeProv.forceWhiteText,
-            onChanged: (v) => themeProv.setForceWhiteText(v),
-          ),
-        ]),
-        const SizedBox(height: 24),
-        Wrap(spacing: 12, runSpacing: 12, children: [
-          const Chip(label: Text('Theme: Light/Dark')),
-          const Chip(label: Text('Backup: Not Configured')),
-          if (context.watch<AuthProvider>().isAdmin)
-            FilledButton.tonal(
-              onPressed: () => Navigator.of(context).pushNamed('/admin-users'),
-              child: const Text('Manage Users (Admin)'),
-            ),
-        ])
-        ,
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            const Icon(Icons.person_outline),
-            const SizedBox(width: 8),
-            Expanded(child: Text(context.watch<AuthProvider>().user?.email ?? '')),
-            TextButton.icon(
-              onPressed: () async {
-                await context.read<AuthProvider>().signOut();
-                if (mounted) {
-                  Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-                }
-              },
-              icon: const Icon(Icons.logout),
-              label: const Text('Sign out'),
-            ),
-          ],
         ),
       ]),
-    ),
-  ),
-),
-),
-);
+    );
   }
 
   void _showBackgroundPicker(ThemeProvider themeProv) {
@@ -5545,3 +5619,457 @@ class _UtilityBillsCategoryPageState extends State<_UtilityBillsCategoryPage> {
     );
   }
 }
+
+// ============== Settings Category Page ==============
+class _SettingsCategoryPage extends StatefulWidget {
+  final String category; // App Settings | Personal Profile
+  const _SettingsCategoryPage({required this.category});
+
+  @override
+  State<_SettingsCategoryPage> createState() => _SettingsCategoryPageState();
+}
+
+class _SettingsCategoryPageState extends State<_SettingsCategoryPage> {
+  // Personal profile fields
+  final _firstNameCtrl = TextEditingController();
+  final _lastNameCtrl = TextEditingController();
+  final _clinicNameCtrl = TextEditingController();
+  final _clinicAddressCtrl = TextEditingController();
+  final _clinicPhoneCtrl = TextEditingController();
+  DateTime? _dateOfBirth;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPersonalData();
+  }
+
+  void _loadPersonalData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _firstNameCtrl.text = prefs.getString('profile_firstName') ?? '';
+      _lastNameCtrl.text = prefs.getString('profile_lastName') ?? '';
+      _clinicNameCtrl.text = prefs.getString('profile_clinicName') ?? '';
+      _clinicAddressCtrl.text = prefs.getString('profile_clinicAddress') ?? '';
+      _clinicPhoneCtrl.text = prefs.getString('profile_clinicPhone') ?? '';
+      final dobStr = prefs.getString('profile_dob');
+      if (dobStr != null) {
+        _dateOfBirth = DateTime.tryParse(dobStr);
+      }
+    });
+  }
+
+  void _savePersonalData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('profile_firstName', _firstNameCtrl.text.trim());
+    await prefs.setString('profile_lastName', _lastNameCtrl.text.trim());
+    await prefs.setString('profile_clinicName', _clinicNameCtrl.text.trim());
+    await prefs.setString('profile_clinicAddress', _clinicAddressCtrl.text.trim());
+    await prefs.setString('profile_clinicPhone', _clinicPhoneCtrl.text.trim());
+    if (_dateOfBirth != null) {
+      await prefs.setString('profile_dob', _dateOfBirth!.toIso8601String());
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile saved successfully')),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _firstNameCtrl.dispose();
+    _lastNameCtrl.dispose();
+    _clinicNameCtrl.dispose();
+    _clinicAddressCtrl.dispose();
+    _clinicPhoneCtrl.dispose();
+    super.dispose();
+  }
+
+  void _showRxImagePicker({required bool isHeader, required ThemeProvider themeProv}) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(isHeader ? 'Choose Rx Header' : 'Choose Rx Footer'),
+        content: SizedBox(
+          width: 560,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Preset images (assets)'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  'assets/images/clinic_header.jpg',
+                  'assets/images/clinic_footer.jpg',
+                ].map((a) => InkWell(
+                  onTap: () async {
+                    if (isHeader) {
+                      await themeProv.setRxHeaderImageAsset(a);
+                    } else {
+                      await themeProv.setRxFooterImageAsset(a);
+                    }
+                    if (mounted) Navigator.pop(context);
+                  },
+                  child: _bgThumb(a, themeProv),
+                )).toList(),
+              ),
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              const Text('Or pick from your files'),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.tonalIcon(
+                  onPressed: () async {
+                    final res = await FilePicker.platform.pickFiles(type: FileType.image, withReadStream: false);
+                    final p = res?.files.single.path;
+                    if (p != null) {
+                      if (isHeader) {
+                        await themeProv.setRxHeaderImagePath(p);
+                      } else {
+                        await themeProv.setRxFooterImagePath(p);
+                      }
+                      if (mounted) Navigator.pop(context);
+                    }
+                  },
+                  icon: const Icon(Icons.upload),
+                  label: const Text('Pick image file'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  void _showBackgroundPicker(ThemeProvider themeProv) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Choose Background'),
+        content: SizedBox(
+          width: 540,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Preset images'),
+              const SizedBox(height: 8),
+              Builder(
+                builder: (_) {
+                  final presets = ThemeProvider.allowedBackgroundAssets;
+                  return Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: presets.map((p) => _bgThumb(p, themeProv)).toList(),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  Widget _bgThumb(String asset, ThemeProvider themeProv) {
+    final selected = themeProv.backgroundImagePath == 'asset:$asset';
+    return InkWell(
+      onTap: () async {
+        await themeProv.setBackgroundImageAsset(asset);
+        if (mounted) Navigator.pop(context);
+      },
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              asset,
+              width: 90,
+              height: 60,
+              fit: BoxFit.cover,
+              errorBuilder: (c, e, s) => Container(
+                width: 90,
+                height: 60,
+                color: Colors.black12,
+                alignment: Alignment.center,
+                child: const Icon(Icons.broken_image_outlined),
+              ),
+            ),
+          ),
+          if (selected)
+            Positioned(
+              right: 4,
+              top: 4,
+              child: Container(
+                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.all(2),
+                child: const Icon(Icons.check, color: Colors.white, size: 14),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isAppSettings = widget.category == 'App Settings';
+    
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.category)),
+      floatingActionButton: !isAppSettings ? FloatingActionButton.extended(
+        onPressed: _savePersonalData,
+        icon: const Icon(Icons.save),
+        label: const Text('Save Profile'),
+      ) : null,
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          child: context.responsiveCenter(
+            maxWidth: 800,
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: isAppSettings ? _buildAppSettings() : _buildPersonalProfile(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPersonalProfile() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Personal Information', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _firstNameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'First Name',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextField(
+                controller: _lastNameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Last Name',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        OutlinedButton.icon(
+          onPressed: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: _dateOfBirth ?? DateTime(1990),
+              firstDate: DateTime(1940),
+              lastDate: DateTime.now(),
+            );
+            if (picked != null) {
+              setState(() => _dateOfBirth = picked);
+            }
+          },
+          icon: const Icon(Icons.calendar_today),
+          label: Text(_dateOfBirth == null
+              ? 'Date of Birth (optional)'
+              : 'DOB: ${_dateOfBirth!.year}-${_dateOfBirth!.month.toString().padLeft(2, '0')}-${_dateOfBirth!.day.toString().padLeft(2, '0')}'),
+        ),
+        const SizedBox(height: 32),
+        const Divider(),
+        const SizedBox(height: 24),
+        Text('Clinic Information', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 24),
+        TextField(
+          controller: _clinicNameCtrl,
+          decoration: const InputDecoration(
+            labelText: 'Clinic Name',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.business),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _clinicAddressCtrl,
+          decoration: const InputDecoration(
+            labelText: 'Clinic Address',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.location_on_outlined),
+          ),
+          maxLines: 2,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _clinicPhoneCtrl,
+          decoration: const InputDecoration(
+            labelText: 'Clinic Phone Number',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.phone_outlined),
+          ),
+          keyboardType: TextInputType.phone,
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildAppSettings() {
+    final themeProv = context.watch<ThemeProvider>();
+    final appSettings = context.watch<AppSettingsProvider>();
+    final baseTheme = Theme.of(context);
+    final cs = baseTheme.colorScheme;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Communication', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: const Text('Default country code for phone numbers')),
+          SizedBox(
+            width: 120,
+            child: TextField(
+              controller: TextEditingController(text: '+${appSettings.defaultCountryCode}')
+                ..selection = TextSelection.fromPosition(TextPosition(offset: ('+${appSettings.defaultCountryCode}').length)),
+              decoration: const InputDecoration(prefixText: ''),
+              onSubmitted: (v) => appSettings.setDefaultCountryCode(v),
+            ),
+          )
+        ]),
+        const SizedBox(height: 32),
+        const Divider(),
+        const SizedBox(height: 24),
+        Text('Theme', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 16),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          _themeChoiceChip('Green', ThemePreset.green, themeProv),
+          _themeChoiceChip('Purple', ThemePreset.purple, themeProv),
+          _themeChoiceChip('Red', ThemePreset.red, themeProv),
+          ActionChip(
+            label: const Text('Custom…'),
+            avatar: const Icon(Icons.color_lens_outlined),
+            onPressed: () {
+              final dashState = context.findAncestorStateOfType<_DashboardPageState>();
+              dashState?._showCustomThemeDialog(themeProv);
+            },
+          ),
+        ]),
+        const SizedBox(height: 32),
+        const Divider(),
+        const SizedBox(height: 24),
+        Text('Printing', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: Text('Rx header image: ${themeProv.hasRxHeader ? (themeProv.rxHeaderPath!.startsWith('asset:') ? themeProv.rxHeaderPath!.substring(6) : themeProv.rxHeaderPath) : 'Not set'}', overflow: TextOverflow.ellipsis)),
+          TextButton.icon(
+            onPressed: () => _showRxImagePicker(isHeader: true, themeProv: themeProv),
+            icon: const Icon(Icons.image_outlined),
+            label: const Text('Change'),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: themeProv.hasRxHeader ? () => themeProv.setRxHeaderImagePath(null) : null,
+            icon: const Icon(Icons.restore),
+            label: const Text('Clear'),
+          ),
+        ]),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: Text('Rx footer image: ${themeProv.hasRxFooter ? (themeProv.rxFooterPath!.startsWith('asset:') ? themeProv.rxFooterPath!.substring(6) : themeProv.rxFooterPath) : 'Not set'}', overflow: TextOverflow.ellipsis)),
+          TextButton.icon(
+            onPressed: () => _showRxImagePicker(isHeader: false, themeProv: themeProv),
+            icon: const Icon(Icons.image_outlined),
+            label: const Text('Change'),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: themeProv.hasRxFooter ? () => themeProv.setRxFooterImagePath(null) : null,
+            icon: const Icon(Icons.restore),
+            label: const Text('Clear'),
+          ),
+        ]),
+        const SizedBox(height: 32),
+        const Divider(),
+        const SizedBox(height: 24),
+        Text('Background', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(
+            child: Text(themeProv.isDefaultBackground ? 'Default background selected' : 'Preset background selected'),
+          ),
+          TextButton.icon(
+            onPressed: () => _showBackgroundPicker(themeProv),
+            icon: const Icon(Icons.image_outlined),
+            label: const Text('Change'),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: () => themeProv.setBackgroundImageAsset(ThemeProvider.defaultBackgroundAsset),
+            icon: const Icon(Icons.restore),
+            label: const Text('Reset to default'),
+          ),
+        ]),
+        const SizedBox(height: 32),
+        const Divider(),
+        const SizedBox(height: 24),
+        Text('Contrast', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 16),
+        SwitchListTile(
+          title: const Text('Force white text (useful for dark backgrounds)'),
+          value: themeProv.forceWhiteText,
+          onChanged: (v) => themeProv.setForceWhiteText(v),
+        ),
+        const SizedBox(height: 16),
+        Row(children: [
+          const Text('Background dim: '),
+          Expanded(
+            child: Slider(
+              value: themeProv.backgroundDim,
+              min: 0,
+              max: 0.7,
+              divisions: 14,
+              label: '${(themeProv.backgroundDim * 100).toStringAsFixed(0)}%',
+              onChanged: (v) => themeProv.setBackgroundDim(v),
+            ),
+          ),
+          Text('${(themeProv.backgroundDim * 100).toStringAsFixed(0)}%'),
+        ]),
+      ],
+    );
+  }
+
+  Widget _themeChoiceChip(String label, ThemePreset preset, ThemeProvider prov) {
+    final dashState = context.findAncestorStateOfType<_DashboardPageState>();
+    return dashState?._themeChoiceChip(label, preset, prov) ?? ChoiceChip(
+      label: Text(label),
+      selected: prov.preset == preset,
+      onSelected: (v) => prov.setPreset(preset),
+    );
+  }
+}
+
