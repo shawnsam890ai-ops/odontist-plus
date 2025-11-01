@@ -190,8 +190,26 @@ class UtilityProvider with ChangeNotifier {
   }
 
   // Bills
-  Future<void> addBill({required DateTime date, required String itemName, required double amount, String? receiptPath, String category = 'Other'}) async {
-    final b = BillEntry(date: date, itemName: itemName, amount: amount, receiptPath: receiptPath, category: category);
+  Future<void> addBill({
+    required DateTime date,
+    required String itemName,
+    required double amount,
+    String? receiptPath,
+    String category = 'Other',
+    bool isPaid = false,
+    bool isCredit = false,
+    DateTime? dueDate,
+  }) async {
+    final b = BillEntry(
+      date: date,
+      itemName: itemName,
+      amount: amount,
+      receiptPath: receiptPath,
+      category: category,
+      isPaid: isPaid,
+      isCredit: isCredit,
+      dueDate: dueDate,
+    );
     await _repo.addBill(b);
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -199,9 +217,39 @@ class UtilityProvider with ChangeNotifier {
         await FirebaseFirestore.instance.collection('users').doc(uid).collection('utility_bills').doc(b.id).set(b.toJson());
       }
     } catch (_) {}
-    // Reflect as negative in revenue
-    final desc = 'Bill: $itemName ${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-    await revenue.addRevenue(patientId: 'bill', description: desc, amount: -amount);
+    // Reflect as negative in revenue only if paid
+    if (isPaid) {
+      final desc = 'Bill: $itemName ${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      await revenue.addRevenue(patientId: 'bill', description: desc, amount: -amount);
+    }
+    // Schedule reminder for credit bills if due date is set
+    if (isCredit && dueDate != null) {
+      _schedulePaymentReminder(b);
+    }
+    notifyListeners();
+  }
+
+  void _schedulePaymentReminder(BillEntry bill) {
+    // TODO: Implement notification scheduling for due date
+    // This can be done using flutter_local_notifications
+    // For now, we'll just log it
+    print('Reminder scheduled for ${bill.itemName} due on ${bill.dueDate}');
+  }
+
+  Future<void> markBillAsPaid(String id) async {
+    final idx = bills.indexWhere((e) => e.id == id);
+    if (idx == -1) return;
+    final bill = bills[idx];
+    bill.isPaid = true;
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).collection('utility_bills').doc(id).update({'isPaid': true});
+      }
+    } catch (_) {}
+    // Add to revenue when marked as paid
+    final desc = 'Bill: ${bill.itemName} ${bill.date.year}-${bill.date.month.toString().padLeft(2, '0')}-${bill.date.day.toString().padLeft(2, '0')}';
+    await revenue.addRevenue(patientId: 'bill', description: desc, amount: -bill.amount);
     notifyListeners();
   }
 

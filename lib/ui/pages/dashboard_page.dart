@@ -89,6 +89,8 @@ class _DashboardPageState extends State<DashboardPage> {
   final ScrollController _managePatientsScroll = ScrollController();
   // Inventory UI state
   String? _invSelectedCategory; // Instruments | Materials | null => all
+  // Utility UI state
+  String? _utilitySelectedCategory; // Utility | Bills | null => all
 
   @override
   void initState() {
@@ -1056,88 +1058,95 @@ class _DashboardPageState extends State<DashboardPage> {
     if (!util.isLoaded) {
       util.ensureLoaded();
     }
-    final services = util.services;
+    
+    // Big clickable category boxes with background images
+    Widget categoryBox({required String label, required IconData icon, required String asset}) {
+      final theme = Theme.of(context);
+      return InkWell(
+        onTap: () {
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => _UtilityBillsCategoryPage(category: label),
+          ));
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            width: 520,
+            height: 380,
+            decoration: BoxDecoration(
+              border: Border.all(color: theme.dividerColor, width: 1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Background image (with graceful fallback if asset is missing)
+                Image.asset(
+                  'assets/images/' + asset,
+                  fit: BoxFit.cover,
+                  errorBuilder: (c, e, s) => Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          theme.colorScheme.primaryContainer,
+                          theme.colorScheme.secondaryContainer,
+                        ],
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(icon, size: 120, color: theme.colorScheme.onPrimaryContainer.withOpacity(0.3)),
+                  ),
+                ),
+                // Dim gradient for text readability
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0x00000000),
+                        Color(0x99000000),
+                      ],
+                    ),
+                  ),
+                ),
+                // Label
+                Positioned(
+                  left: 20,
+                  right: 20,
+                  bottom: 20,
+                  child: Text(
+                    label,
+                    style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-  Text('Utility & Bills', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 12),
-        // Use Wrap so buttons/labels flow to next line on narrow screens instead
-        // of causing a horizontal overflow.
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            ElevatedButton.icon(onPressed: _showAddUtilityDialog, icon: const Icon(Icons.add), label: const Text('Add Utility')),
-            FilledButton.tonalIcon(onPressed: _showAddBillDialog, icon: const Icon(Icons.shopping_cart_checkout), label: const Text('Add Bill')),
-            Text('Services: ${services.length}'),
-          ],
-        ),
-        const SizedBox(height: 16),
-        // Scrollable content area containing all cards below
+      child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Text('Utility & Bills', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 32),
+        // Only the two boxes should be visible here - centered
         Expanded(
-          child: SingleChildScrollView(
-            child: Column(children: [
-              // Services list
-              context.responsiveCenter(
-                maxWidth: 1100,
-                child: Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: services.isEmpty
-                      ? const Padding(padding: EdgeInsets.all(16), child: Center(child: Text('No utilities added')))
-                      : ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: services.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, i) {
-                            final s = services[i];
-                            return ExpansionTile(
-                              title: Text(s.name),
-                              subtitle: s.regNumber == null || s.regNumber!.isEmpty ? null : Text('Reg/ID: ${s.regNumber}'),
-                              trailing: Switch(value: s.active, onChanged: (v) => context.read<UtilityProvider>().updateService(s.id, active: v)),
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: FilledButton.tonalIcon(
-                                        onPressed: () => _showAddUtilityPaymentDialog(s.id),
-                                        icon: const Icon(Icons.receipt_long),
-                                        label: const Text('Add Payment'),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    _utilityPaymentsList(s.id),
-                                  ]),
-                                )
-                              ],
-                            );
-                          },
-                        ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Payments history panel (self-expands with pagination)
-              context.responsiveCenter(
-                maxWidth: 1100,
-                child: Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: _UtilityPaymentsHistoryPanel(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Bills history (self-expands with pagination)
-              context.responsiveCenter(
-                maxWidth: 1100,
-                child: Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: _BillsHistoryPanel(),
-                ),
-              ),
-            ]),
+          child: Center(
+            child: Wrap(
+              spacing: 30,
+              runSpacing: 30,
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                categoryBox(label: 'Utility', icon: Icons.miscellaneous_services_outlined, asset: 'utility_bg.jpg'),
+                categoryBox(label: 'Bills', icon: Icons.receipt_long_outlined, asset: 'bills_bg.jpg'),
+              ],
+            ),
           ),
         ),
       ]),
@@ -4536,8 +4545,51 @@ class _BillsHistoryPanelState extends State<_BillsHistoryPanel> {
                   },
                 ),
                 title: Text('${b.itemName} • ₹${b.amount.toStringAsFixed(0)}'),
-                subtitle: Text('Date: $dateStr • Category: ${b.category}${b.receiptPath != null ? ' • Receipt: ${b.receiptPath}' : ''}'),
+                subtitle: Text('Date: $dateStr • Category: ${b.category}${b.isCredit ? ' • CREDIT' : ''}${b.dueDate != null ? ' • Due: ${b.dueDate!.year}-${b.dueDate!.month.toString().padLeft(2, '0')}-${b.dueDate!.day.toString().padLeft(2, '0')}' : ''}${b.receiptPath != null ? ' • Receipt: ${b.receiptPath}' : ''}'),
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (b.isCredit && !b.isPaid)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Chip(
+                        label: const Text('Credit', style: TextStyle(fontSize: 11)),
+                        backgroundColor: Colors.orange.shade100,
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  if (b.isPaid)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                    ),
+                  if (!b.isPaid && !b.isCredit)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: IconButton(
+                        tooltip: 'Mark as Paid',
+                        icon: const Icon(Icons.payment, size: 20),
+                        onPressed: () async {
+                          await context.read<UtilityProvider>().markBillAsPaid(b.id);
+                        },
+                      ),
+                    ),
+                  if (b.isCredit && !b.isPaid)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        ),
+                        onPressed: () async {
+                          await context.read<UtilityProvider>().markBillAsPaid(b.id);
+                        },
+                        icon: const Icon(Icons.payment, size: 16),
+                        label: const Text('Pay Now', style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
                   if (b.receiptPath != null && b.receiptPath!.isNotEmpty)
                     IconButton(
                       tooltip: 'Open receipt',
@@ -5149,5 +5201,347 @@ class _PhoneField extends StatelessWidget {
         ),
       ),
     ]);
+  }
+}
+
+// ============== Utility & Bills Category Page ==============
+class _UtilityBillsCategoryPage extends StatefulWidget {
+  final String category; // Utility | Bills
+  const _UtilityBillsCategoryPage({required this.category});
+
+  @override
+  State<_UtilityBillsCategoryPage> createState() => _UtilityBillsCategoryPageState();
+}
+
+class _UtilityBillsCategoryPageState extends State<_UtilityBillsCategoryPage> {
+  @override
+  void initState() {
+    super.initState();
+    // ensure provider loads
+    final prov = context.read<UtilityProvider>();
+    if (!prov.isLoaded) {
+      prov.ensureLoaded();
+    }
+  }
+
+  void _showAddUtilityDialog() {
+    final nameCtrl = TextEditingController();
+    final regCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Add Utility Service'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Service Name')),
+            const SizedBox(height: 8),
+            TextField(controller: regCtrl, decoration: const InputDecoration(labelText: 'Registration/ID Number (optional)')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              context.read<UtilityProvider>().addService(name, regNumber: regCtrl.text.trim());
+              Navigator.pop(context);
+            },
+            child: const Text('Add'),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _showAddBillDialog() {
+    final descCtrl = TextEditingController();
+    final amtCtrl = TextEditingController(text: '0');
+    DateTime date = DateTime.now();
+    String category = 'Consumables';
+    bool isPaid = false;
+    bool isCredit = false;
+    DateTime? dueDate;
+    
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(builder: (context, setSt) {
+        return AlertDialog(
+          title: const Text('Add Bill'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Description')),
+                const SizedBox(height: 8),
+                TextField(controller: amtCtrl, decoration: const InputDecoration(labelText: 'Amount'), keyboardType: TextInputType.number),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: category,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: const [
+                    DropdownMenuItem(value: 'Consumables', child: Text('Consumables')),
+                    DropdownMenuItem(value: 'Equipment', child: Text('Equipment')),
+                    DropdownMenuItem(value: 'Maintenance', child: Text('Maintenance')),
+                    DropdownMenuItem(value: 'Other', child: Text('Other')),
+                  ],
+                  onChanged: (v) => setSt(() => category = v ?? category),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: () async {
+                    final picked = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2020), lastDate: DateTime(2030));
+                    if (picked != null) setSt(() => date = picked);
+                  },
+                  child: Text('Date: ${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'),
+                ),
+                const Divider(height: 24),
+                SwitchListTile(
+                  title: const Text('Mark as Paid'),
+                  subtitle: const Text('Check if bill is already paid'),
+                  value: isPaid,
+                  onChanged: (v) => setSt(() {
+                    isPaid = v;
+                    if (isPaid) isCredit = false; // Can't be both paid and credit
+                  }),
+                ),
+                SwitchListTile(
+                  title: const Text('Credit (Pay Later)'),
+                  subtitle: const Text('Bill on credit, to be paid by due date'),
+                  value: isCredit,
+                  onChanged: (v) => setSt(() {
+                    isCredit = v;
+                    if (isCredit) {
+                      isPaid = false; // Can't be both paid and credit
+                      if (dueDate == null) dueDate = DateTime.now().add(const Duration(days: 30));
+                    }
+                  }),
+                ),
+                if (isCredit) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: dueDate ?? DateTime.now().add(const Duration(days: 30)),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime(2030),
+                      );
+                      if (picked != null) setSt(() => dueDate = picked);
+                    },
+                    icon: const Icon(Icons.event),
+                    label: Text(dueDate == null
+                        ? 'Set Due Date'
+                        : 'Due: ${dueDate!.year}-${dueDate!.month.toString().padLeft(2, '0')}-${dueDate!.day.toString().padLeft(2, '0')}'),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text('You will receive a reminder on the due date', style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                final desc = descCtrl.text.trim();
+                if (desc.isEmpty) return;
+                final amt = double.tryParse(amtCtrl.text) ?? 0;
+                if (isCredit && dueDate == null) {
+                  // Show error - credit bills need a due date
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please set a due date for credit bills')),
+                  );
+                  return;
+                }
+                context.read<UtilityProvider>().addBill(
+                  date: date,
+                  itemName: desc,
+                  amount: amt,
+                  category: category,
+                  isPaid: isPaid,
+                  isCredit: isCredit,
+                  dueDate: dueDate,
+                );
+                Navigator.pop(context);
+              },
+              child: const Text('Add'),
+            )
+          ],
+        );
+      }),
+    );
+  }
+
+  void _showAddUtilityPaymentDialog(String serviceId) {
+    final amtCtrl = TextEditingController(text: '0');
+    DateTime date = DateTime.now();
+    String mode = 'Cash';
+    bool paid = true;
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(builder: (context, setSt) {
+        return AlertDialog(
+          title: const Text('Add Utility Payment'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: amtCtrl, decoration: const InputDecoration(labelText: 'Amount'), keyboardType: TextInputType.number),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: mode,
+                decoration: const InputDecoration(labelText: 'Payment Mode'),
+                items: const [
+                  DropdownMenuItem(value: 'Cash', child: Text('Cash')),
+                  DropdownMenuItem(value: 'Card', child: Text('Card')),
+                  DropdownMenuItem(value: 'UPI', child: Text('UPI')),
+                  DropdownMenuItem(value: 'Bank Transfer', child: Text('Bank Transfer')),
+                ],
+                onChanged: (v) => setSt(() => mode = v ?? mode),
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                title: const Text('Paid'),
+                value: paid,
+                onChanged: (v) => setSt(() => paid = v),
+              ),
+              OutlinedButton(
+                onPressed: () async {
+                  final picked = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2020), lastDate: DateTime(2030));
+                  if (picked != null) setSt(() => date = picked);
+                },
+                child: Text('Date: ${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                final amt = double.tryParse(amtCtrl.text) ?? 0;
+                context.read<UtilityProvider>().addPayment(serviceId, date: date, amount: amt, mode: mode, paid: paid);
+                Navigator.pop(context);
+              },
+              child: const Text('Add'),
+            )
+          ],
+        );
+      }),
+    );
+  }
+
+  Widget _utilityPaymentsList(String serviceId) {
+    final util = context.watch<UtilityProvider>();
+    final list = util.payments.where((p) => p.serviceId == serviceId).toList()..sort((a, b) => b.date.compareTo(a.date));
+    if (list.isEmpty) return const Padding(padding: EdgeInsets.all(8), child: Text('No payments yet', style: TextStyle(fontStyle: FontStyle.italic)));
+    return Column(
+      children: list.map((p) {
+        return ListTile(
+          dense: true,
+          title: Text('₹${p.amount.toStringAsFixed(0)}'),
+          subtitle: Text('${p.date.year}-${p.date.month.toString().padLeft(2, '0')}-${p.date.day.toString().padLeft(2, '0')} • ${p.mode}'),
+          trailing: p.paid ? const Icon(Icons.check_circle, color: Colors.green, size: 18) : const Icon(Icons.pending, color: Colors.orange, size: 18),
+        );
+      }).toList(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final utilityProvider = context.watch<UtilityProvider>();
+    final isUtility = widget.category == 'Utility';
+    
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.category)),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          if (isUtility) {
+            _showAddUtilityDialog();
+          } else {
+            _showAddBillDialog();
+          }
+        },
+        icon: const Icon(Icons.add),
+        label: Text(isUtility ? 'Add Utility' : 'Add Bill'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          child: Column(children: [
+            if (isUtility) ...[
+              // Services list
+              context.responsiveCenter(
+                maxWidth: 1100,
+                child: Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: utilityProvider.services.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Center(child: Text('No utilities added')))
+                      : ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: utilityProvider.services.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, i) {
+                            final s = utilityProvider.services[i];
+                            return ExpansionTile(
+                              title: Text(s.name),
+                              subtitle: s.regNumber == null || s.regNumber!.isEmpty
+                                  ? null
+                                  : Text('Reg/ID: ${s.regNumber}'),
+                              trailing: Switch(
+                                  value: s.active,
+                                  onChanged: (v) => context
+                                      .read<UtilityProvider>()
+                                      .updateService(s.id, active: v)),
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                                  child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: FilledButton.tonalIcon(
+                                            onPressed: () => _showAddUtilityPaymentDialog(s.id),
+                                            icon: const Icon(Icons.receipt_long),
+                                            label: const Text('Add Payment'),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        _utilityPaymentsList(s.id),
+                                      ]),
+                                )
+                              ],
+                            );
+                          },
+                        ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Payments history
+              context.responsiveCenter(
+                maxWidth: 1100,
+                child: Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: _UtilityPaymentsHistoryPanel(),
+                ),
+              ),
+            ] else ...[
+              // Bills history
+              context.responsiveCenter(
+                maxWidth: 1100,
+                child: Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: _BillsHistoryPanel(),
+                ),
+              ),
+            ]
+          ]),
+        ),
+      ),
+    );
   }
 }
